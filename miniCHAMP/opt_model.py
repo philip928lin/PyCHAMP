@@ -2,7 +2,7 @@
 """
 The code is developed by Chung-Yi Lin at Virginia Tech, in April 2023.
 Email: chungyi@vt.edu
-Last modified on April 24, 2023
+Last modified on May 1, 2023
 
 WARNING: This code is not yet published, please do not distributed the code
 without permission.
@@ -134,6 +134,11 @@ class OptModel():
         self.crop_options = crop_options
         self.tech_options = tech_options
         self.eval_metric = eval_metric
+
+        ## gurobi pars
+        self.gurobi_pars = config.get("gurobi")
+        if self.gurobi_pars is None:
+            self.gurobi_pars = {}
 
         ## Dimension coefficients
         self.n_c = len(crop_options)    # NO. crop options (not distinguished
@@ -795,9 +800,11 @@ class OptModel():
             return sols
 
         m = self.model
-        if "NonConvex" not in kwargs.keys():
+        gurobi_pars = self.gurobi_pars
+        gurobi_pars.update(kwargs)
+        if "NonConvex" not in gurobi_pars.keys():
             m.setParam("NonConvex", 2)  # Set to solve non-convex problem
-        for k, v in kwargs.items():
+        for k, v in gurobi_pars.items():
             m.setParam(k, v)
         m.optimize()
 

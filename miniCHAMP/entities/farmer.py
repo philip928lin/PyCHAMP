@@ -1,20 +1,18 @@
-# -*- coding: utf-8 -*-
-"""
+r"""
 The code is developed by Chung-Yi Lin at Virginia Tech, in April 2023.
 Email: chungyi@vt.edu
-Last modified on April 24, 2023
+Last modified on May 1, 2023
 
 WARNING: This code is not yet published, please do not distributed the code
 without permission.
-
-To do:
-    Complete et calculation
 """
 import random
 import numpy as np
-from pandas import to_numeric
 from dotmap import DotMap
-from .miniCHAMP_opt import OptModel
+from ..opt_model import OptModel
+from .field import Field
+from .well import Well
+from .finance import Finance
 
 class Farmer():#ap.Agent):
     def setup(self, agt_id, config, agent_dict, fields_dict, wells_dict,
@@ -126,7 +124,7 @@ class Farmer():#ap.Agent):
         self.fields = fields
         self.wells = wells
         self.finance = Finance(config=config, crop_options=crop_options)
-        self.dm_model = OptModel(name=agt_id)
+        # self.dm_model = OptModel(name=agt_id) # Not pickable for parallel computing
 
         # Initialize CONSUMAT
         self.sa_thre = config.consumat.satisfaction_threshold
@@ -159,7 +157,7 @@ class Farmer():#ap.Agent):
         for f, v in fdict.items():
             dm_sols[f]["i_area"] = i_area
             dm_sols[f]["i_te"] = i_te
-        self.dm_sols = self.make_dm(dm=self.dm_model, dm_sols=dm_sols, init=True)
+        self.dm_sols = self.make_dm(dm_sols=dm_sols, init=True)
         self.make_simulation(prec_dict, temp_dict) # aquifers
 
     def sim_step(self, prec_dict, temp_dict):
@@ -262,7 +260,7 @@ class Farmer():#ap.Agent):
         elif satisfaction < sa_thre and uncertainty < un_thre:
             self.state = "Deliberation"
 
-    def make_dm(self, dm, dm_sols=None, init=False):
+    def make_dm(self, dm_sols=None, init=False):
         """
         Make decisions.
 
@@ -293,6 +291,8 @@ class Farmer():#ap.Agent):
         wells = self.wells
         alphas = self.alphas
 
+        # Locally create OptModel to make the Farmer object pickable for parallel computing
+        dm = OptModel(name=self.agt_id)
         dm.setup_ini_model(config=config, horizon=n_h, eval_metric=eval_metric,
                            crop_options=crop_options, tech_options=tech_options)
 
@@ -333,7 +333,9 @@ class Farmer():#ap.Agent):
         dm.setup_obj(alpha_dict=alphas)
         dm.finish_setup()
         dm.solve(keep_gp_model=False, keep_gp_output=False)
-        return dm.sols
+        dm_sols = dm.sols
+        dm.depose_gp_env() # Release memory
+        return dm_sols
 
     def make_dm_deliberation(self):
         """
@@ -344,7 +346,7 @@ class Farmer():#ap.Agent):
         None.
 
         """
-        self.dm_sols = self.make_dm(self.dm_model, dm_sols=None)
+        self.dm_sols = self.make_dm(dm_sols=None)
 
     def make_dm_repetition(self):
         """
@@ -355,7 +357,7 @@ class Farmer():#ap.Agent):
         None.
 
         """
-        self.dm_sols = self.make_dm(self.dm_model, self.dm_sols)
+        self.dm_sols = self.make_dm(self.dm_sols)
 
     def make_dm_social_comparison(self):
         """
@@ -372,7 +374,7 @@ class Farmer():#ap.Agent):
         dm_sols_list = []
         for agt_id in comparable_agt_ids:
             # !!! Here we assume no. fields, n_c and split are the same across agents
-            dm_sols = self.make_dm(self.dm_model, comparable_agts[agt_id].dm_sols)
+            dm_sols = self.make_dm(comparable_agts[agt_id].dm_sols)
             dm_sols_list.append(dm_sols)
         objs = [s.obj for s in dm_sols_list]
         selected_agt_obj = max(objs)
@@ -401,424 +403,5 @@ class Farmer():#ap.Agent):
 
         comparable_agts = self.comparable_agts
 
-        dm_sols = self.make_dm(self.dm_model, comparable_agts[comparable_agt_id].dm_sols)
+        dm_sols = self.make_dm(comparable_agts[comparable_agt_id].dm_sols)
         self.dm_sols = dm_sols
-
-def cal_pet_Hamon(temp, lat, dz=None):
-    """Calculate potential evapotranspiration (pet) with Hamon (1961) equation.
-
-    Parameters
-    ----------
-    temp : numpy.ndarray
-        Daily mean temperature [degC].
-    lat : float
-        Latitude [deg].
-    dz : float, optional
-        Altitude temperature adjustment [m], by default None.
-
-    Returns
-    -------
-    numpy.ndarray
-        Potential evapotranspiration [cm/day]
-
-    Note
-    ----
-    The code is adopted from HydroCNHS (Lin et al., 2022).
-    Lin, C. Y., Yang, Y. C. E., & Wi, S. (2022). HydroCNHS: A Python Package of
-    Hydrological Model for Coupled Natural–Human Systems. Journal of Water
-    Resources Planning and Management, 148(12), 06022005.
-    """
-    pdDatedateIndex = temp.index
-    temp = temp.values.flatten()
-    # Altitude temperature adjustment
-    if dz is not None:
-        # Assume temperature decrease 0.6 degC for every 100 m elevation.
-        tlaps = 0.6
-        temp = temp - tlaps*dz/100
-    # Calculate Julian days
-    # data_length = len(temp)
-    # start_date = to_datetime(start_date, format="%Y/%m/%d")
-    # pdDatedateIndex = date_range(start=start_date, periods=data_length,
-    #                              freq="D")
-    JDay = to_numeric(pdDatedateIndex.strftime('%j')) # convert to Julian days
-    # Calculate solar declination [rad] from day of year (JDay) based on
-    # equations 24 in ALLen et al (1998).
-    sol_dec = 0.4093 * np.sin(2. * 3.141592654 / 365. * JDay - 1.39)
-    lat_rad = lat*np.pi/180
-    # Calculate sunset hour angle from latitude and solar declination [rad]
-    # based on equations 25 in ALLen et al (1998).
-    omega = np.arccos(-np.tan(sol_dec) * np.tan(lat_rad))
-    # Calculate maximum possible daylight length [hr]
-    dl = 24 / np.pi * omega
-    # From Prudhomme(hess, 2013)
-    # https://hess.copernicus.org/articles/17/1365/2013/hess-17-1365-2013-supplement.pdf
-    # Slightly different from what we used to.
-    pet = (dl / 12) ** 2 * np.exp(temp / 16)
-    pet = np.array(pet/10)         # Convert from mm to cm
-    pet[np.where(temp <= 0)] = 0   # Force pet = 0 when temperature is below 0.
-    return pet      # [cm/day]
-
-
-class Field():
-    """
-    A field simulator.
-
-    Attributes
-    ----------
-    field_id : str or int
-        Field id.
-    config : dict or DotMap
-        General info of the model.
-    te : str, optional
-        Irrigation technology. The default is None. The default is "center
-        pivot".
-    lat : float, optional
-        Latitude of the field [deg]. This will be used in calculating
-        evapotranspiration. The default is 39.4.
-    dz : float, optional
-        Gauge height adjustment. This will be used in calculating
-        evapotranspiration. The default is None.
-    crop_options : list, optional
-        A list of crop type options. They must exist in the config. The
-        default is ["corn", "sorghum", "soybean", "fallow"].
-    tech_options : list, optional
-        A list of irrigation technologies. They must exist in the config. The
-        default is ["center pivot", "center pivot LEPA"].
-    """
-
-    def __init__(self, field_id, config, te="center pivot", lat=39.4, dz=None,
-                 crop_options=["corn", "sorghum", "soybean", "fallow"],
-                 tech_options=["center pivot", "center pivot LEPA"]):
-        # for name_, value_ in vars().items():
-        #     if name_ != 'self' and name_ != 'config':
-        #         setattr(self, name_, value_)
-        self.field_id = field_id
-        self.lat = lat
-        self.dz = dz
-        config = DotMap(config)
-        crop = np.array([config.field.crop[c] for c in crop_options])
-        self.ymax = crop[:, 0].reshape((-1, 1))     # (n_c, 1)
-        self.wmax = crop[:, 1].reshape((-1, 1))     # (n_c, 1)
-        self.a = crop[:, 2].reshape((-1, 1))        # (n_c, 1)
-        self.b = crop[:, 3].reshape((-1, 1))        # (n_c, 1)
-        self.c = crop[:, 4].reshape((-1, 1))        # (n_c, 1)
-        self.n_s = config.field.area_split
-        self.unit_area = config.field.field_area/self.n_s
-
-        self.tech_options = tech_options
-        self.techs = config.field.tech
-        self.update_irr_tech(te)
-
-        self.cal_pet_Hamon = cal_pet_Hamon
-
-    def update_irr_tech(self, i_te):
-        """
-        Update the irri
-
-        Parameters
-        ----------
-        i_te : 1darray
-            An array outputted from OptModel() that represent the indicator
-            matrix for the irrigation technology choices in following year. The
-            dimension of the array should be (n_te).
-
-        Returns
-        -------
-        None.
-
-        """
-        if isinstance(i_te, str):
-            new_te = i_te
-        else:
-            new_te = self.tech_options[np.where(i_te==1)[0][0]]
-        self.a_te, self.b_te, self.l_pr = self.techs[new_te]
-        self.te = new_te
-
-    def sim_step(self, irr, i_area, i_te, prec, temp):
-        """
-        Simulate a single timestep.
-
-        Parameters
-        ----------
-        irr : 3darray
-            An array outputted from OptModel() that represent the irrigation
-            depth for the following year. The dimension of the array should be
-            (n_s, n_c, 1).
-        i_area : 3darray
-            An array outputted from OptModel() that represent the indicator
-            matrix for the crop choices in following year. The dimension of the
-            array should be (n_s, n_c, 1).
-        i_te : 1darray
-            An array outputted from OptModel() that represent the indicator
-            matrix for the irrigation technology choices in following year. The
-            dimension of the array should be (n_te).
-        prec : float
-            The annual precipitation amount.
-        temp : DataFrame
-            The daily mean temperature storing in DataFrame format with
-            datetime index.
-
-        Returns
-        -------
-        y : 3darray
-            Crop yield with the dimension (n_s, n_c, 1).
-        y_y : 3darray
-            Crop yield/maximum yield with the dimension (n_s, n_c, 1).
-        v : float
-            Irrigation amount.
-        inflow : float
-            Inflow to the aquifer.
-
-        """
-        # Crop yield
-        a = self.a
-        b = self.b
-        c = self.c
-        ymax = self.ymax
-        wmax = self.wmax
-        n_s = self.n_s
-        unit_area = self.unit_area
-
-        w = irr + prec
-        w = w * i_area
-        w_ = w/wmax
-        y_ = (a * w_**2 + b * w_ + c)
-        # y_ = yw_ * i_area
-        y = y_ * ymax
-        v_c = irr * unit_area
-        v = np.sum(v_c)
-        y_y = np.sum(y_) / n_s
-
-        self.y, self.y_y, self.v = y, y_y, v
-        # Can be deleted in the future
-        #assert w_ >= 0 and w_ <= 1, f"w_ in [0, 1] expected, got: {w_}"
-        #assert y_ >= 0 and y_ <= 1, f"y_ in [0, 1]  expected, got: {y_}"
-
-        # Tech
-        self.update_irr_tech(i_te)  # update tech
-        a_te = self.a_te
-        b_te = self.b_te
-        q = a_te * v + b_te
-        self.q = q
-
-        # Annual ET for aquifer
-        # !!!! Calculate et + remember to average over the corner
-        wv = np.sum(w * unit_area)
-        pet = self.cal_pet_Hamon(temp, self.lat, self.dz)
-        Kc = 1 # not yet decide how
-
-        # Adopt the stress coeficient from GWLF
-        Ks = np.ones(w_.shape)
-        Ks[w_ <= 0.5] = 2 * w_[w_ <= 0.5]
-
-        et = Ks * Kc * sum(pet) * unit_area
-        inflow = wv - et    # volumn
-        self.inflow = inflow
-        return y, y_y, v, inflow
-
-class Well():
-    """
-    A well simulator.
-
-    Attributes
-    ----------
-    well_id : str or int
-        Well id.
-    config : dict or DotMap
-        General info of the model.
-    r : float
-        Well radius.
-    tr : float
-        Transmissivity.
-    sy : float
-        Specific yield.
-    l_wt : float
-        Initial head for the lift from the water table to the ground
-        surface at the start of the pumping season.
-    eff_pump : float
-        Pump efficiency. The default is 0.77.
-    eff_well : float
-        Well efficiency. The default is 0.5.
-    aquifer_id : str or int, optional
-        Aquifer id. The default is None.
-
-    """
-    def __init__(self, well_id, config, r, tr, sy, l_wt,
-                 eff_pump=0.77, eff_well=0.5, aquifer_id=None):
-        # for name_, value_ in vars().items():
-        #     if name_ != 'self' and name_ != 'config':
-        #         setattr(self, name_, value_)
-        self.well_id, self.r, self.tr, self.sy, self.l_wt = \
-            well_id, r, tr, sy, l_wt
-        self.eff_pump, self.eff_well = eff_pump, eff_well
-        self.aquifer_id = aquifer_id
-
-        config = DotMap(config)
-        self.rho = config.well.rho
-        self.g = config.well.g
-
-        self.t = 0
-
-    def sim_step(self, v, dwl, q, l_pr):
-        """
-        Simulate a single timestep.
-
-        Parameters
-        ----------
-        v : float
-            Irrigation amount that will be withdraw from this well.
-        dwl : float
-            Groudwater level change.
-        q : float
-            Average daily pumping rate.
-        l_pr : float
-            The effective lift due to pressurization and of water and pipe
-            losses necessary for the allocated irrigation system.
-
-        Returns
-        -------
-        e : float
-            Energy consumption.
-
-        """
-        # update groundwater level change from the last year
-        self.l_wt += dwl
-        l_wt = self.l_wt
-
-        r, tr, sy = self.r, self.tr, self.sy
-        eff_well, eff_pump = self.eff_well, self.eff_pump
-        rho, g = self.rho, self.g
-
-        cm_ha_2_m3 = 1000
-        fpitr = 4 * np.pi * tr
-        l_cd_l_wd = (1+eff_well) * q/fpitr \
-                    * (-0.5772 - np.log(r**2*sy/fpitr)) * cm_ha_2_m3
-        l_t = l_wt + l_cd_l_wd + l_pr
-        e = rho * g * v * l_t / eff_pump * cm_ha_2_m3
-
-        # record
-        self.t += 1
-        e = e[0]
-        self.e = e
-        return e
-
-class Finance():
-    """
-    An finance simulator.
-
-    Attributes
-    ----------
-    config : dict or DotMap
-        General info of the model.
-    crop_options : list, optional
-        A list of crop type options. They must exist in the config. The
-        default is ["corn", "sorghum", "soybean", "fallow"].
-
-    """
-    def __init__(self, config,
-                 crop_options=["corn", "sorghum", "soybean", "fallow"]):
-        config = DotMap(config)
-        self.energy_price = config.finance.energy_price
-        self.crop_profit = config.finance.crop_profit
-        self.crop_options = crop_options
-
-    def sim_step(self, e, y):
-        """
-        Simulate a single timestep.
-
-        Parameters
-        ----------
-        e : float
-            Total energy consumption.
-        y : 3darray
-            Crop yield with the dimension (n_s, n_c, 1).
-
-        Returns
-        -------
-        profit : float
-            Annual profit.
-
-        """
-        ep = self.energy_price
-        cp = self.crop_profit
-        crop_options = self.crop_options
-
-        cost_e = e * ep
-        rev = sum([y[i,j,:] * cp[c] for i in range(y.shape[0]) \
-                   for j, c in enumerate(crop_options)])
-        profit = rev - cost_e
-        profit = profit[0]
-        self.profit = profit
-        return profit
-
-class Aquifer():
-    """
-    An aquifer simulator.
-
-    Attributes
-    ----------
-
-    """
-    def __init__(self, aquifer_id, sy, area, lag, ini_inflow=0, ini_dwl=0):
-        """
-
-
-        Parameters
-        ----------
-        aquifer_id : str or int
-            Aquifer id.
-        sy : float
-            Specific yield.
-        area : float
-            Area.
-        lag : int
-            Vertical percolation time lag for infiltrated water to contribute
-            to the groundwater level change.
-        ini_inflow : float, optional
-            Initial inflow. This will be assigned for the first number of the
-            "lag" years. The default is 0.
-        ini_dwl : float, optional
-            Initial groundwater level change. The default is 0.
-
-        Returns
-        -------
-        None.
-
-        """
-        # for name_, value_ in vars().items():
-        #     if name_ != 'self':
-        #         setattr(self, name_, value_)
-        self.aquifer_id, self.sy, self.area, self.lag = aquifer_id, sy, area, lag
-        self.in_list = [ini_inflow]*lag
-        self.t = 0
-        self.dwl_list = [ini_dwl]
-        self.dwl = ini_dwl
-
-    def sim_step(self, inflow, v):
-        """
-        Simulate a single timestep.
-
-        Parameters
-        ----------
-        inflow : float
-            Inflow of the aquifer.
-        v : float
-            Total water withdraw from the aquifer.
-
-        Returns
-        -------
-        dwl : float
-            Groundwater level change.
-
-        """
-        in_list = self.in_list
-        sy, area = self.sy, self.area
-
-        in_list.append(inflow)
-        inflow_lag = in_list.pop(0)
-        dwl = 1/(area * sy) * (inflow_lag - v)
-
-        self.dwl_list.append(dwl)
-        self.t += 1
-        self.dwl = dwl
-        return dwl

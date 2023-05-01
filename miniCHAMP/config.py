@@ -1,7 +1,7 @@
 """
 The code is developed by Chung-Yi Lin at Virginia Tech, in April 2023.
 Email: chungyi@vt.edu
-Last modified on April 24, 2023
+Last modified on May 1, 2023
 
 WARNING: This code is not yet published, please do not distributed the code
 without permission.
@@ -16,7 +16,7 @@ Suggestion:
 config = {
     "field": {
         "field_area": 50.,
-        "area_split": 1,
+        "area_split": 4,
         "crop": {
             #           ymax, wmax,  a,    b,   c
             "corn":     [5., 400., -1.75, 2.65, 0.],
@@ -51,5 +51,7 @@ config = {
             "yield_pct": 1},
         "satisfaction_threshold": 1,
         "uncertainty_threshold": 1
-        }
+        },
+    "gurobi":
+        {"LogToConsole": 0}  # Default 1
     }

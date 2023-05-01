@@ -1,5 +1,5 @@
 import pathlib
-from setuptools import setup
+from setuptools import setup, find_packages
 
 # The directory containing this file
 HERE = pathlib.Path(__file__).parent
@@ -19,7 +19,7 @@ setup(name='miniCHAMP',
       author='Chung-Yi Lin',
       author_email='philip928lin@gmail.com',
       license='--',
-      packages=['miniCHAMP'],
+      packages=find_packages(), #['miniCHAMP'],
       install_requires = ["numpy", "pandas", "dotmap", "gurobipy"],
       classifiers=[
         #"License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
@@ -37,7 +37,7 @@ setup(name='miniCHAMP',
         "Topic :: Scientific/Engineering :: Hydrology",
     ],
       zip_safe=False,
-      include_package_data = False,
+      include_package_data = True,
       python_requires='>=3.10')
 
 
