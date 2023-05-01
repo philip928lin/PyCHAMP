@@ -393,7 +393,7 @@ class OptModel():
 
         self.n_fields += 1
 
-    def setup_constr_well(self, well_id, dwl, l_wt, r, tr, sy, eff_pump,
+    def setup_constr_well(self, well_id, dwl, st, l_wt, r, k, sy, eff_pump,
                           eff_well, pumping_capacity=None):
         """
         Add well constraints. Multiple wells can be assigned by calling
@@ -408,10 +408,13 @@ class OptModel():
         l_wt : float
             Initial head for the lift from the water table to the ground
             surface at the start of the pumping season [m].
+        st: float
+            Aquifer saturated thickness [m].
         r : float
             Well radius [m].
-        tr : float
-            Transmissivity [m2/d].
+        k : float
+            Hydraulic conductivity [m/d]. This will be used to calculate
+            transmissivity [m2/d] by multiply saturated thickness [m].
         sy : float
             Specific yield.
         eff_pump : float
@@ -435,7 +438,7 @@ class OptModel():
         g = self.g
 
         # Assume a linear projection to the future
-        l_wt = np.array([l_wt + dwl*(i) for i in range(n_h)])
+        l_wt = np.array([l_wt - dwl*(i) for i in range(n_h)])
 
         # Calculate propotion of the irrigation water (v), daily pumping rate
         # (q), and head for irr tech (l_pr) of this well.
@@ -448,6 +451,7 @@ class OptModel():
             m.addConstr((v <= pumping_capacity),
                         name=f"c.{wid}.pumping_capacity")
 
+        tr = st * k
         fpitr = 4 * np.pi * tr
         e = m.addMVar((n_h), vtype="C", name=f"{wid}.e(PJ)", lb=0, ub=inf)
         l_t = m.addMVar((n_h), vtype="C", name=f"{wid}.l_t(m)", lb=0, ub=inf)
@@ -823,7 +827,7 @@ class OptModel():
             # release the memory of the previous model
             m.dispose()
 
-    def do_IIS_gp(self):
+    def do_IIS_gp(self, filename=None):
         """
         Compute an Irreducible Inconsistent Subsystem (IIS). This function can
         only be exercuted if the model is infeasible.
@@ -839,6 +843,11 @@ class OptModel():
         with fewer constraints or bounds.
 
         More info: https://www.gurobi.com/documentation/10.0/refman/py_model_computeiis.html
+
+        Parameters
+        ----------
+        filename : str
+            Output filename. The default is None.
 
         Returns
         -------
@@ -856,7 +865,11 @@ class OptModel():
         for c in m.getConstrs():
             if c.IISConstr:
                 print('%s' % c.ConstrName)
-        m.write(os.path.join(data_path, 'opt.ilp'))
+
+        if filename is not None:
+            if filename[-4:] != ".ilp":
+                filename += ".ilp"
+            m.write(filename)
 
     def write_ilp(self, filename):
         """

@@ -36,7 +36,7 @@ class Finance():
         Parameters
         ----------
         e : float
-            Total energy consumption.
+            Total energy consumption [PJ].
         y : 3darray
             Crop yield with the dimension (n_s, n_c, 1).
 

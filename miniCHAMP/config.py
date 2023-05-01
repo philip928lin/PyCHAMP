@@ -15,8 +15,8 @@ Suggestion:
 
 config = {
     "field": {
-        "field_area": 50.,
-        "area_split": 4,
+        "field_area": 50.,  # ha
+        "area_split": 4,    # --
         "crop": {
             #           ymax, wmax,  a,    b,   c
             "corn":     [5., 400., -1.75, 2.65, 0.],
@@ -31,15 +31,15 @@ config = {
             }
         },
     "well": {
-        "rho": 1000.,
-        "g": 9.8016
+        "rho": 1000.,   # kg/m3
+        "g": 9.8016     # m/s2
         },
     "finance": {
-        "energy_price": 0.,
+        "energy_price": 3.6e-10,     # $/PJ      # $0.10/kWh = 3.24e-10 PJ (Aguilar et al., 2015)
         "crop_profit": {
-            "corn":     20.,
-            "sorghum":  10.,
-            "soybean":  10.,
+            "corn":     6.10,   # $/bu  2023    Northwest KS (can vary from 2.5-~6; Aguilar et al., 2015)
+            "sorghum":  6.16,   # $/bu  2023    Northwest KS
+            "soybean":  12.87,  # $/bu  2023    Northwest KS
             "fallow":   0.}
         },
     "aquifer": {
@@ -47,11 +47,11 @@ config = {
         },
     "consumat": {
         "alpha":{
-            "profit": 0.001,    # keep the potential numerical issue in mind!
+            "profit": 1,    # keep the potential numerical issue in mind!
             "yield_pct": 1},
         "satisfaction_threshold": 1,
         "uncertainty_threshold": 1
         },
     "gurobi":
-        {"LogToConsole": 0}  # Default 1
+        {"LogToConsole": 0}     # 0: no console output; 1: with console output
     }

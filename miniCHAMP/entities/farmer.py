@@ -29,16 +29,7 @@ class Farmer():#ap.Agent):
         config : dict or DotMap
             A dictionary store in DotMap format. DotMap is a python package.
         agent_dict : dict
-            A dictionary containing an agent's settings. E.g.,\n
-            agent_dict = {"horizon": 5,
-                          "eval_metric": "profit",
-                          "risk_attitude_prec": 30,
-                          "n_dwl": 5,
-                          "comparable_agt_ids": [],
-                          "alphas": None,
-                          "init": {
-                              "te": "center pivot",
-                              "crop_type": "corn"}}
+            A dictionary containing an agent's settings.
             horizon : int
                 The planing horizon [yr]. The default is 5.
             eval_metric : str
@@ -46,21 +37,9 @@ class Farmer():#ap.Agent):
             risk_attitude_prec : float
                 Annual precipitation of a specific quantile of historical records.
         fields_dict : dict
-            A dictionary containing an agent's field settings. E.g.,\n
-            fields_dict = {"field1": {"te": "center pivot",
-                                      "lat": 39.4,
-                                      "dz": None,
-                                      "rain_fed_option": False}}
+            A dictionary containing an agent's field settings.
         wells_dict : dict
-            A dictionary containing an agent's well settings. E.g.,\n
-            wells_dict = {"well1": {"r": 0.05,
-                                    "tr": 1,
-                                    "sy": 1,
-                                    "l_wt": 10,
-                                    "eff_pump": 0.77,
-                                    "eff_well": 0.5,
-                                    "aquifer_id": "ac1",
-                                    "pumping_capacity": None}}
+            A dictionary containing an agent's well settings.
         prec_dict : dict
             The annual precipitation for each field. The format is e.g.,
             {"field1": 0.8}.
@@ -91,7 +70,7 @@ class Farmer():#ap.Agent):
         self.wdict = wdict
         self.agtdict = agtdict
 
-        self.aquifers = aquifers  #!!! check this!
+        self.aquifers = DotMap(aquifers)  #!!! check this!
 
         self.field_list = list(fields_dict.keys())
         self.well_list = list(wells_dict.keys())
@@ -117,7 +96,8 @@ class Farmer():#ap.Agent):
                               tech_options=tech_options)
             fields[f].rain_fed_option = v.rain_fed_option
         for w, v in wdict.items():
-            wells[w] = Well(well_id=w, config=config, r=v.r, tr=v.tr, sy=v.sy,
+            wells[w] = Well(well_id=w, config=config, r=v.r, k=v.k,
+                            st=aquifers[v.aquifer_id].st, sy=v.sy,
                             l_wt=v.l_wt, eff_pump=v.eff_pump,
                             eff_well=v.eff_well, aquifer_id=v.aquifer_id)
             wells[w].pumping_capacity = v.pumping_capacity
@@ -158,7 +138,7 @@ class Farmer():#ap.Agent):
             dm_sols[f]["i_area"] = i_area
             dm_sols[f]["i_te"] = i_te
         self.dm_sols = self.make_dm(dm_sols=dm_sols, init=True)
-        self.make_simulation(prec_dict, temp_dict) # aquifers
+        self.run_simulation(prec_dict, temp_dict) # aquifers
 
     def sim_step(self, prec_dict, temp_dict):
         """
@@ -195,9 +175,9 @@ class Farmer():#ap.Agent):
             self.make_dm_deliberation()
 
         ### Simulation
-        self.make_simulation(prec_dict, temp_dict)
+        self.run_simulation(prec_dict, temp_dict)
 
-    def make_simulation(self, prec_dict, temp_dict):  # aquifers
+    def run_simulation(self, prec_dict, temp_dict):  # aquifers
         aquifers = self.aquifers
         eval_metric = self.eval_metric
         alphas = self.alphas
@@ -323,9 +303,9 @@ class Farmer():#ap.Agent):
             #proj_dwl = 0
             aquifer_id = self.wdict[w]["aquifer_id"]
             proj_dwl = np.mean(aquifers[aquifer_id].dwl_list[-n_dwl:])
-            dm.setup_constr_well(well_id=w, dwl=proj_dwl, l_wt=well.l_wt,
-                                 r=well.r, tr=well.tr, sy=well.sy,
-                                 eff_pump=well.eff_pump,
+            dm.setup_constr_well(well_id=w, dwl=proj_dwl, st=well.st,
+                                 l_wt=well.l_wt, r=well.r, k=well.k,
+                                 sy=well.sy, eff_pump=well.eff_pump,
                                  eff_well=well.eff_well,
                                  pumping_capacity=well.pumping_capacity)
         #!!! missing water rights here (do it later)

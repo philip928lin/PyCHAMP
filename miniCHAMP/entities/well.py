@@ -20,14 +20,17 @@ class Well():
     config : dict or DotMap
         General info of the model.
     r : float
-        Well radius.
-    tr : float
-        Transmissivity.
+        Well radius [m].
+    k : float
+        Hydraulic conductivity [m/d]. This will be used to calculate
+        transmissivity [m2/d] by multiply saturated thickness [m].
+    st: float
+        Aquifer saturated thickness [m].
     sy : float
         Specific yield.
     l_wt : float
         Initial head for the lift from the water table to the ground
-        surface at the start of the pumping season.
+        surface at the start of the pumping season [m].
     eff_pump : float
         Pump efficiency. The default is 0.77.
     eff_well : float
@@ -36,13 +39,15 @@ class Well():
         Aquifer id. The default is None.
 
     """
-    def __init__(self, well_id, config, r, tr, sy, l_wt,
+    def __init__(self, well_id, config, r, k, st, sy, l_wt,
                  eff_pump=0.77, eff_well=0.5, aquifer_id=None):
         # for name_, value_ in vars().items():
         #     if name_ != 'self' and name_ != 'config':
         #         setattr(self, name_, value_)
-        self.well_id, self.r, self.tr, self.sy, self.l_wt = \
-            well_id, r, tr, sy, l_wt
+        self.well_id, self.r, self.k, self.st, self.sy, self.l_wt = \
+            well_id, r, k, st, sy, l_wt
+
+        self.tr = st * k
         self.eff_pump, self.eff_well = eff_pump, eff_well
         self.aquifer_id = aquifer_id
 
@@ -75,7 +80,9 @@ class Well():
 
         """
         # update groundwater level change from the last year
-        self.l_wt += dwl
+        self.l_wt -= dwl
+        self.st += dwl
+        self.tr = self.st * self.k
         l_wt = self.l_wt
 
         r, tr, sy = self.r, self.tr, self.sy
