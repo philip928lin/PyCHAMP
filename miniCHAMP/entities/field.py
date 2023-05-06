@@ -88,7 +88,7 @@ class Field():
         self.a_te, self.b_te, self.l_pr = self.techs[new_te]
         self.te = new_te
 
-    def sim_step(self, irr, i_area, i_te, prec, temp):
+    def sim_step(self, irr, i_crop, i_te, prec, temp):
         """
         Simulate a single timestep.
 
@@ -98,7 +98,7 @@ class Field():
             An array outputted from OptModel() that represent the irrigation
             depth for the following year. The dimension of the array should be
             (n_s, n_c, 1).
-        i_area : 3darray
+        i_crop : 3darray
             An array outputted from OptModel() that represent the indicator
             matrix for the crop choices in following year. The dimension of the
             array should be (n_s, n_c, 1).
@@ -134,10 +134,10 @@ class Field():
         unit_area = self.unit_area
 
         w = irr + prec
-        w = w * i_area
+        w = w * i_crop
         w_ = w/wmax
         y_ = (a * w_**2 + b * w_ + c)
-        # y_ = yw_ * i_area
+        # y_ = yw_ * i_crop
         y = y_ * ymax
         v_c = irr * unit_area
         v = np.sum(v_c)

@@ -124,18 +124,18 @@ class Farmer():#ap.Agent):
 
         n_s = config["field"]["area_split"]
         n_c = len(crop_options)
-        i_area = np.zeros((n_s, n_c, 1))
+        i_crop = np.zeros((n_s, n_c, 1))
         crop_type = agtdict.init.crop_type
         if isinstance(crop_type, str):
             i_c = crop_options.index(crop_type)
-            i_area[:, i_c, 0] = 1
+            i_crop[:, i_c, 0] = 1
         else:
             for i, c in enumerate(crop_type):
                 i_c = crop_options.index(c)
-                i_area[i, i_c, 0] = 1
+                i_crop[i, i_c, 0] = 1
         dm_sols = DotMap()
         for f, v in fdict.items():
-            dm_sols[f]["i_area"] = i_area
+            dm_sols[f]["i_crop"] = i_crop
             dm_sols[f]["i_te"] = i_te
         self.dm_sols = self.make_dm(dm_sols=dm_sols, init=True)
         self.run_simulation(prec_dict, temp_dict) # aquifers
@@ -188,9 +188,9 @@ class Farmer():#ap.Agent):
         # Simulate over fields
         for f, field in fields.items():
             irr = dm_sols[f].irr
-            i_area = dm_sols[f].i_area
+            i_crop = dm_sols[f].i_crop
             i_te = dm_sols[f].i_te
-            field.sim_step(irr=irr, i_area=i_area, i_te=i_te,
+            field.sim_step(irr=irr, i_crop=i_crop, i_te=i_te,
                            prec=prec_dict[f], temp=temp_dict[f])
 
         # Simulate over wells
@@ -280,7 +280,7 @@ class Farmer():#ap.Agent):
             for f, field in fields.items():
                 if init:
                     dm.setup_constr_field(field_id=f, prec=risk_attitude_prec,
-                                          i_area=dm_sols[f].i_area,
+                                          i_crop=dm_sols[f].i_crop,
                                           i_rain_fed=None,
                                           rain_fed_option=field.rain_fed_option,
                                           i_te=dm_sols[f].i_te)
@@ -288,13 +288,13 @@ class Farmer():#ap.Agent):
 
                 if dm_sols is None:
                     dm.setup_constr_field(field_id=f, prec=risk_attitude_prec,
-                                          i_area=None,
+                                          i_crop=None,
                                           i_rain_fed=None,
                                           rain_fed_option=field.rain_fed_option,
                                           i_te=None)
                 else:
                     dm.setup_constr_field(field_id=f, prec=risk_attitude_prec,
-                                          i_area=dm_sols[f].i_area,
+                                          i_crop=dm_sols[f].i_crop,
                                           i_rain_fed=dm_sols[f].i_rain_fed,
                                           rain_fed_option=field.rain_fed_option,
                                           i_te=dm_sols[f].i_te)

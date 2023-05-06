@@ -10,13 +10,37 @@ without permission.
 To do:
     Add example documentation (wait for the completion of the miniCHAMP)
 """
-import os
+#import os
 import json
 import numpy as np
 import gurobipy as gp
 from dotmap import DotMap
-from .util import dict_to_string
+#from .util import dict_to_string
+def dict_to_string(dictionary, prefix="", indentor="  ", level=2):
+    """Ture a dictionary into a printable string.
+    Parameters
+    ----------
+    dictionary : dict
+        A dictionary.
+    indentor : str, optional
+        Indentor, by default "  ".
 
+    Returns
+    -------
+    str
+        A printable string.
+    """
+    def dict_to_string_list(dictionary, indentor="  ", count=1, string=[]):
+        for key, value in dictionary.items():
+            string.append(prefix + indentor * count + str(key))
+            if isinstance(value, dict) and count < level:
+                string = dict_to_string_list(value, indentor, count+1, string)
+            elif isinstance(value, dict) is False and count == level:
+                string[-1] += ":\t" + str(value)
+            else:
+                string.append(prefix + indentor * (count+1) + str(value))
+        return string
+    return "\n".join(dict_to_string_list(dictionary, indentor))
 #################
 
 class OptModel():
@@ -199,7 +223,7 @@ class OptModel():
         # total used electricity (pumping) per yr
         e = m.addMVar((n_h), vtype="C", name="e(PJ)", lb=0, ub=inf)
         # total profit
-        profit = m.addMVar((n_h), vtype="C", name="profit", lb=0, ub=inf)
+        profit = m.addMVar((n_h), vtype="C", name="profit(1e6$)", lb=0, ub=inf)
 
         self.vars.irr = irr
         self.vars.v = v
@@ -212,10 +236,10 @@ class OptModel():
         self.msg = {}
 
     def setup_constr_field(self, field_id, prec, rain_fed_option=False,
-                           i_area=None, i_rain_fed=None, i_te=None):
+                           i_crop=None, i_rain_fed=None, i_te=None):
         """
         Add crop field constriants. Multiple fields can be assigned by calling
-        this function multiple times with different field id. If i_area (and
+        this function multiple times with different field id. If i_crop (and
         i_rain_fed) is (are) given, the model will not optimize over different
         crop type options (and rain-fed options). If te is given, the model
         will not optimize over different irrigation technologies.
@@ -226,7 +250,7 @@ class OptModel():
             Field id distinguishing equation sets for different fields.
         prec : float
             Percieved annual precipitation amount [cm].
-        i_area : 3darray, optional
+        i_crop : 3darray, optional
             Indicator matrix with the dimension of (area_split, number of crop
             type options, 1). 1 means the corresponding crop type is selected.
             The default is None.
@@ -234,7 +258,7 @@ class OptModel():
             Indicator matrix with the dimension of (area_split, number of crop
             type options, 1). 1 means the unit area in a field is rainfed.
             i_rain_fed is only used when rain_fed_option is True. Also, if it
-            is given, make sure 1 only exists at where i_area is also 1. If
+            is given, make sure 1 only exists at where i_crop is also 1. If
             given, rain_fed_option will be forced to be True. The
             default is None.
         rain_fed_option : bool, optional
@@ -260,7 +284,7 @@ class OptModel():
                          "Rain-fed option": rain_fed_option,
                          "Rain-fed areas": (lambda o: "optimize" if o else None)(rain_fed_option)}
 
-        i_area_input = i_area
+        i_crop_input = i_crop
         i_rain_fed_input = i_rain_fed
         i_te_input = i_te
         m = self.model
@@ -286,28 +310,30 @@ class OptModel():
         irr = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.irr(cm)", lb=0, ub=ub_irr)
         #irr.Start = 100
         w   = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.w(cm)", lb=0, ub=ub_w)
+        w_temp = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.w_temp", lb=0, ub=inf)
         w_  = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.w_", lb=0, ub=1)
-        y   = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.y", lb=0, ub=inf)
+        y   = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.y(1e6bu)", lb=0, ub=inf)
         y_  = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.y_", lb=0, ub=1)
+        yw_temp  = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.yw_temp", lb=-inf, ub=1)
         yw_  = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.yw_", lb=0, ub=1)
         v_c = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.v_c(m-ha)", lb=0, ub=inf)
         y_y = m.addMVar((n_h), vtype="C", name=f"{fid}.y_y", lb=0, ub=1)    # avg y_ per yr
         v   = m.addMVar((n_h), vtype="C", name=f"{fid}.v(m-ha)", lb=0, ub=inf)
-        i_area = m.addMVar((n_s, n_c, 1), vtype="B", name=f"{fid}.i_area")
+        i_crop = m.addMVar((n_s, n_c, 1), vtype="B", name=f"{fid}.i_crop")
         i_rain_fed = m.addMVar((n_s, n_c, 1), vtype="B", name=f"{fid}.i_rain_fed")
 
-        # Given i_area as an input (i.e., don't optimize over crop type
+        # Given i_crop as an input (i.e., don't optimize over crop type
         # choices)
-        # Otherwise, optimize i_area (i.e., optimize over crop type choices)
+        # Otherwise, optimize i_crop (i.e., optimize over crop type choices)
         # Currently, crop type choice has to be the same accross planning
         # horizon.
-        if i_area_input is not None:
-            #i_area_input = np.repeat(i_area_input[:, :, np.newaxis], 1, axis=2)
-            m.addConstr(i_area == i_area_input, name=f"c.{fid}.i_area_input")
+        if i_crop_input is not None:
+            #i_crop_input = np.repeat(i_crop_input[:, :, np.newaxis], 1, axis=2)
+            m.addConstr(i_crop == i_crop_input, name=f"c.{fid}.i_crop_input")
             self.msg[fid]["Crop types"] = "user input"
         # One unit area can only be planted one type of crops.
-        m.addConstr(gp.quicksum(i_area[:,j,:] for j in range(n_c)) == 1,
-                    name=f"c.{fid}.i_area")
+        m.addConstr(gp.quicksum(i_crop[:,j,:] for j in range(n_c)) == 1,
+                    name=f"c.{fid}.i_crop")
 
         ### Include rain-fed option
         if rain_fed_option:
@@ -319,9 +345,9 @@ class OptModel():
                             name=f"c.{fid}.i_rain_fed_input")
                 self.msg[fid]["Rain-fed areas"] = "user input"
 
-            # i_rain_fed[i, j, h] can be 1 only when i_area[i, j, h] is 1.
+            # i_rain_fed[i, j, h] can be 1 only when i_crop[i, j, h] is 1.
             # Otherwise, it has to be zero.
-            m.addConstr(i_area - i_rain_fed >= 0,
+            m.addConstr(i_crop - i_rain_fed >= 0,
                         name=f"c.{fid}.i_rain_fed")
 
             m.addConstr(irr * i_rain_fed == 0, name=f"c.{fid}.irr_rain_fed")
@@ -332,16 +358,28 @@ class OptModel():
         # See the numpy broadcast rules:
         # https://numpy.org/doc/stable/user/basics.broadcasting.html
         m.addConstr((w == irr + prec), name=f"c.{fid}.w(cm)")
-        m.addConstr((w_ == w/wmax), name=f"c.{fid}.w_")
+        m.addConstr((w_temp == w/wmax), name=f"c.{fid}.w_temp")
+
+        # m.addConstr((w_ == w_temp), name=f"c.{fid}.w_")
+        m.addConstrs((w_[s,c,h] == gp.min_(w_temp[s,c,h], constant=1) \
+                    for s in range(n_s) for c in range(n_c) for h in range(n_h)),
+                    name=f"c.{fid}.w_")
+
+
         # We force irr to be zero but prec will add to w & w_, which will
         # output positive y_ leading to violation for y_y (< 1)
         # Also, we need to seperate yw_ and y_ into two constraints. Otherwise,
         # gurobi will crush. No idea why.
-        m.addConstr((yw_ == (a * w_**2 + b * w_ + c)), name=f"c.{fid}.yw_")
+        m.addConstr((yw_temp == (a * w_**2 + b * w_ + c)), name=f"c.{fid}.yw_temp")
+        # m.addConstr((yw_ == yw_temp), name=f"c.{fid}.yw_")
+        m.addConstrs((yw_[s,c,h] == gp.max_(yw_temp[s,c,h], constant=0) \
+                    for s in range(n_s) for c in range(n_c) for h in range(n_h)),
+                    name=f"c.{fid}.yw_")
+
         #m.addConstr((yw_ == (0.5 * w_ + 0.5 * w)), name=f"c.{fid}.yw_new")
-        m.addConstr((y_ == yw_ * i_area), name=f"c.{fid}.y_")
-        m.addConstr((y == y_ * ymax), name=f"c.{fid}.y")
-        m.addConstr((irr * (1-i_area) == 0), name=f"c.{fid}.irr(cm)")
+        m.addConstr((y_ == yw_ * i_crop), name=f"c.{fid}.y_")
+        m.addConstr((y == y_ * ymax * unit_area * 1e-4), name=f"c.{fid}.y") #!!! 1e-6
+        m.addConstr((irr * (1-i_crop) == 0), name=f"c.{fid}.irr(cm)")
         cm2m = 0.1
         m.addConstr((v_c == irr * unit_area * cm2m), name=f"c.{fid}.v_c(m-ha)")
         m.addConstr(v == gp.quicksum(v_c[i,j,:] \
@@ -385,7 +423,7 @@ class OptModel():
         self.vars[fid].y = y
         self.vars[fid].y_y = y_y
         self.vars[fid].irr = irr
-        self.vars[fid].i_area = i_area
+        self.vars[fid].i_crop = i_crop
         self.vars[fid].i_rain_fed = i_rain_fed
         self.vars[fid].i_te = i_te
         self.vars[fid].l_pr = l_pr
@@ -421,6 +459,8 @@ class OptModel():
             Pump efficiency.
         eff_well : float
             Well efficiency.
+        pumping_capacity : float
+            Pumping capacity [m-ha/yr]
 
         Returns
         -------
@@ -491,6 +531,7 @@ class OptModel():
     def setup_constr_finance(self):
         """
         Add financial constraints that output profits.
+        Output in Million.
 
         Returns
         -------
@@ -505,11 +546,11 @@ class OptModel():
         area_split = self.area_split
         inf = self.inf
 
-        e = self.vars.e     # (n_h)
+        e = self.vars.e     # (n_h) [PJ]
         y = self.vars.y     # (n_s, n_c, n_h)
 
-        cost_e = m.addMVar((n_h), vtype="C", name="cost_e", lb=0, ub=inf)
-        rev = m.addMVar((n_h), vtype="C", name="rev", lb=0, ub=inf)
+        cost_e = m.addMVar((n_h), vtype="C", name="cost_e(1e6$)", lb=0, ub=inf)
+        rev = m.addMVar((n_h), vtype="C", name="rev(1e6$)", lb=0, ub=inf)
         # The profit variable is created in the initial to allow users to add
         # contraints without a specific order.
         profit = self.vars.profit

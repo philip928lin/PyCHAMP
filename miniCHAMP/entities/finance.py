@@ -43,7 +43,7 @@ class Finance():
         Returns
         -------
         profit : float
-            Annual profit.
+            Annual profit (Million).
 
         """
         ep = self.energy_price
