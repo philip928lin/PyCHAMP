@@ -223,7 +223,7 @@ class OptModel():
         # total used electricity (pumping) per yr
         e = m.addMVar((n_h), vtype="C", name="e(PJ)", lb=0, ub=inf)
         # total profit
-        profit = m.addMVar((n_h), vtype="C", name="profit(1e6$)", lb=0, ub=inf)
+        profit = m.addMVar((n_h), vtype="C", name="profit(1e4$)", lb=0, ub=inf)
 
         self.vars.irr = irr
         self.vars.v = v
@@ -308,11 +308,10 @@ class OptModel():
 
         ### Add general variables
         irr = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.irr(cm)", lb=0, ub=ub_irr)
-        #irr.Start = 100
         w   = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.w(cm)", lb=0, ub=ub_w)
         w_temp = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.w_temp", lb=0, ub=inf)
         w_  = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.w_", lb=0, ub=1)
-        y   = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.y(1e6bu)", lb=0, ub=inf)
+        y   = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.y(1e4bu)", lb=0, ub=inf)
         y_  = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.y_", lb=0, ub=1)
         yw_temp  = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.yw_temp", lb=-inf, ub=1)
         yw_  = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.yw_", lb=0, ub=1)
@@ -359,26 +358,25 @@ class OptModel():
         # https://numpy.org/doc/stable/user/basics.broadcasting.html
         m.addConstr((w == irr + prec), name=f"c.{fid}.w(cm)")
         m.addConstr((w_temp == w/wmax), name=f"c.{fid}.w_temp")
-
-        # m.addConstr((w_ == w_temp), name=f"c.{fid}.w_")
         m.addConstrs((w_[s,c,h] == gp.min_(w_temp[s,c,h], constant=1) \
                     for s in range(n_s) for c in range(n_c) for h in range(n_h)),
                     name=f"c.{fid}.w_")
-
+        # Does not really help to improve the speed.
+        #m.addConstr((w_ == w/wmax), name=f"c.{fid}.w_")
 
         # We force irr to be zero but prec will add to w & w_, which will
         # output positive y_ leading to violation for y_y (< 1)
         # Also, we need to seperate yw_ and y_ into two constraints. Otherwise,
         # gurobi will crush. No idea why.
         m.addConstr((yw_temp == (a * w_**2 + b * w_ + c)), name=f"c.{fid}.yw_temp")
-        # m.addConstr((yw_ == yw_temp), name=f"c.{fid}.yw_")
         m.addConstrs((yw_[s,c,h] == gp.max_(yw_temp[s,c,h], constant=0) \
                     for s in range(n_s) for c in range(n_c) for h in range(n_h)),
                     name=f"c.{fid}.yw_")
+        # Does not really help to improve the speed.
+        #m.addConstr((yw_ == (a * w_**2 + b * w_ + c)), name=f"c.{fid}.yw_")
 
-        #m.addConstr((yw_ == (0.5 * w_ + 0.5 * w)), name=f"c.{fid}.yw_new")
         m.addConstr((y_ == yw_ * i_crop), name=f"c.{fid}.y_")
-        m.addConstr((y == y_ * ymax * unit_area * 1e-4), name=f"c.{fid}.y") #!!! 1e-6
+        m.addConstr((y == y_ * ymax * unit_area * 1e-4), name=f"c.{fid}.y") # 1e4 bu
         m.addConstr((irr * (1-i_crop) == 0), name=f"c.{fid}.irr(cm)")
         cm2m = 0.1
         m.addConstr((v_c == irr * unit_area * cm2m), name=f"c.{fid}.v_c(m-ha)")
@@ -531,7 +529,7 @@ class OptModel():
     def setup_constr_finance(self):
         """
         Add financial constraints that output profits.
-        Output in Million.
+        Output in 1e4$.
 
         Returns
         -------
@@ -666,9 +664,15 @@ class OptModel():
         self.water_right_ids.append(water_right_id)
         self.n_water_rights += 1
 
-    def setup_obj(self, alpha_dict=None):
+    def setup_obj_Sa(self, alpha_dict=None):
         """
         Add the objective to maximize the agent's expected satisfication.
+        The calculation of satisfication involves exp, which require using the
+        general expression in gurobi. The piecewise process will introduct
+        additional binary integers that can significantly slow down the solving
+        process and may encounter unexpected numerical issue. We suggest to use
+        setup_obj instead and calculate satisfication afterward. Same solution
+        should be expected.
 
         Parameters
         ----------
@@ -725,11 +729,70 @@ class OptModel():
             vars.Sa[metric] = Sa
 
         for metric in eval_metrics:
-            add_metric(metric, alphas[metric])
+            # It will be super slow if calculate all needs within opt model.
+            #add_metric(metric, alphas[metric])
 
             # Add objective
             if metric == eval_metric:
+                add_metric(metric, alphas[metric])
                 m.setObjective(vars.Sa[metric], gp.GRB.MAXIMIZE)
+        self.obj_post_calculation = False
+
+    def setup_obj(self, alpha_dict=None):
+        """
+        Add the objective to maximize the agent's expected satisfication. Note
+        that the satisfication is calculate after the optimization which is
+        much faster. The solution is equivalent to using satisfication directly
+        as objective.
+
+        Parameters
+        ----------
+        alpha_dict : dict, optional
+            Overwrite alpha values retrieved from the config. The default is None.
+
+        Returns
+        -------
+        None.
+
+        """
+        eval_metric = self.eval_metric
+        alphas = self.alphas
+        vars = self.vars
+
+        # Update alpha list
+        if alpha_dict is not None:
+            alphas.update(alpha_dict)
+            self.eval_metrics = [metric for metric, v in self.alphas.items() if v is not None]
+
+        # Check the selected eval_metric exist
+        eval_metrics = self.eval_metrics
+        eval_metric = self.eval_metric
+        if eval_metric not in eval_metrics:
+            raise ValueError(f"Alpha value of metric '{eval_metric}' is not given.")
+
+        # Currently supported metrices
+        eval_metric_vars = {
+            "profit": vars.profit,
+            "yield_pct": vars.y_y
+            }
+
+        inf = self.inf
+        m = self.model
+        n_h = self.n_h
+
+        def add_metric(metric):
+            Sa = m.addVar(vtype="C", name=f"Sa.{metric}", lb=0, ub=inf)
+            metric_var = eval_metric_vars.get(metric)
+            m.addConstr((Sa == gp.quicksum(metric_var[h] for h in range(n_h))/n_h),
+                        name=f"c.Sa.{metric}")
+            vars.Sa[metric] = Sa
+
+        for metric in eval_metrics:
+            # Add objective
+            if metric == eval_metric:
+                add_metric(metric)
+                m.setObjective(vars.Sa[metric], gp.GRB.MAXIMIZE)
+        self.obj_post_calculation = True
 
     def finish_setup(self, display_summary=True):
         """
@@ -857,6 +920,24 @@ class OptModel():
             self.optimal_obj_value = m.objVal
             self.sols = extract_sol(self.vars)
             self.sols.obj = m.objVal
+
+            # Calculate satisfication
+            if self.obj_post_calculation:
+                eval_metrics = self.eval_metrics
+                alphas = self.alphas
+
+                # Currently supported metrices
+                eval_metric_vars = {
+                    "profit": self.sols.profit,
+                    "yield_pct": self.sols.y_y
+                    }
+                for metric in eval_metrics:
+                    alpha = alphas[metric]
+                    metric_var = eval_metric_vars.get(metric)
+                    N_yr = 1 - np.exp(-alpha * metric_var)
+                    Sa = np.mean(N_yr)
+                    self.sols.Sa[metric] = Sa
+
         else:
             print("Optimal solution is not found.")
             self.optimal_obj_value = None
