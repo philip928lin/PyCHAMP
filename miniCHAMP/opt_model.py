@@ -16,7 +16,7 @@ import numpy as np
 import gurobipy as gp
 from dotmap import DotMap
 #from .util import dict_to_string
-def dict_to_string(dictionary, prefix="", indentor="  ", level=2):
+def dict_to_string(dictionary, prefix="", indentor="  ", level=2, roun=None):
     """Ture a dictionary into a printable string.
     Parameters
     ----------
@@ -38,7 +38,10 @@ def dict_to_string(dictionary, prefix="", indentor="  ", level=2):
             elif isinstance(value, dict) is False and count == level:
                 string[-1] += ":\t" + str(value)
             else:
-                string.append(prefix + indentor * (count+1) + str(value))
+                if roun is not None and isinstance(value, float):
+                    string.append(prefix + indentor * (count+1) + str(round(value, roun)))
+                else:
+                    string.append(prefix + indentor * (count+1) + str(value))
         return string
     return "\n".join(dict_to_string_list(dictionary, indentor))
 #################
@@ -126,7 +129,8 @@ class OptModel():
 
     def setup_ini_model(self, config, horizon=5, eval_metric="profit",
                         crop_options=["corn", "sorghum", "soybean", "fallow"],
-                        tech_options=["center pivot", "center pivot LEPA"]):
+                        tech_options=["center pivot", "center pivot LEPA"],
+                        approx_horizon=True):
         """
         Setup initial setting for an optimization model. This will
         automatically dispose the model created in the previous run. However,
@@ -148,6 +152,13 @@ class OptModel():
         tech_options : list, optional
             A list of irrigation technologies. They must exist in the config. The
             default is ["center pivot", "center pivot LEPA"].
+        approx_horizon : bool, optional
+            If True, the model will calculate two (start & end) points over the
+            given horizon to calcalate the objective, which is the average over
+            the horizon. This will significantly improve solving speed with
+            long horizon. Most of the time this is equivalent to the original
+            problem. This is built upon the assumption that groundwater level
+            linearly decrease in the projected future.
 
         Returns
         -------
@@ -168,7 +179,13 @@ class OptModel():
         self.n_c = len(crop_options)    # NO. crop options (not distinguished
                                         # by rain-fed or irrigated)
         self.n_te = len(tech_options)   # NO. irr tech options
-        self.n_h = horizon              # Planning horizon
+        self.approx_horizon = approx_horizon
+        self.horizon = horizon          # Original planning horizon
+
+        if approx_horizon:
+            self.n_h = 2                # calculate obj with start and end points
+        else:
+            self.n_h = horizon
 
         ## Records fields and wells
         self.field_ids = []
@@ -185,6 +202,7 @@ class OptModel():
         self.a = crop[:, 2].reshape((-1, 1))        # (n_c, 1)
         self.b = crop[:, 3].reshape((-1, 1))        # (n_c, 1)
         self.c = crop[:, 4].reshape((-1, 1))        # (n_c, 1)
+        self.growth_period_ratio = {c: config.field.growth_period_ratio[c] for c in crop_options}
         self.area_split = config.field.area_split
         self.unit_area = config.field.field_area/self.area_split
 
@@ -249,7 +267,7 @@ class OptModel():
         field_id : str or int
             Field id distinguishing equation sets for different fields.
         prec : float
-            Percieved annual precipitation amount [cm].
+            Percieved precipitation amount in the growing season [cm].
         i_crop : 3darray, optional
             Indicator matrix with the dimension of (area_split, number of crop
             type options, 1). 1 means the corresponding crop type is selected.
@@ -475,8 +493,13 @@ class OptModel():
         rho = self.rho
         g = self.g
 
+        approx_horizon = self.approx_horizon
+        if approx_horizon:
+            dwls = np.array([0, dwl*(self.horizon-1)])
+        else:
+            dwls = np.array([dwl*(i) for i in range(n_h)])
         # Assume a linear projection to the future
-        l_wt = np.array([l_wt - dwl*(i) for i in range(n_h)])
+        l_wt = l_wt + dwls
 
         # Calculate propotion of the irrigation water (v), daily pumping rate
         # (q), and head for irr tech (l_pr) of this well.
@@ -615,7 +638,7 @@ class OptModel():
                     irr_sub = vars[fid].irr
                 else:
                     irr_sub += vars[fid].irr
-
+            irr_sub = irr_sub/len(fids)
         self.wr = wr
         self.time_window = time_window
 
@@ -629,7 +652,7 @@ class OptModel():
                 start_index = max(n_h, start_index+1) - 1
                 print("Warning: start_index is larger than (horizon - 1).")
             m.addConstrs((gp.quicksum(irr_sub[i,j,h] \
-                        for i in range(n_s) for j in range(n_c)) <= remaining_wr \
+                        for i in range(n_s) for j in range(n_c))/n_s <= remaining_wr \
                         for h in range(0, start_index + 1)),
                         name=f"c.{water_right_id}.wr_{c_i}(cm)")
             c_i += 1
@@ -641,7 +664,7 @@ class OptModel():
         # Middle period
         while remaining_length > time_window:
             m.addConstrs((gp.quicksum(irr_sub[i,j,h] \
-                        for i in range(n_s) for j in range(n_c)) <= wr \
+                        for i in range(n_s) for j in range(n_c))/n_s <= wr \
                         for h in range(start_index, start_index+time_window)),
                         name=f"c.{water_right_id}.wr_{c_i}(cm)")
             c_i += 1
@@ -657,7 +680,7 @@ class OptModel():
             # Otherwise, we expect a value given by users.
 
             m.addConstrs((gp.quicksum(irr_sub[i,j,h] \
-                        for i in range(n_s) for j in range(n_c)) <= wr_tail \
+                        for i in range(n_s) for j in range(n_c))/n_s <= wr_tail \
                         for h in range(start_index, n_h)),
                         name=f"c.{water_right_id}.wr_{c_i}(cm)")
 
@@ -852,11 +875,15 @@ class OptModel():
 
         m.update()
 
+        if self.approx_horizon:
+            h_msg = str(self.n_h) + " (approximate with 2)"
+        else:
+            h_msg = str(self.n_h)
         msg = dict_to_string(self.msg, prefix="\t\t", level=2)
         summary = f"""
         ########## Model Summary ##########\n
         Name:   {self.name}\n
-        Planning horizon:   {self.n_h}
+        Planning horizon:   {h_msg}
         NO. Crop fields:    {self.n_fields}
         NO. splits          {self.area_split}
         NO. Wells:          {self.n_wells}
@@ -868,7 +895,7 @@ class OptModel():
         if display_summary:
             print(summary)
 
-    def solve(self, keep_gp_model=False, keep_gp_output=False, **kwargs):
+    def solve(self, keep_gp_model=False, keep_gp_output=False, display_report=False, **kwargs):
         """
         Solve the optimization problem. Default NonConvex = 2 (solve for a
         nonconvex model).
@@ -927,16 +954,65 @@ class OptModel():
                 alphas = self.alphas
 
                 # Currently supported metrices
-                eval_metric_vars = {
-                    "profit": self.sols.profit,
-                    "yield_pct": self.sols.y_y
-                    }
+                if self.approx_horizon:
+                    horizon = self.horizon
+                    profits = self.sols.profit
+                    y_ys = self.sols.y_y
+                    eval_metric_vars = {
+                        "profit": np.linspace(profits[0], profits[1], num=horizon),
+                        "yield_pct": np.linspace(y_ys[0], y_ys[1], num=horizon)
+                        }
+                else:
+                    eval_metric_vars = {
+                        "profit": self.sols.profit,
+                        "yield_pct": self.sols.y_y
+                        }
                 for metric in eval_metrics:
                     alpha = alphas[metric]
                     metric_var = eval_metric_vars.get(metric)
                     N_yr = 1 - np.exp(-alpha * metric_var)
                     Sa = np.mean(N_yr)
                     self.sols.Sa[metric] = Sa
+
+            # Display report
+            crop_options = self.crop_options
+            tech_options = self.tech_options
+            n_s = self.area_split
+            fids = self.field_ids
+            sols = self.sols
+            irrs = list(sols.irr.mean(axis=0).sum(axis=0).round(2))
+            decisions = {"Irrigation depths": irrs}
+            for fid in fids:
+                i_crop = sols[fid].i_crop[:, :, 0]
+                crop_type = [crop_options[np.where(i_crop[s,:].round(0) == 1)[0][0]] for s in range(n_s)]
+                tech = tech_options[np.where(sols[fid].i_te[:].round(0) == 1)[0][0]]
+                Irrigated = list((sols[fid].i_rain_fed[:, :, 0].sum(axis=1).round(0) == 0))
+                decisions[fid] = {"Crop types": crop_type,
+                                  "Irr tech": tech,
+                                  "Irrigated": Irrigated}
+            decisions = dict_to_string(decisions, prefix="\t\t", level=2)
+            msg = dict_to_string(self.msg, prefix="\t\t", level=2)
+            sas = dict_to_string(self.sols.Sa, prefix="\t\t", level=2, roun=4)
+            if self.approx_horizon:
+                h_msg = str(self.n_h) + " (approximate with 2)"
+            else:
+                h_msg = str(self.n_h)
+            report = f"""
+        ########## Model Report ##########\n
+        Name:   {self.name}\n
+        Planning horizon:   {h_msg}
+        NO. Crop fields:    {self.n_fields}
+        NO. splits          {self.area_split}
+        NO. Wells:          {self.n_wells}
+        NO. Water rights:   {self.n_water_rights}\n
+        Decision settings:\n{msg}\n
+        Solutions:\n{decisions}\n
+        Satisfication:\n{sas}\n
+        ###################################
+            """
+            self.report = report
+            if display_report:
+                print(report)
 
         else:
             print("Optimal solution is not found.")

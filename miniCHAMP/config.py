@@ -16,18 +16,24 @@ Suggestion:
 config = {
     "field": {
         "field_area": 50.,  # ha
-        "area_split": 4,    # --
+        "area_split": 1,    # -- # 2 will be alright, starting from 3 it will be slow in process.
         "crop": {
             #           ymax, wmax,  a,    b,   c
-            "corn":     [521., 103., -4.19, 7.21, -2.23],
-            "sorghum":  [264., 98.7, -4.19, 7.21, -2.23],
-            "soybean":  [163., 101., -4.19, 7.21, -2.23], #-1.75, 2.65, 0.
-            "fallow":   [0., 100., 0, 0, 0.],   # wmax cannot be zero
+            "corn":     [531, 93., -3.25, 5.81, -1.74],    # you have numerical issue here~~ try to change to $M
+            "sorghum":  [267, 82.1, -3.47, 5.90, -1.57],
+            "soybean":  [165, 89.2, -2.81, 5.00, -1.42],
+            "fallow":   [0., 100., 0, 0, 0.],
             },
         "tech": {
             #                        a  b [m3 -> m-ha] Lpr[m] (McCarthy et al., 2020)
             "center pivot":      [0.0051, 0.268744, 28.12],
             "center pivot LEPA": [0.0058, 0.212206, 12.65]
+            },
+        "growth_period_ratio": {
+            "corn":     1,
+            "sorghum":  0.822,
+            "soybean":  0.934,
+            "fallow":   1,
             }
         },
     "well": {
