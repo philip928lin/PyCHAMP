@@ -25,8 +25,8 @@ class Finance():
     def __init__(self, config,
                  crop_options=["corn", "sorghum", "soybean", "fallow"]):
         config = DotMap(config)
-        self.energy_price = config.finance.energy_price
-        self.crop_profit = config.finance.crop_profit
+        self.energy_price = config.finance.energy_price  # 1e6$/PJ
+        self.crop_profit = config.finance.crop_profit    # $/bu
         self.crop_options = crop_options
 
     def sim_step(self, e, y):
@@ -38,7 +38,7 @@ class Finance():
         e : float
             Total energy consumption [PJ].
         y : 3darray
-            Crop yield with the dimension (n_s, n_c, 1).
+            Crop yield with the dimension (n_s, n_c, 1) [1e4 bu].
 
         Returns
         -------
@@ -46,14 +46,14 @@ class Finance():
             Annual profit (Million).
 
         """
-        ep = self.energy_price
-        cp = self.crop_profit
+        ep = self.energy_price          # [1e6$/PJ]
+        cp = self.crop_profit           # [$/bu]
         crop_options = self.crop_options
 
-        cost_e = e * ep
-        rev = sum([y[i,j,:] * cp[c] for i in range(y.shape[0]) \
-                   for j, c in enumerate(crop_options)])
+        cost_e = e * ep     # 1e6$
+        rev = sum([y[i,j,:] * cp[c] * 1e-2 for i in range(y.shape[0]) \
+                   for j, c in enumerate(crop_options)])    # 1e6$
         profit = rev - cost_e
         profit = profit[0]
-        self.profit = profit
+        self.profit = profit    # 1e6$
         return profit

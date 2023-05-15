@@ -253,7 +253,7 @@ class OptModel():
         ## Add input msg
         self.msg = {}
 
-    def setup_constr_field(self, field_id, prec, rain_fed_option=False,
+    def setup_constr_field(self, field_id, prec_aw, rain_fed_option=False,
                            i_crop=None, i_rain_fed=None, i_te=None):
         """
         Add crop field constriants. Multiple fields can be assigned by calling
@@ -266,7 +266,7 @@ class OptModel():
         ----------
         field_id : str or int
             Field id distinguishing equation sets for different fields.
-        prec : float
+        prec_aw : float
             Percieved precipitation amount in the growing season [cm].
         i_crop : 3darray, optional
             Indicator matrix with the dimension of (area_split, number of crop
@@ -290,8 +290,8 @@ class OptModel():
         None.
 
         """
-        assert prec <= np.max(self.wmax), f"""prec {prec} is larger than wmax
-        {np.max(self.wmax)}. This will lead to infeasible solution."""
+        # assert prec_aw <= np.max(self.wmax), f"""prec_aw {prec_aw} is larger than wmax
+        # {np.max(self.wmax)}. This will lead to infeasible solution."""
 
         self.field_ids.append(field_id)
         fid = field_id
@@ -317,12 +317,17 @@ class OptModel():
         c = self.c
         ymax = self.ymax
         wmax = self.wmax
+        growth_period_ratio = self.growth_period_ratio
         ub_w = self.bounds.ub_w
-        ub_irr = ub_w - prec
+        ub_irr = ub_w #ub_w - prec_aw
         self.bounds[fid].ub_irr = ub_irr
 
-
         unit_area = self.unit_area
+
+        # Adjust growing period
+        prec_aw = np.ones((n_s, n_c, n_h)) * prec_aw
+        for c, crop in enumerate(self.crop_options):
+            prec_aw[:, c, :] = prec_aw[:, c, :] * growth_period_ratio[crop]
 
         ### Add general variables
         irr = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.irr(cm)", lb=0, ub=ub_irr)
@@ -374,7 +379,7 @@ class OptModel():
 
         # See the numpy broadcast rules:
         # https://numpy.org/doc/stable/user/basics.broadcasting.html
-        m.addConstr((w == irr + prec), name=f"c.{fid}.w(cm)")
+        m.addConstr((w == irr + prec_aw), name=f"c.{fid}.w(cm)")
         m.addConstr((w_temp == w/wmax), name=f"c.{fid}.w_temp")
         m.addConstrs((w_[s,c,h] == gp.min_(w_temp[s,c,h], constant=1) \
                     for s in range(n_s) for c in range(n_c) for h in range(n_h)),
@@ -382,7 +387,7 @@ class OptModel():
         # Does not really help to improve the speed.
         #m.addConstr((w_ == w/wmax), name=f"c.{fid}.w_")
 
-        # We force irr to be zero but prec will add to w & w_, which will
+        # We force irr to be zero but prec_aw will add to w & w_, which will
         # output positive y_ leading to violation for y_y (< 1)
         # Also, we need to seperate yw_ and y_ into two constraints. Otherwise,
         # gurobi will crush. No idea why.
@@ -396,7 +401,7 @@ class OptModel():
         m.addConstr((y_ == yw_ * i_crop), name=f"c.{fid}.y_")
         m.addConstr((y == y_ * ymax * unit_area * 1e-4), name=f"c.{fid}.y") # 1e4 bu
         m.addConstr((irr * (1-i_crop) == 0), name=f"c.{fid}.irr(cm)")
-        cm2m = 0.1
+        cm2m = 0.01
         m.addConstr((v_c == irr * unit_area * cm2m), name=f"c.{fid}.v_c(m-ha)")
         m.addConstr(v == gp.quicksum(v_c[i,j,:] \
                     for i in range(n_s) for j in range(n_c)),
@@ -499,7 +504,7 @@ class OptModel():
         else:
             dwls = np.array([dwl*(i) for i in range(n_h)])
         # Assume a linear projection to the future
-        l_wt = l_wt + dwls
+        l_wt = l_wt - dwls
 
         # Calculate propotion of the irrigation water (v), daily pumping rate
         # (q), and head for irr tech (l_pr) of this well.
@@ -523,7 +528,7 @@ class OptModel():
         l_cd_l_wd = m.addMVar((n_h), vtype="C", name=f"{wid}.l_cd_l_wd(m)", lb=0, ub=inf)
 
         # 10000 is to convert m*ha to m3
-        m_ha_2_m3 = 10000.0
+        m_ha_2_m3 = 10000
         m.addConstr((q_lnx == r**2*sy/fpitr), name=f"c.{wid}.q_lnx")
         # y = ln(x)  addGenConstrLog(x, y)
         # Due to TypeError: unsupported operand type(s) for *: 'MLinExpr' and
@@ -560,7 +565,7 @@ class OptModel():
 
         """
         m = self.model
-        energy_price = self.energy_price
+        energy_price = self.energy_price    #[1e6$/PJ]
         crop_profit = self.crop_profit
         crop_options = self.crop_options
         n_h = self.n_h
@@ -568,7 +573,7 @@ class OptModel():
         inf = self.inf
 
         e = self.vars.e     # (n_h) [PJ]
-        y = self.vars.y     # (n_s, n_c, n_h)
+        y = self.vars.y     # (n_s, n_c, n_h) [1e4 bu]
 
         cost_e = m.addMVar((n_h), vtype="C", name="cost_e(1e6$)", lb=0, ub=inf)
         rev = m.addMVar((n_h), vtype="C", name="rev(1e6$)", lb=0, ub=inf)
@@ -577,7 +582,7 @@ class OptModel():
         profit = self.vars.profit
 
         m.addConstr((cost_e == e * energy_price), name="c.cost_e")
-        m.addConstr(rev == gp.quicksum(y[i,j,:] * crop_profit[c]\
+        m.addConstr(rev == gp.quicksum(y[i,j,:] * crop_profit[c] * 1e-2\
                     for i in range(area_split) for j, c in enumerate(crop_options)),
                     name="c.rev")
         m.addConstr((profit == rev - cost_e), name="c.profit")
@@ -990,6 +995,7 @@ class OptModel():
                 decisions[fid] = {"Crop types": crop_type,
                                   "Irr tech": tech,
                                   "Irrigated": Irrigated}
+            self.decisions = decisions
             decisions = dict_to_string(decisions, prefix="\t\t", level=2)
             msg = dict_to_string(self.msg, prefix="\t\t", level=2)
             sas = dict_to_string(self.sols.Sa, prefix="\t\t", level=2, roun=4)

@@ -64,19 +64,19 @@ class Well():
         Parameters
         ----------
         v : float
-            Irrigation amount that will be withdraw from this well.
+            Irrigation amount that will be withdraw from this well [m-ha].
         dwl : float
-            Groudwater level change.
+            Groudwater level change [m].
         q : float
-            Average daily pumping rate.
+            Average daily pumping rate [m-ha].
         l_pr : float
             The effective lift due to pressurization and of water and pipe
-            losses necessary for the allocated irrigation system.
+            losses necessary for the allocated irrigation system [m].
 
         Returns
         -------
         e : float
-            Energy consumption.
+            Energy consumption [PJ].
 
         """
         # update groundwater level change from the last year
@@ -89,12 +89,12 @@ class Well():
         eff_well, eff_pump = self.eff_well, self.eff_pump
         rho, g = self.rho, self.g
 
-        cm_ha_2_m3 = 1000
+        m_ha_2_m3 = 10000
         fpitr = 4 * np.pi * tr
         l_cd_l_wd = (1+eff_well) * q/fpitr \
-                    * (-0.5772 - np.log(r**2*sy/fpitr)) * cm_ha_2_m3
+                    * (-0.5772 - np.log(r**2*sy/fpitr)) * m_ha_2_m3
         l_t = l_wt + l_cd_l_wd + l_pr
-        e = rho * g * v * l_t / eff_pump * cm_ha_2_m3
+        e = rho * g * m_ha_2_m3 / eff_pump / 1e15 * v * l_t
 
         # record
         self.t += 1

@@ -56,6 +56,7 @@ class Field():
         self.a = crop[:, 2].reshape((-1, 1))        # (n_c, 1)
         self.b = crop[:, 3].reshape((-1, 1))        # (n_c, 1)
         self.c = crop[:, 4].reshape((-1, 1))        # (n_c, 1)
+        self.growth_period_ratio = {c: config.field.growth_period_ratio[c] for c in crop_options}
         self.n_s = config.field.area_split
         self.unit_area = config.field.field_area/self.n_s
 
@@ -88,7 +89,7 @@ class Field():
         self.a_te, self.b_te, self.l_pr = self.techs[new_te]
         self.te = new_te
 
-    def sim_step(self, irr, i_crop, i_te, prec, temp):
+    def sim_step(self, irr, i_crop, i_te, prec_aw, prec, temp):
         """
         Simulate a single timestep.
 
@@ -96,7 +97,7 @@ class Field():
         ----------
         irr : 3darray
             An array outputted from OptModel() that represent the irrigation
-            depth for the following year. The dimension of the array should be
+            depth for the following year [cm]. The dimension of the array should be
             (n_s, n_c, 1).
         i_crop : 3darray
             An array outputted from OptModel() that represent the indicator
@@ -106,22 +107,24 @@ class Field():
             An array outputted from OptModel() that represent the indicator
             matrix for the irrigation technology choices in following year. The
             dimension of the array should be (n_te).
+        prec_aw : float
+            The precipitation amount in the growing season [cm].
         prec : float
-            The annual precipitation amount.
+            The annual precipitation amount [cm].
         temp : DataFrame
             The daily mean temperature storing in DataFrame format with
-            datetime index.
+            datetime index [degC].
 
         Returns
         -------
         y : 3darray
-            Crop yield with the dimension (n_s, n_c, 1).
+            Crop yield with the dimension (n_s, n_c, 1) [1e4 bu].
         y_y : 3darray
             Crop yield/maximum yield with the dimension (n_s, n_c, 1).
         v : float
-            Irrigation amount.
+            Irrigation amount [m-ha].
         inflow : float
-            Inflow to the aquifer.
+            Inflow to the aquifer [ m-ha].
 
         """
         # Crop yield
@@ -132,15 +135,23 @@ class Field():
         wmax = self.wmax
         n_s = self.n_s
         unit_area = self.unit_area
+        growth_period_ratio = self.growth_period_ratio
 
-        w = irr + prec
+        # Adjust growing period
+        prec_aw_ = np.ones(irr.size) * prec_aw
+        for c, crop in enumerate(self.crop_options):
+            prec_aw_[:, c, :] = prec_aw_[:, c, :] * growth_period_ratio[crop]
+
+        w = irr + prec_aw_
         w = w * i_crop
-        w_ = w/wmax
+        w_ = w/wmax     # see if we want to set the max 1 here
         y_ = (a * w_**2 + b * w_ + c)
-        # y_ = yw_ * i_crop
-        y = y_ * ymax
-        v_c = irr * unit_area
-        v = np.sum(v_c)
+        y_ = np.max(0, y_)
+        y_ = y_ * i_crop
+        y = y_ * ymax * 1e-4            # 1e4 bu
+        cm2m = 0.01
+        v_c = irr * unit_area * cm2m    # m-ha
+        v = np.sum(v_c)                 # m-ha
         y_y = np.sum(y_) / n_s
 
         self.y, self.y_y, self.v = y, y_y, v
@@ -157,7 +168,7 @@ class Field():
 
         # Annual ET for aquifer
         # !!!! Calculate et + remember to average over the corner
-        wv = np.sum(w * unit_area)
+        wv = np.sum(w * unit_area) * cm2m
         pet = self.cal_pet_Hamon(temp, self.lat, self.dz)
         Kc = 1 # not yet decide how
 
@@ -165,7 +176,7 @@ class Field():
         Ks = np.ones(w_.shape)
         Ks[w_ <= 0.5] = 2 * w_[w_ <= 0.5]
 
-        et = Ks * Kc * sum(pet) * unit_area
-        inflow = wv - et    # volumn
-        self.inflow = inflow
+        et = Ks * Kc * sum(pet) * unit_area * cm2m  # m-ha
+        inflow = wv - et                            # m-ha
+        self.inflow = inflow                        # m-ha
         return y, y_y, v, inflow

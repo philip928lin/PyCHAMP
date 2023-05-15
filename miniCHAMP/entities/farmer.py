@@ -16,7 +16,7 @@ from .finance import Finance
 
 class Farmer():#ap.Agent):
     def setup(self, agt_id, config, agent_dict, fields_dict, wells_dict,
-              prec_dict, temp_dict, aquifers,
+              prec_aw_dict, prec_dict, temp_dict, aquifers,
               crop_options=["corn", "sorghum", "soybean", "fallow"],
               tech_options=["center pivot", "center pivot LEPA"]):
         """
@@ -40,6 +40,10 @@ class Farmer():#ap.Agent):
             A dictionary containing an agent's field settings.
         wells_dict : dict
             A dictionary containing an agent's well settings.
+        prec_aw_dict : dict
+            The annual precipitation during grow season for each field. The
+            format is e.g.,
+            {"field1": 0.8}.
         prec_dict : dict
             The annual precipitation for each field. The format is e.g.,
             {"field1": 0.8}.
@@ -91,7 +95,8 @@ class Farmer():#ap.Agent):
         fields = DotMap()
         wells = DotMap()
         for f, v in fdict.items():
-            fields[f] = Field(field_id=f, config=config, te=v.te, lat=v.lat, dz=v.dz,
+            fields[f] = Field(field_id=f, config=config, te=v.te, lat=v.lat,
+                              dz=v.dz,
                               crop_options=crop_options,
                               tech_options=tech_options)
             fields[f].rain_fed_option = v.rain_fed_option
@@ -138,14 +143,18 @@ class Farmer():#ap.Agent):
             dm_sols[f]["i_crop"] = i_crop
             dm_sols[f]["i_te"] = i_te
         self.dm_sols = self.make_dm(dm_sols=dm_sols, init=True)
-        self.run_simulation(prec_dict, temp_dict) # aquifers
+        self.run_simulation(prec_aw_dict, prec_dict, temp_dict) # aquifers
 
-    def sim_step(self, prec_dict, temp_dict):
+    def sim_step(self, prec_aw_dict, prec_dict, temp_dict):
         """
         Simulate a single timestep.
 
         Parameters
         ----------
+        prec_aw_dict : dict
+            The annual precipitation during grow season for each field. The
+            format is e.g.,
+            {"field1": 0.8}.
         prec_dict : dict, optional
             The annual precipitation for each field. The format is e.g.,
             {"field1": 0.8} The default is {}.
@@ -175,9 +184,9 @@ class Farmer():#ap.Agent):
             self.make_dm_deliberation()
 
         ### Simulation
-        self.run_simulation(prec_dict, temp_dict)
+        self.run_simulation(prec_aw_dict, prec_dict, temp_dict)
 
-    def run_simulation(self, prec_dict, temp_dict):  # aquifers
+    def run_simulation(self, prec_aw_dict, prec_dict, temp_dict):  # aquifers
         aquifers = self.aquifers
         eval_metric = self.eval_metric
         alphas = self.alphas
@@ -191,6 +200,7 @@ class Farmer():#ap.Agent):
             i_crop = dm_sols[f].i_crop
             i_te = dm_sols[f].i_te
             field.sim_step(irr=irr, i_crop=i_crop, i_te=i_te,
+                           prec_aw=prec_aw_dict[f],
                            prec=prec_dict[f], temp=temp_dict[f])
 
         # Simulate over wells
@@ -224,8 +234,8 @@ class Farmer():#ap.Agent):
             needs[a] = func(eval_metric_vars[a], alpha=alpha)
 
         satisfaction = needs[eval_metric]
-        obj_val = dm_sols.obj
-        uncertainty = abs(obj_val - satisfaction)
+        expected_sa = dm_sols.Sa[eval_metric]
+        uncertainty = abs(expected_sa - satisfaction)
 
         self.satisfaction = satisfaction
         self.uncertainty = uncertainty
@@ -279,7 +289,7 @@ class Farmer():#ap.Agent):
         for f, field in fields.items():
             for f, field in fields.items():
                 if init:
-                    dm.setup_constr_field(field_id=f, prec=risk_attitude_prec,
+                    dm.setup_constr_field(field_id=f, prec_aw=risk_attitude_prec,
                                           i_crop=dm_sols[f].i_crop,
                                           i_rain_fed=None,
                                           rain_fed_option=field.rain_fed_option,
@@ -287,13 +297,13 @@ class Farmer():#ap.Agent):
                     continue
 
                 if dm_sols is None:
-                    dm.setup_constr_field(field_id=f, prec=risk_attitude_prec,
+                    dm.setup_constr_field(field_id=f, prec_aw=risk_attitude_prec,
                                           i_crop=None,
                                           i_rain_fed=None,
                                           rain_fed_option=field.rain_fed_option,
                                           i_te=None)
                 else:
-                    dm.setup_constr_field(field_id=f, prec=risk_attitude_prec,
+                    dm.setup_constr_field(field_id=f, prec_aw=risk_attitude_prec,
                                           i_crop=dm_sols[f].i_crop,
                                           i_rain_fed=dm_sols[f].i_rain_fed,
                                           rain_fed_option=field.rain_fed_option,
