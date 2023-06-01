@@ -61,10 +61,10 @@ class OptModel():
     implemented by assigning pumping capacity to a well.
 
     Multiple crop types can be planted in a single field if the attribute
-    'area_split' is larger then 1. For example, if area_split = 4, a field is
+    'n_s' is larger then 1. For example, if n_s = 4, a field is
     uniformly split into 4 subfields. The farmer can make individual crop and
-    irrigation decision for each of the subfields. area_split is extract from
-    the 'config.'
+    irrigation decision for each of the subfields. n_s is extract from
+    the area_split in 'config.'
 
     If the 'horizon' is larger than 1, only the irrigation depth are varied in
     each year. crop types, rain-fed option, and irrigation technologies are
@@ -166,6 +166,7 @@ class OptModel():
 
         """
         config = DotMap(config)
+        self.config = config
         self.crop_options = crop_options
         self.tech_options = tech_options
         self.eval_metric = eval_metric
@@ -182,8 +183,10 @@ class OptModel():
         self.approx_horizon = approx_horizon
         self.horizon = horizon          # Original planning horizon
 
-        if approx_horizon:
-            self.n_h = 2                # calculate obj with start and end points
+        if approx_horizon and horizon > 2:
+            # calculate obj with start and end points
+            # Assume a linear relationship
+            self.n_h = 2
         else:
             self.n_h = horizon
 
@@ -203,20 +206,38 @@ class OptModel():
         self.b = crop[:, 3].reshape((-1, 1))        # (n_c, 1)
         self.c = crop[:, 4].reshape((-1, 1))        # (n_c, 1)
         self.growth_period_ratio = {c: config.field.growth_period_ratio[c] for c in crop_options}
-        self.area_split = config.field.area_split
-        self.unit_area = config.field.field_area/self.area_split
-
-        self.rho = config.well.rho
-        self.g = config.well.g
-        self.techs = config.field.tech
-
-        self.energy_price = config.finance.energy_price
-        self.crop_profit = config.finance.crop_profit
+        self.n_s = config.field.area_split
+        self.unit_area = config.field.field_area/self.n_s
 
         self.alphas = config.consumat.alpha
         self.eval_metrics = [metric for metric, v in self.alphas.items() if v is not None]
 
-        ## Model
+        ## Form changing matrix from the config
+        n_te = self.n_te
+        irr_tech_change_cost = config.finance.irr_tech_change_cost
+        tech_change_cost_matrix = np.zeros((n_te, n_te))
+        for k, v in irr_tech_change_cost.items():
+            try:
+                i = tech_options.index(k[0])
+                j = tech_options.index(k[1])
+                tech_change_cost_matrix[i, j] = v
+            except:
+                pass
+        self.tech_change_cost_matrix = tech_change_cost_matrix
+
+        n_c = self.n_c
+        crop_change_cost = config.finance.crop_change_cost
+        crop_change_cost_matrix = np.zeros((n_c, n_c))
+        for k, v in crop_change_cost.items():
+            try:
+                i = crop_options.index(k[0])
+                j = crop_options.index(k[1])
+                crop_change_cost_matrix[i, j] = v
+            except:
+                pass
+        self.crop_change_cost_matrix = crop_change_cost_matrix
+
+        ## Optimization Model
         #self.model.dispose()    # release the memory of the previous model
         self.model = gp.Model(name=self.name, env=self.gpenv)
         self.vars = DotMap()
@@ -229,7 +250,7 @@ class OptModel():
         inf = self.inf
         n_c = self.n_c
         n_h = self.n_h
-        n_s = self.area_split
+        n_s = self.n_s
         # total irrigation depth per crop per yr
         irr = m.addMVar((n_s, n_c, n_h), vtype="C", name="irr(cm)", lb=0, ub=inf)
         # total irrigation volumn per yr
@@ -241,7 +262,7 @@ class OptModel():
         # total used electricity (pumping) per yr
         e = m.addMVar((n_h), vtype="C", name="e(PJ)", lb=0, ub=inf)
         # total profit
-        profit = m.addMVar((n_h), vtype="C", name="profit(1e4$)", lb=0, ub=inf)
+        profit = m.addMVar((n_h), vtype="C", name="profit(1e4$)", lb=-inf, ub=inf)
 
         self.vars.irr = irr
         self.vars.v = v
@@ -253,7 +274,12 @@ class OptModel():
         ## Add input msg
         self.msg = {}
 
-    def setup_constr_field(self, field_id, prec_aw, rain_fed_option=False,
+        ## Record water rights info
+        self.wrs = DotMap()
+
+    def setup_constr_field(self, field_id, prec_aw,
+                           pre_i_crop, pre_i_te,
+                           rain_fed_option=True,
                            i_crop=None, i_rain_fed=None, i_te=None):
         """
         Add crop field constriants. Multiple fields can be assigned by calling
@@ -302,19 +328,17 @@ class OptModel():
                          "Rain-fed option": rain_fed_option,
                          "Rain-fed areas": (lambda o: "optimize" if o else None)(rain_fed_option)}
 
+        n_c = self.n_c
+        n_h = self.n_h
+        n_s = self.n_s
+        n_te = self.n_te
+
         i_crop_input = i_crop
         i_rain_fed_input = i_rain_fed
         i_te_input = i_te
         m = self.model
 
-        n_c = self.n_c
-        n_h = self.n_h
-        n_s = self.area_split
-
         inf = self.inf
-        a = self.a
-        b = self.b
-        c = self.c
         ymax = self.ymax
         wmax = self.wmax
         growth_period_ratio = self.growth_period_ratio
@@ -377,6 +401,11 @@ class OptModel():
             m.addConstr(i_rain_fed == 0,
                         name=f"c.{fid}.no_i_rain_fed")
 
+        # This is logically incorrect
+        # m.addConstr(gp.quicksum(irr[s, c, :] * (1 - i_rain_fed[s, c, 0]) \
+        #                         for s in range(n_s) for c in range(n_c)) >= 1,
+        #             name=f"c.{fid}.ensure_irr")
+
         # See the numpy broadcast rules:
         # https://numpy.org/doc/stable/user/basics.broadcasting.html
         m.addConstr((w == irr + prec_aw), name=f"c.{fid}.w(cm)")
@@ -391,6 +420,9 @@ class OptModel():
         # output positive y_ leading to violation for y_y (< 1)
         # Also, we need to seperate yw_ and y_ into two constraints. Otherwise,
         # gurobi will crush. No idea why.
+        a = self.a
+        b = self.b
+        c = self.c
         m.addConstr((yw_temp == (a * w_**2 + b * w_ + c)), name=f"c.{fid}.yw_temp")
         m.addConstrs((yw_[s,c,h] == gp.max_(yw_temp[s,c,h], constant=0) \
                     for s in range(n_s) for c in range(n_c) for h in range(n_h)),
@@ -410,9 +442,20 @@ class OptModel():
                     for i in range(n_s) for j in range(n_c) ) / n_s,
                     name=f"c.{fid}.y_y")
 
+        # Create variable for crop type change
+        if isinstance(pre_i_crop, str):
+            i_c = self.crop_options.index(pre_i_crop)
+            pre_i_crop = np.zeros((n_s, n_c, 1))
+            pre_i_crop[:, i_c, :] = 1
+        i_crop_change_ = m.addMVar((n_s, n_c, 1), vtype="I", name=f"{fid}.i_crop_change_", lb=-1, ub=1)
+        i_crop_change = m.addMVar((n_s, n_c, 1), vtype="B", name=f"{fid}.i_crop_change")
+        m.addConstr(i_crop_change_ == i_crop - pre_i_crop, name=f"c.{fid}.i_crop_change_")
+        m.addConstrs((i_crop_change[s,c,0] == gp.max_(i_crop_change_[s,c,0], constant=0) \
+                    for s in range(n_s) for c in range(n_c)),
+                    name=f"c.{fid}.i_crop_change")
+
         # Tech decisions
-        techs = self.techs
-        n_te = self.n_te
+        techs = self.config.field.tech
         tech_options = self.tech_options
 
         q = m.addMVar((n_h), vtype="C", name=f"{fid}.q(m-ha/d)", lb=0, ub=inf)
@@ -436,9 +479,21 @@ class OptModel():
             else:
                 te = tech_options[list(i_te_input).index(1)]
             m.addConstr(i_te == i_te_input, name=f"c.{fid}.i_te_input")
-            qa_input, qb_input, l_pr_input = self.techs[te]
+            qa_input, qb_input, l_pr_input = techs[te]
             m.addConstr(l_pr == l_pr_input, name=f"c.{fid}.l_pr(m)_input")
             m.addConstr(i_te == i_te_input, name=f"c.{fid}.i_te(m)_input")
+
+        # Create variable for tech change
+        if isinstance(pre_i_te, str):
+            i_t = self.tech_options.index(pre_i_te)
+            pre_i_te = np.zeros((n_te))
+            pre_i_te[i_t] = 1
+        i_tech_change_ = m.addMVar((n_te), vtype="I", name=f"{fid}.i_tech_change_", lb=-1, ub=1)
+        i_tech_change = m.addMVar((n_te), vtype="B", name=f"{fid}.i_tech_change")
+        m.addConstr(i_tech_change_ == i_te - pre_i_te, name=f"c.{fid}.i_tech_change_")
+        m.addConstrs((i_tech_change[t] == gp.max_(i_tech_change_[t], constant=0) \
+                      for t in range(n_te)),
+                      name=f"c.{fid}.i_crop_change")
 
         self.vars[fid].v = v
         self.vars[fid].y = y
@@ -449,6 +504,13 @@ class OptModel():
         self.vars[fid].i_te = i_te
         self.vars[fid].l_pr = l_pr
         self.vars[fid].q = q
+
+        self.vars[fid].pre_i_crop = pre_i_crop
+        self.vars[fid].pre_i_te = pre_i_te
+        self.vars[fid].i_crop_change = i_crop_change
+        self.vars[fid].i_tech_change = i_tech_change
+
+        self.vars[fid].rain_fed_option = rain_fed_option
 
         self.n_fields += 1
 
@@ -495,18 +557,19 @@ class OptModel():
         n_h = self.n_h
 
         inf = self.inf
-        rho = self.rho
-        g = self.g
+        cw = self.config.well
+        rho = cw.rho
+        g = cw.g
 
         approx_horizon = self.approx_horizon
-        if approx_horizon:
+        if approx_horizon and self.horizon > 2:
             dwls = np.array([0, dwl*(self.horizon-1)])
         else:
             dwls = np.array([dwl*(i) for i in range(n_h)])
         # Assume a linear projection to the future
         l_wt = l_wt - dwls
 
-        # Calculate propotion of the irrigation water (v), daily pumping rate
+        # Calculate proportion of the irrigation water (v), daily pumping rate
         # (q), and head for irr tech (l_pr) of this well.
         v = m.addMVar((n_h), vtype="C", name=f"{wid}.v(m-ha)", lb=0, ub=inf)
         q = m.addMVar((n_h), vtype="C", name=f"{wid}.q(m-ha/d)", lb=0, ub=inf)
@@ -541,7 +604,7 @@ class OptModel():
                     name=f"c.{wid}.l_cd_l_wd(m)")
 
         m.addConstr((l_t == l_wt + l_cd_l_wd + l_pr), name=f"c.{wid}.l_t(m)")
-        #!!!  e could be large. Make sure no numerical issue here.
+        # e could be large. Make sure no numerical issue here.
         # J to PJ (1e-15)
         r_g_m_ha_2_m3_eff = rho * g * m_ha_2_m3 / eff_pump / 1e15
         m.addConstr((e ==  r_g_m_ha_2_m3_eff * v * l_t), name=f"c.{wid}.e(PJ)")
@@ -565,33 +628,67 @@ class OptModel():
 
         """
         m = self.model
-        energy_price = self.energy_price    #[1e6$/PJ]
-        crop_profit = self.crop_profit
+        cf = self.config.finance
+        energy_price = cf.energy_price    #[1e4$/PJ]
+        crop_profit = cf.crop_profit
         crop_options = self.crop_options
+        tech_options = self.tech_options
         n_h = self.n_h
-        area_split = self.area_split
+        n_c = self.n_c
+        n_s = self.n_s
+        n_te = self.n_te
         inf = self.inf
+        vars = self.vars
+        field_ids = self.field_ids
 
-        e = self.vars.e     # (n_h) [PJ]
-        y = self.vars.y     # (n_s, n_c, n_h) [1e4 bu]
+        e = vars.e     # (n_h) [PJ]
+        y = vars.y     # (n_s, n_c, n_h) [1e4 bu]
 
-        cost_e = m.addMVar((n_h), vtype="C", name="cost_e(1e6$)", lb=0, ub=inf)
-        rev = m.addMVar((n_h), vtype="C", name="rev(1e6$)", lb=0, ub=inf)
+        cost_e = m.addMVar((n_h), vtype="C", name="cost_e(1e4$)", lb=0, ub=inf)
+        rev = m.addMVar((n_h), vtype="C", name="rev(1e4$)", lb=0, ub=inf)
+
+        cost_tech = np.array([cf.irr_tech_operational_cost[te] for te in tech_options])
+
+        annual_tech_cost = 0
+        annual_tech_change_cost = 0
+        annual_crop_change_cost = 0
+        for fid in field_ids:
+            i_te = vars[fid].i_te
+            annual_tech_cost += i_te*cost_tech
+
+            pre_i_te = vars[fid].pre_i_te
+            tech_change_cost_arr = self.tech_change_cost_matrix[np.where(pre_i_te == 1)[0][0], :]
+            i_tech_change = vars[fid].i_tech_change
+            annual_tech_change_cost += tech_change_cost_arr * i_tech_change/n_h # uniformly allocate into planning horizon
+
+            for s in range(n_s):
+                pre_i_crop = vars[fid].pre_i_crop[s, :, 0]
+                crop_change_cost_arr = self.crop_change_cost_matrix[np.where(pre_i_crop == 1)[0][0], :]
+                i_crop_change = vars[fid].i_crop_change[s, :, 0]
+                annual_crop_change_cost += crop_change_cost_arr * i_crop_change/n_h # uniformly allocate into planning horizon
+        annual_cost = m.addMVar((n_h), vtype="C", name="annual_cost(1e4$)", lb=-inf, ub=inf)
+        m.addConstr(annual_cost == \
+                    gp.quicksum(annual_tech_cost[t] for t in range(n_te))
+                    + gp.quicksum(annual_tech_change_cost[t] for t in range(n_te))
+                    + gp.quicksum(annual_crop_change_cost[c] for c in range(n_c)),
+                    name="c.annual_cost(1e4$)")
+
         # The profit variable is created in the initial to allow users to add
         # contraints without a specific order.
-        profit = self.vars.profit
+        profit = vars.profit
 
         m.addConstr((cost_e == e * energy_price), name="c.cost_e")
-        m.addConstr(rev == gp.quicksum(y[i,j,:] * crop_profit[c] * 1e-2\
-                    for i in range(area_split) for j, c in enumerate(crop_options)),
+        m.addConstr(rev == gp.quicksum(y[i,j,:] * crop_profit[c] \
+                    for i in range(n_s) for j, c in enumerate(crop_options)),
                     name="c.rev")
-        m.addConstr((profit == rev - cost_e), name="c.profit")
-        self.vars.cost_e = cost_e
-        self.vars.rev = rev
+        m.addConstr((profit == rev - cost_e - annual_cost), name="c.profit")
+        vars.other_cost = annual_cost
+        vars.cost_e = cost_e
+        vars.rev = rev
 
     def setup_constr_wr(self, water_right_id, wr, field_id_list="all",
-                        time_window=1, start_index=None, remaining_wr=None,
-                        tail_wr="propotion"):
+                        time_window=1, i_tw=1, remaining_wr=None,
+                        tail_method="proportion"):
         """
         Add water rights constraints.
 
@@ -614,15 +711,15 @@ class OptModel():
         time_window : int, optional
             If given, the water right constrains the total irrigation depth
             over the time window. The default is 5.
-        start_index : int, optional
-            The start index of the time window. This is useful when the
-            previous time window has not yet used up. The default is None.
+        i_tw : int, optional
+            In which year of the time window. This is useful when the
+            previous time window has not yet used up. The default is 1.
         remaining_wr : float, optional
             The remaining water rights in the previous time window [cm]. The
             default is None.
-        tail_wr : "propotion" or "all" or float, optional
+        tail_method : "proportion" or "all" or float, optional
             Method to allocate incomplete time window if happened. If a float
-            is given, the value will be used. The default is "propotion".
+            is given, the value will be used. The default is "proportion".
 
         Returns
         -------
@@ -633,7 +730,7 @@ class OptModel():
         fids = field_id_list
         n_h = self.n_h
         n_c = self.n_c
-        n_s = self.area_split
+        n_s = self.n_s
         vars = self.vars
         if fids == "all":
             irr_sub = self.vars.irr         # (n_s, n_c, n_h)
@@ -644,15 +741,14 @@ class OptModel():
                 else:
                     irr_sub += vars[fid].irr
             irr_sub = irr_sub/len(fids)
-        self.wr = wr
-        self.time_window = time_window
 
+        start_index = i_tw-1
         # Initial period
         # The structure is to fit within a larger simulation framework, which
         # we allow the remaining water rights that are not used in the previous
         # year.
         c_i = 0
-        if start_index is not None and remaining_wr is not None:
+        if start_index !=0 and remaining_wr is not None:
             if start_index > n_h: # Ensure within the planning horizon
                 start_index = max(n_h, start_index+1) - 1
                 print("Warning: start_index is larger than (horizon - 1).")
@@ -662,6 +758,7 @@ class OptModel():
                         name=f"c.{water_right_id}.wr_{c_i}(cm)")
             c_i += 1
         else:
+            remaining_wr = wr
             start_index = 0
 
         remaining_length = n_h - start_index
@@ -678,9 +775,9 @@ class OptModel():
 
         # Last period
         if remaining_length > 0:
-            if tail_wr == "propotion":
+            if tail_method == "proportion":
                 wr_tail = wr * remaining_length/time_window
-            elif tail_wr == "wr":
+            elif tail_method == "wr":
                 wr_tail = wr
             # Otherwise, we expect a value given by users.
 
@@ -692,79 +789,14 @@ class OptModel():
         self.water_right_ids.append(water_right_id)
         self.n_water_rights += 1
 
-    def setup_obj_Sa(self, alpha_dict=None):
-        """
-        Add the objective to maximize the agent's expected satisfication.
-        The calculation of satisfication involves exp, which require using the
-        general expression in gurobi. The piecewise process will introduct
-        additional binary integers that can significantly slow down the solving
-        process and may encounter unexpected numerical issue. We suggest to use
-        setup_obj instead and calculate satisfication afterward. Same solution
-        should be expected.
-
-        Parameters
-        ----------
-        alpha_dict : dict, optional
-            Overwrite alpha values retrieved from the config. The default is None.
-
-        Returns
-        -------
-        None.
-
-        """
-        eval_metric = self.eval_metric
-        alphas = self.alphas
-        vars = self.vars
-
-        # Update alpha list
-        if alpha_dict is not None:
-            alphas.update(alpha_dict)
-            self.eval_metrics = [metric for metric, v in self.alphas.items() if v is not None]
-
-        # Check the selected eval_metric exist
-        eval_metrics = self.eval_metrics
-        eval_metric = self.eval_metric
-        if eval_metric not in eval_metrics:
-            raise ValueError(f"Alpha value of metric '{eval_metric}' is not given.")
-
-        # Currently supported metrices
-        eval_metric_vars = {
-            "profit": vars.profit,
-            "yield_pct": vars.y_y
-            }
-
-        inf = self.inf
-        m = self.model
-        n_h = self.n_h
-
-        # Caluculate all active metrics
-        def add_metric(metric, alpha):
-            N_yr_x =  m.addMVar((n_h), vtype="C", name=f"N_yr_x.{metric}", lb=-inf, ub=0)
-            N_yr_y = m.addMVar((n_h), vtype="C", name=f"N_yr_y.{metric}", lb=0, ub=inf)
-            N_yr = m.addMVar((n_h), vtype="C", name=f"N_yr.{metric}", lb=0, ub=1)
-            Sa = m.addVar(vtype="C", name=f"Sa.{metric}", lb=0, ub=1)
-
-            metric_var = eval_metric_vars.get(metric)
-            if metric_var is None:
-                raise ValueError(f"""'{eval_metric}' is not supported.
-                                 Available metrics includes {list(eval_metric_vars.keys())}""")
-            m.addConstr((N_yr_x == -alpha * metric_var), name=f"c.N_yr_x.{metric}")
-            for h in range(n_h):   # y = exp(x)  addGenConstrLog(x, y)
-                m.addGenConstrExp(N_yr_x[h], N_yr_y[h])
-            m.addConstr(N_yr == 1 - N_yr_y, name=f"c.N_yr.{metric}")
-            m.addConstr((Sa == gp.quicksum(N_yr[h] for h in range(n_h))/n_h),
-                        name=f"c.Sa.{metric}")
-            vars.Sa[metric] = Sa
-
-        for metric in eval_metrics:
-            # It will be super slow if calculate all needs within opt model.
-            #add_metric(metric, alphas[metric])
-
-            # Add objective
-            if metric == eval_metric:
-                add_metric(metric, alphas[metric])
-                m.setObjective(vars.Sa[metric], gp.GRB.MAXIMIZE)
-        self.obj_post_calculation = False
+        # Record for the next run. Assume the simulation runs annually and will
+        # apply the irr solved by the opt model.
+        self.wrs[water_right_id] = DotMap({"wr": wr,
+                                           "field_id_list": field_id_list,
+                                           "time_window": time_window,
+                                           "i_tw": i_tw%time_window + 1,
+                                           "remaining_wr": remaining_wr,
+                                           "tail_method": tail_method})
 
     def setup_obj(self, alpha_dict=None):
         """
@@ -809,11 +841,12 @@ class OptModel():
         n_h = self.n_h
 
         def add_metric(metric):
-            Sa = m.addVar(vtype="C", name=f"Sa.{metric}", lb=0, ub=inf)
+            # fakeSa will be forced to be nonnegative later on for Sa calculation
+            fakeSa = m.addVar(vtype="C", name=f"fakeSa.{metric}", lb=-inf, ub=inf)
             metric_var = eval_metric_vars.get(metric)
-            m.addConstr((Sa == gp.quicksum(metric_var[h] for h in range(n_h))/n_h),
+            m.addConstr((fakeSa == gp.quicksum(metric_var[h] for h in range(n_h))/n_h),
                         name=f"c.Sa.{metric}")
-            vars.Sa[metric] = Sa
+            vars.Sa[metric] = fakeSa
 
         for metric in eval_metrics:
             # Add objective
@@ -890,7 +923,7 @@ class OptModel():
         Name:   {self.name}\n
         Planning horizon:   {h_msg}
         NO. Crop fields:    {self.n_fields}
-        NO. splits          {self.area_split}
+        NO. splits          {self.n_s}
         NO. Wells:          {self.n_wells}
         NO. Water rights:   {self.n_water_rights}\n
         Decision settings:\n{msg}\n
@@ -935,7 +968,11 @@ class OptModel():
                     if isinstance(v, dict):
                         get_inner_dict(v, new_dotmap[k])
                     else:
-                        new_dotmap[k] = v.X
+                        #new_dotmap[k] = v.X
+                        try:
+                            new_dotmap[k] = v.X
+                        except:
+                            new_dotmap[k] = v
             get_inner_dict(vars, sols)
             return sols
 
@@ -952,6 +989,8 @@ class OptModel():
             self.optimal_obj_value = m.objVal
             self.sols = extract_sol(self.vars)
             self.sols.obj = m.objVal
+            self.sols.field_ids = self.field_ids
+            self.sols.well_ids = self.well_ids
 
             # Calculate satisfication
             if self.obj_post_calculation:
@@ -959,7 +998,7 @@ class OptModel():
                 alphas = self.alphas
 
                 # Currently supported metrices
-                if self.approx_horizon:
+                if self.approx_horizon and self.horizon > 2:
                     horizon = self.horizon
                     profits = self.sols.profit
                     y_ys = self.sols.y_y
@@ -975,16 +1014,42 @@ class OptModel():
                 for metric in eval_metrics:
                     alpha = alphas[metric]
                     metric_var = eval_metric_vars.get(metric)
+                    # force the minimum value to be zero since exp
+                    metric_var[metric_var<0] = 0
                     N_yr = 1 - np.exp(-alpha * metric_var)
                     Sa = np.mean(N_yr)
                     self.sols.Sa[metric] = Sa
+            # Update rainfed info
+            sols = self.sols
+            for fid in self.field_ids:
+                if sols[fid].rain_fed_option:
+                    irr = sols[fid].irr[:,:,0].sum(axis=1)
+                    i_rain_fed = sols[fid].i_rain_fed
+                    i_rain_fed[np.where(irr == 0), :, :] = 1
 
+            # Update remaining water rights
+            wrs = self.wrs
+            for k, v in wrs.items():
+                fids = v.field_id_list
+                if fids == "all":
+                    irr_sub = sols.irr         # (n_s, n_c, n_h)
+                else:
+                    for i, fid in enumerate(fids):
+                        if i == 0:
+                            irr_sub = sols[fid].irr.copy()
+                        else:
+                            irr_sub += sols[fid].irr
+                    irr_sub = irr_sub/len(fids)
+
+                v.i_tw = v.i_tw % v.time_window + 1
+                v.remaining_wr = v.remaining_wr - np.sum(irr_sub[:, :, 0])
+            sols.water_rights = wrs
             # Display report
             crop_options = self.crop_options
             tech_options = self.tech_options
-            n_s = self.area_split
+            n_s = self.n_s
             fids = self.field_ids
-            sols = self.sols
+            #sols = self.sols
             irrs = list(sols.irr.mean(axis=0).sum(axis=0).round(2))
             decisions = {"Irrigation depths": irrs}
             for fid in fids:
@@ -1008,7 +1073,7 @@ class OptModel():
         Name:   {self.name}\n
         Planning horizon:   {h_msg}
         NO. Crop fields:    {self.n_fields}
-        NO. splits          {self.area_split}
+        NO. splits          {self.n_s}
         NO. Wells:          {self.n_wells}
         NO. Water rights:   {self.n_water_rights}\n
         Decision settings:\n{msg}\n
@@ -1185,5 +1250,77 @@ class OptModel():
     #             else:
     #                 vars[k].Start = v
 
+    # def setup_obj_Sa(self, alpha_dict=None):
+    #     """
+    #     Add the objective to maximize the agent's expected satisfication.
+    #     The calculation of satisfication involves exp, which require using the
+    #     general expression in gurobi. The piecewise process will introduct
+    #     additional binary integers that can significantly slow down the solving
+    #     process and may encounter unexpected numerical issue. We suggest to use
+    #     setup_obj instead and calculate satisfication afterward. Same solution
+    #     should be expected.
 
+    #     Parameters
+    #     ----------
+    #     alpha_dict : dict, optional
+    #         Overwrite alpha values retrieved from the config. The default is None.
+
+    #     Returns
+    #     -------
+    #     None.
+
+    #     """
+    #     eval_metric = self.eval_metric
+    #     alphas = self.alphas
+    #     vars = self.vars
+
+    #     # Update alpha list
+    #     if alpha_dict is not None:
+    #         alphas.update(alpha_dict)
+    #         self.eval_metrics = [metric for metric, v in self.alphas.items() if v is not None]
+
+    #     # Check the selected eval_metric exist
+    #     eval_metrics = self.eval_metrics
+    #     eval_metric = self.eval_metric
+    #     if eval_metric not in eval_metrics:
+    #         raise ValueError(f"Alpha value of metric '{eval_metric}' is not given.")
+
+    #     # Currently supported metrices
+    #     eval_metric_vars = {
+    #         "profit": vars.profit,
+    #         "yield_pct": vars.y_y
+    #         }
+
+    #     inf = self.inf
+    #     m = self.model
+    #     n_h = self.n_h
+
+    #     # Caluculate all active metrics
+    #     def add_metric(metric, alpha):
+    #         N_yr_x =  m.addMVar((n_h), vtype="C", name=f"N_yr_x.{metric}", lb=-inf, ub=0)
+    #         N_yr_y = m.addMVar((n_h), vtype="C", name=f"N_yr_y.{metric}", lb=0, ub=inf)
+    #         N_yr = m.addMVar((n_h), vtype="C", name=f"N_yr.{metric}", lb=0, ub=1)
+    #         Sa = m.addVar(vtype="C", name=f"Sa.{metric}", lb=0, ub=1)
+
+    #         metric_var = eval_metric_vars.get(metric)
+    #         if metric_var is None:
+    #             raise ValueError(f"""'{eval_metric}' is not supported.
+    #                              Available metrics includes {list(eval_metric_vars.keys())}""")
+    #         m.addConstr((N_yr_x == -alpha * metric_var), name=f"c.N_yr_x.{metric}")
+    #         for h in range(n_h):   # y = exp(x)  addGenConstrLog(x, y)
+    #             m.addGenConstrExp(N_yr_x[h], N_yr_y[h])
+    #         m.addConstr(N_yr == 1 - N_yr_y, name=f"c.N_yr.{metric}")
+    #         m.addConstr((Sa == gp.quicksum(N_yr[h] for h in range(n_h))/n_h),
+    #                     name=f"c.Sa.{metric}")
+    #         vars.Sa[metric] = Sa
+
+    #     for metric in eval_metrics:
+    #         # It will be super slow if calculate all needs within opt model.
+    #         #add_metric(metric, alphas[metric])
+
+    #         # Add objective
+    #         if metric == eval_metric:
+    #             add_metric(metric, alphas[metric])
+    #             m.setObjective(vars.Sa[metric], gp.GRB.MAXIMIZE)
+    #     self.obj_post_calculation = False
 

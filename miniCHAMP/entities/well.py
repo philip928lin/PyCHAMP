@@ -94,10 +94,9 @@ class Well():
         l_cd_l_wd = (1+eff_well) * q/fpitr \
                     * (-0.5772 - np.log(r**2*sy/fpitr)) * m_ha_2_m3
         l_t = l_wt + l_cd_l_wd + l_pr
-        e = rho * g * m_ha_2_m3 / eff_pump / 1e15 * v * l_t
+        e = rho * g * m_ha_2_m3 / eff_pump / 1e15 * v * l_t     # PJ
 
         # record
         self.t += 1
-        e = e[0]
         self.e = e
         return e

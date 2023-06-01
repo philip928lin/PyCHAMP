@@ -16,7 +16,7 @@ from .finance import Finance
 
 class Farmer():#ap.Agent):
     def setup(self, agt_id, config, agent_dict, fields_dict, wells_dict,
-              prec_aw_dict, prec_dict, temp_dict, aquifers,
+              water_rights_dict, prec_aw_dict, prec_dict, temp_dict, aquifers,
               crop_options=["corn", "sorghum", "soybean", "fallow"],
               tech_options=["center pivot", "center pivot LEPA"]):
         """
@@ -34,12 +34,14 @@ class Farmer():#ap.Agent):
                 The planing horizon [yr]. The default is 5.
             eval_metric : str
                 evaluation metric.
-            risk_attitude_prec : float
+            perceived_prec_aw : float
                 Annual precipitation of a specific quantile of historical records.
         fields_dict : dict
             A dictionary containing an agent's field settings.
         wells_dict : dict
             A dictionary containing an agent's well settings.
+        water_rights_dict : dict
+            A dictionary containing water rights settings.
         prec_aw_dict : dict
             The annual precipitation during grow season for each field. The
             format is e.g.,
@@ -73,19 +75,20 @@ class Farmer():#ap.Agent):
         self.fdict = fdict
         self.wdict = wdict
         self.agtdict = agtdict
+        self.wrdict = DotMap(water_rights_dict)
 
         self.aquifers = DotMap(aquifers)  #!!! check this!
 
         self.field_list = list(fields_dict.keys())
         self.well_list = list(wells_dict.keys())
-        self.n_h = agtdict.horizon
+        self.horizon = agtdict.horizon
         self.n_dwl = agtdict.n_dwl
         self.eval_metric = agtdict.eval_metric
         self.crop_options = crop_options
         self.tech_options = tech_options
         config = DotMap(config)
         self.config = config
-        self.risk_attitude_prec = agtdict.risk_attitude_prec
+        self.perceived_prec_aw = agtdict.perceived_prec_aw
         if agtdict.alphas is None:
             self.alphas = config.consumat.alpha
         else:
@@ -95,7 +98,9 @@ class Farmer():#ap.Agent):
         fields = DotMap()
         wells = DotMap()
         for f, v in fdict.items():
-            fields[f] = Field(field_id=f, config=config, te=v.te, lat=v.lat,
+            fields[f] = Field(field_id=f, config=config, te=agtdict.init.te,
+                              crop=agtdict.init.crop_type,
+                              lat=v.lat,
                               dz=v.dz,
                               crop_options=crop_options,
                               tech_options=tech_options)
@@ -108,7 +113,7 @@ class Farmer():#ap.Agent):
             wells[w].pumping_capacity = v.pumping_capacity
         self.fields = fields
         self.wells = wells
-        self.finance = Finance(config=config, crop_options=crop_options)
+        self.finance = Finance(config=config)
         # self.dm_model = OptModel(name=agt_id) # Not pickable for parallel computing
 
         # Initialize CONSUMAT
@@ -141,8 +146,10 @@ class Farmer():#ap.Agent):
         dm_sols = DotMap()
         for f, v in fdict.items():
             dm_sols[f]["i_crop"] = i_crop
+            dm_sols[f]["pre_i_crop"] = crop_type
             dm_sols[f]["i_te"] = i_te
-        self.dm_sols = self.make_dm(dm_sols=dm_sols, init=True)
+            dm_sols[f]["pre_i_te"] = agtdict.init.te
+        self.dm_sols = self.make_dm(None, dm_sols=dm_sols, init=True)
         self.run_simulation(prec_aw_dict, prec_dict, temp_dict) # aquifers
 
     def sim_step(self, prec_aw_dict, prec_dict, temp_dict):
@@ -204,21 +211,30 @@ class Farmer():#ap.Agent):
                            prec=prec_dict[f], temp=temp_dict[f])
 
         # Simulate over wells
-        for w, well in wells.items():
-            # Here we simply adopt opt solutions for demonstration
-            v = dm_sols[w].v
+        allo_r = dm_sols.allo_r
+        allo_r_w = dm_sols.allo_r_w     # Well allocation ratio from opt
+        field_ids = dm_sols.field_ids
+        well_ids = dm_sols.well_ids
+        total_v = sum([field.v for f, field in fields.items()])
+        for k, wid in enumerate(well_ids):
+            well = wells[wid]
+            # select the first year
+            v = total_v * allo_r_w[k, 0]
+            q = sum([fields[fid].q * allo_r[f,k,0] for f, fid in enumerate(field_ids)])
+            l_pr = sum([fields[fid].l_pr * allo_r[f,k,0] for f, fid in enumerate(field_ids)])
             dwl = aquifers[well.aquifer_id].dwl
-            q = dm_sols[w].q
-            l_pr = dm_sols[w].l_pr
+
+            # Here we simply adopt opt solutions for demonstration
+            # v = dm_sols[w].v
+            # q = dm_sols[w].q
+            # l_pr = dm_sols[w].l_pr
             well.sim_step(v=v, dwl=dwl, q=q, l_pr=l_pr)
 
         # Calulate profit and pumping cost
-        y = sum([field.y for f, field in fields.items()])
-        y_y = sum([field.y_y for f, field in fields.items()])/len(fields)
-        e = sum([well.e for w, well in wells.items()])
-        self.finance.sim_step(e=e, y=y)
+        self.finance.sim_step(fields=self.fields, wells=self.wells)
         profit = self.finance.profit
 
+        y_y = sum([field.y_y for f, field in fields.items()])/len(fields)
         eval_metric_vars = {
             "profit": profit,
             "yield_pct": y_y}
@@ -250,7 +266,7 @@ class Farmer():#ap.Agent):
         elif satisfaction < sa_thre and uncertainty < un_thre:
             self.state = "Deliberation"
 
-    def make_dm(self, dm_sols=None, init=False):
+    def make_dm(self, state, dm_sols, init=False):
         """
         Make decisions.
 
@@ -271,11 +287,11 @@ class Farmer():#ap.Agent):
         """
         aquifers = self.aquifers
         config = self.config
-        n_h = self.n_h
+        horizon = self.horizon
         n_dwl = self.n_dwl
         crop_options = self.crop_options
         tech_options = self.tech_options
-        risk_attitude_prec = self.risk_attitude_prec
+        perceived_prec_aw = self.perceived_prec_aw
         eval_metric = self.eval_metric
         fields = self.fields
         wells = self.wells
@@ -283,30 +299,36 @@ class Farmer():#ap.Agent):
 
         # Locally create OptModel to make the Farmer object pickable for parallel computing
         dm = OptModel(name=self.agt_id)
-        dm.setup_ini_model(config=config, horizon=n_h, eval_metric=eval_metric,
+        dm.setup_ini_model(config=config, horizon=horizon, eval_metric=eval_metric,
                            crop_options=crop_options, tech_options=tech_options)
 
         for f, field in fields.items():
             for f, field in fields.items():
                 if init:
-                    dm.setup_constr_field(field_id=f, prec_aw=risk_attitude_prec,
+                    dm.setup_constr_field(field_id=f, prec_aw=perceived_prec_aw,
+                                          pre_i_crop=dm_sols[f].pre_i_crop,
+                                          pre_i_te=dm_sols[f].pre_i_te,
+                                          rain_fed_option=field.rain_fed_option,
                                           i_crop=dm_sols[f].i_crop,
                                           i_rain_fed=None,
-                                          rain_fed_option=field.rain_fed_option,
                                           i_te=dm_sols[f].i_te)
                     continue
 
-                if dm_sols is None:
-                    dm.setup_constr_field(field_id=f, prec_aw=risk_attitude_prec,
+                if state == "Deliberation":
+                    dm.setup_constr_field(field_id=f, prec_aw=perceived_prec_aw,
+                                          pre_i_crop=dm_sols[f].pre_i_crop,
+                                          pre_i_te=dm_sols[f].pre_i_te,
+                                          rain_fed_option=field.rain_fed_option,
                                           i_crop=None,
                                           i_rain_fed=None,
-                                          rain_fed_option=field.rain_fed_option,
                                           i_te=None)
                 else:
-                    dm.setup_constr_field(field_id=f, prec_aw=risk_attitude_prec,
+                    dm.setup_constr_field(field_id=f, prec_aw=perceived_prec_aw,
+                                          pre_i_crop=dm_sols[f].pre_i_crop,
+                                          pre_i_te=dm_sols[f].pre_i_te,
+                                          rain_fed_option=field.rain_fed_option,
                                           i_crop=dm_sols[f].i_crop,
                                           i_rain_fed=dm_sols[f].i_rain_fed,
-                                          rain_fed_option=field.rain_fed_option,
                                           i_te=dm_sols[f].i_te)
 
         for w, well in wells.items():
@@ -318,7 +340,9 @@ class Farmer():#ap.Agent):
                                  sy=well.sy, eff_pump=well.eff_pump,
                                  eff_well=well.eff_well,
                                  pumping_capacity=well.pumping_capacity)
-        #!!! missing water rights here (do it later)
+
+        for wr_id, v in self.wrdict.items():
+            dm.setup_constr_wr(water_right_id=wr_id, *v)
         dm.setup_constr_finance()
         dm.setup_obj(alpha_dict=alphas)
         dm.finish_setup()
@@ -336,7 +360,7 @@ class Farmer():#ap.Agent):
         None.
 
         """
-        self.dm_sols = self.make_dm(dm_sols=None)
+        self.dm_sols = self.make_dm(self.state, dm_sols=self.dm_sols)
 
     def make_dm_repetition(self):
         """
@@ -347,7 +371,7 @@ class Farmer():#ap.Agent):
         None.
 
         """
-        self.dm_sols = self.make_dm(self.dm_sols)
+        self.dm_sols = self.make_dm(self.state, self.dm_sols)
 
     def make_dm_social_comparison(self):
         """
@@ -393,5 +417,5 @@ class Farmer():#ap.Agent):
 
         comparable_agts = self.comparable_agts
 
-        dm_sols = self.make_dm(comparable_agts[comparable_agt_id].dm_sols)
+        dm_sols = self.make_dm(self.state, comparable_agts[comparable_agt_id].dm_sols)
         self.dm_sols = dm_sols

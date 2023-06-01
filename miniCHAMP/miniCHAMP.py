@@ -52,7 +52,7 @@ Discard this file
 
 # agent_dict = {"horizon": 5,
 #               "eval_metric": "profit",
-#               "risk_attitude_prec": 30,
+#               "perceived_prec_aw": 30,
 #               "n_dwl": 5,
 #               "comparable_agt_ids": [],
 #               "alphas": None,
