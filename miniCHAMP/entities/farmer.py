@@ -15,9 +15,8 @@ from .well import Well
 from .finance import Finance
 
 class Farmer():#ap.Agent):
-    def setup(self, agt_id, config, agent_dict, fields_dict, wells_dict,
-              water_rights_dict, prec_aw_dict, prec_dict, temp_dict, aquifers,
-              crop_options=["corn", "sorghum", "soybean", "fallow"],
+    def setup(self, agt_id, config, agt_attrs, prec_aw_dict, prec_dict, temp_dict, aquifers,
+              crop_options=["corn", "sorghum", "soybeans", "fallow"],
               tech_options=["center pivot", "center pivot LEPA"]):
         """
         Setup an agent (farmer).
@@ -57,7 +56,7 @@ class Farmer():#ap.Agent):
             {"aquifer1": aquifer object}.
         crop_options : list, optional
             A list of crop type options. They must exist in the config. The
-            default is ["corn", "sorghum", "soybean", "fallow"].
+            default is ["corn", "sorghum", "soybeans", "fallow"].
         tech_options : list, optional
             A list of irrigation technologies. They must exist in the config.
             The default is ["center pivot", "center pivot LEPA"].
@@ -68,44 +67,39 @@ class Farmer():#ap.Agent):
 
         """
         self.agt_id = agt_id
-        fdict = DotMap(fields_dict)
-        wdict = DotMap(wells_dict)
-        agtdict = DotMap(agent_dict)
+        agt_attrs = DotMap(agt_attrs)
         # self.fdict & self.wdict & agtdict can be deleted to save memory
-        self.fdict = fdict
-        self.wdict = wdict
-        self.agtdict = agtdict
-        self.wrdict = DotMap(water_rights_dict)
+        self.agt_attrs = agt_attrs
 
-        self.aquifers = DotMap(aquifers)  #!!! check this!
+        self.aquifers = DotMap(aquifers)
 
-        self.field_list = list(fields_dict.keys())
-        self.well_list = list(wells_dict.keys())
-        self.horizon = agtdict.horizon
-        self.n_dwl = agtdict.n_dwl
-        self.eval_metric = agtdict.eval_metric
+        self.field_list = list(agt_attrs.fields.keys())
+        self.well_list = list(agt_attrs.wells.keys())
+        self.horizon = agt_attrs.horizon
+        self.n_dwl = agt_attrs.n_dwl
+        self.eval_metric = agt_attrs.eval_metric
         self.crop_options = crop_options
         self.tech_options = tech_options
         config = DotMap(config)
         self.config = config
-        self.perceived_prec_aw = agtdict.perceived_prec_aw
-        if agtdict.alphas is None:
+        self.perceived_prec_aw = agt_attrs.perceived_prec_aw
+        if agt_attrs.alphas is None:
             self.alphas = config.consumat.alpha
         else:
-            self.alphas = agtdict.alphas
+            self.alphas = agt_attrs.alphas
 
         # Create containers for simulation objects
         fields = DotMap()
         wells = DotMap()
-        for f, v in fdict.items():
-            fields[f] = Field(field_id=f, config=config, te=agtdict.init.te,
-                              crop=agtdict.init.crop_type,
+        for f, v in agt_attrs.fields.items():
+            fields[f] = Field(field_id=f, config=config, te=v.init.tech,
+                              crop=v.init.crop,
                               lat=v.lat,
                               dz=v.dz,
                               crop_options=crop_options,
                               tech_options=tech_options)
             fields[f].rain_fed_option = v.rain_fed_option
-        for w, v in wdict.items():
+        for w, v in agt_attrs.wells.items():
             wells[w] = Well(well_id=w, config=config, r=v.r, k=v.k,
                             st=aquifers[v.aquifer_id].st, sy=v.sy,
                             l_wt=v.l_wt, eff_pump=v.eff_pump,
@@ -123,32 +117,34 @@ class Farmer():#ap.Agent):
         self.satisfaction = None
         self.uncertainty = None
         self.needs = DotMap()
-        self.comparable_agt_ids = agtdict.comparable_agt_ids
+        self.comparable_agt_ids = agt_attrs.comparable_agt_ids
         self.comparable_agts = {}   # This should be dynamically updated in the simulation
         self.comparable_agt_id = None # This will be populated after social comparison
 
         # Initialize dm_sol
         n_te = len(tech_options)
-        i_te = np.zeros(n_te)
-        i_te[tech_options.index(agtdict.init.te)] = 1
-
         n_s = config["field"]["area_split"]
         n_c = len(crop_options)
-        i_crop = np.zeros((n_s, n_c, 1))
-        crop_type = agtdict.init.crop_type
-        if isinstance(crop_type, str):
-            i_c = crop_options.index(crop_type)
-            i_crop[:, i_c, 0] = 1
-        else:
-            for i, c in enumerate(crop_type):
-                i_c = crop_options.index(c)
-                i_crop[i, i_c, 0] = 1
+
         dm_sols = DotMap()
-        for f, v in fdict.items():
+        for f, v in agt_attrs.fields.items():
+            i_crop = np.zeros((n_s, n_c, 1))
+            crop = v.init.crop
+            if isinstance(crop, str):
+                i_c = crop_options.index(crop)
+                i_crop[:, i_c, 0] = 1
+            else:
+                for i, c in enumerate(crop):
+                    i_c = crop_options.index(c)
+                    i_crop[i, i_c, 0] = 1
             dm_sols[f]["i_crop"] = i_crop
-            dm_sols[f]["pre_i_crop"] = crop_type
+            dm_sols[f]["pre_i_crop"] = crop
+
+            i_te = np.zeros(n_te)
+            i_te[tech_options.index(v.init.tech)] = 1
             dm_sols[f]["i_te"] = i_te
-            dm_sols[f]["pre_i_te"] = agtdict.init.te
+
+            dm_sols[f]["pre_i_te"] = v.init.tech
         self.dm_sols = self.make_dm(None, dm_sols=dm_sols, init=True)
         self.run_simulation(prec_aw_dict, prec_dict, temp_dict) # aquifers
 
@@ -300,7 +296,8 @@ class Farmer():#ap.Agent):
         # Locally create OptModel to make the Farmer object pickable for parallel computing
         dm = OptModel(name=self.agt_id)
         dm.setup_ini_model(config=config, horizon=horizon, eval_metric=eval_metric,
-                           crop_options=crop_options, tech_options=tech_options)
+                           crop_options=crop_options, tech_options=tech_options,
+                           approx_horizon=True)
 
         for f, field in fields.items():
             for f, field in fields.items():
@@ -333,7 +330,7 @@ class Farmer():#ap.Agent):
 
         for w, well in wells.items():
             #proj_dwl = 0
-            aquifer_id = self.wdict[w]["aquifer_id"]
+            aquifer_id = aquifer_id = well.aquifer_id
             proj_dwl = np.mean(aquifers[aquifer_id].dwl_list[-n_dwl:])
             dm.setup_constr_well(well_id=w, dwl=proj_dwl, st=well.st,
                                  l_wt=well.l_wt, r=well.r, k=well.k,
@@ -341,8 +338,29 @@ class Farmer():#ap.Agent):
                                  eff_well=well.eff_well,
                                  pumping_capacity=well.pumping_capacity)
 
-        for wr_id, v in self.wrdict.items():
-            dm.setup_constr_wr(water_right_id=wr_id, *v)
+        wrs = dm_sols.wrs
+        for wr_id, v in self.agt_attrs.water_rights.items():
+            if v.status: # Check whether the wr is activated
+                # Extract the water right setting from the previous opt run,
+                # which we record the remaining water right fromt the previous
+                # year. If the wr is newly activate in a simulation, then we
+                # use the input to setup the wr.
+                wr_args = wrs.get(wr_id)
+                if wr_args is None:
+                    dm.setup_constr_wr(water_right_id=wr_id, wr=v.wr,
+                                       field_id_list=v.field_id_list,
+                                       time_window=v.time_window, i_tw=v.i_tw,
+                                       remaining_wr=v.remaining_wr,
+                                       tail_method=v.tail_method)
+                else:
+                    dm.setup_constr_wr(water_right_id=wr_id, wr=wr_args.wr,
+                                       field_id_list=wr_args.field_id_list,
+                                       time_window=wr_args.time_window,
+                                       i_tw=wr_args.i_tw,
+                                       remaining_wr=wr_args.remaining_wr,
+                                       tail_method=wr_args.tail_method)
+                    #dm.setup_constr_wr(water_right_id=wr_id, *wr_args)
+
         dm.setup_constr_finance()
         dm.setup_obj(alpha_dict=alphas)
         dm.finish_setup()

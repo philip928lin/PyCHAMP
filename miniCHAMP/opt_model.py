@@ -128,7 +128,7 @@ class OptModel():
         self.gpenv.dispose()
 
     def setup_ini_model(self, config, horizon=5, eval_metric="profit",
-                        crop_options=["corn", "sorghum", "soybean", "fallow"],
+                        crop_options=["corn", "sorghum", "soybeans", "fallow"],
                         tech_options=["center pivot", "center pivot LEPA"],
                         approx_horizon=True):
         """
@@ -148,7 +148,7 @@ class OptModel():
             "profit" or "yield_pct". The default is "profit".
         crop_options : list, optional
             A list of crop type options. They must exist in the config. The
-            default is ["corn", "sorghum", "soybean", "fallow"].
+            default is ["corn", "sorghum", "soybeans", "fallow"].
         tech_options : list, optional
             A list of irrigation technologies. They must exist in the config. The
             default is ["center pivot", "center pivot LEPA"].
@@ -791,12 +791,12 @@ class OptModel():
 
         # Record for the next run. Assume the simulation runs annually and will
         # apply the irr solved by the opt model.
-        self.wrs[water_right_id] = DotMap({"wr": wr,
-                                           "field_id_list": field_id_list,
-                                           "time_window": time_window,
-                                           "i_tw": i_tw%time_window + 1,
-                                           "remaining_wr": remaining_wr,
-                                           "tail_method": tail_method})
+        self.vars.wrs[water_right_id] = DotMap({"wr": wr,
+                                               "field_id_list": field_id_list,
+                                               "time_window": time_window,
+                                               "i_tw": i_tw%time_window + 1,
+                                               "remaining_wr": remaining_wr,
+                                               "tail_method": tail_method})
 
     def setup_obj(self, alpha_dict=None):
         """
@@ -914,7 +914,7 @@ class OptModel():
         m.update()
 
         if self.approx_horizon:
-            h_msg = str(self.n_h) + " (approximate with 2)"
+            h_msg = str(self.horizon) + " (approximate with 2)"
         else:
             h_msg = str(self.n_h)
         msg = dict_to_string(self.msg, prefix="\t\t", level=2)
@@ -1065,7 +1065,7 @@ class OptModel():
             msg = dict_to_string(self.msg, prefix="\t\t", level=2)
             sas = dict_to_string(self.sols.Sa, prefix="\t\t", level=2, roun=4)
             if self.approx_horizon:
-                h_msg = str(self.n_h) + " (approximate with 2)"
+                h_msg = str(self.horizon) + " (approximate with 2)"
             else:
                 h_msg = str(self.n_h)
             report = f"""

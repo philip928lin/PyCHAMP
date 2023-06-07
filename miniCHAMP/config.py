@@ -21,8 +21,8 @@ config = {
             #           ymax, wmax,  a,    b,   c
             "corn":     (455.0162437162218, 93.70410821239668, -3.792352328384122, 6.784495928053121, -2.0343557910784873),
             "sorghum":  (252.99787566746383, 82.1193601089726, -3.6572818850257454, 6.228651607058931, -1.651976389963492),
-            "soybean":  (133.65537966632013, 89.15443022069083, -3.4664151483341152, 6.184045213667842, -1.758066588119619),
-            "fallow":   [0., 100., 0, 0, 0.],
+            "soybeans":  (133.65537966632013, 89.15443022069083, -3.4664151483341152, 6.184045213667842, -1.758066588119619),
+            "fallow":   (0., 100., 0, 0, 0.),
             },
         "tech": {
             #                        a  b [m3 -> m-ha] Lpr[m] (McCarthy et al., 2020)
@@ -32,7 +32,7 @@ config = {
         "growth_period_ratio": {
             "corn":     1,
             "sorghum":  0.822,
-            "soybean":  0.934,
+            "soybeans":  0.934,
             "fallow":   1,
             }
         },
@@ -45,7 +45,7 @@ config = {
         "crop_profit": {
             "corn":     6.10,   # $/bu  2023    Northwest KS (can vary from 2.5-~6; Aguilar et al., 2015)
             "sorghum":  6.16,   # $/bu  2023    Northwest KS
-            "soybean":  12.87,  # $/bu  2023    Northwest KS
+            "soybeans":  12.87,  # $/bu  2023    Northwest KS
             "fallow":   0.},
         "irr_tech_operational_cost": {
             # [1e4$]
@@ -59,17 +59,17 @@ config = {
             # if not specify, 0 is the default.
             # This is a fixed cost per unit area crop change. [1e4$]
             ("corn", "sorghum"):    0,
-            ("corn", "soybean"):    0,
+            ("corn", "soybeans"):    0,
             ("corn", "fallow"):     0,
             ("sorghum", "corn"):    0,
-            ("sorghum", "soybean"): 0,
+            ("sorghum", "soybeans"): 0,
             ("sorghum", "fallow"):  0,
-            ("soybean", "corn"):    0,
-            ("soybean", "sorghum"): 0,
-            ("soybean", "fallow"):  0,
+            ("soybeans", "corn"):    0,
+            ("soybeans", "sorghum"): 0,
+            ("soybeans", "fallow"):  0,
             ("fallow", "corn"):     0,
             ("fallow", "sorghum"):  0,
-            ("fallow", "soybean"):  0,}
+            ("fallow", "soybeans"):  0}
         },
     "aquifer": {
         "lag": 5    # yr

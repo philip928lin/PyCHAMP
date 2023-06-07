@@ -34,7 +34,7 @@ class Field():
         evapotranspiration. The default is None.
     crop_options : list, optional
         A list of crop type options. They must exist in the config. The
-        default is ["corn", "sorghum", "soybean", "fallow"].
+        default is ["corn", "sorghum", "soybeans", "fallow"].
     tech_options : list, optional
         A list of irrigation technologies. They must exist in the config. The
         default is ["center pivot", "center pivot LEPA"].
