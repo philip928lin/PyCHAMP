@@ -1,13 +1,10 @@
 r"""
 The code is developed by Chung-Yi Lin at Virginia Tech, in April 2023.
 Email: chungyi@vt.edu
-Last modified on May 1, 2023
+Last modified on Jun 9, 2023
 
 WARNING: This code is not yet published, please do not distributed the code
 without permission.
-
-To do:
-    Complete et calculation
 """
 import numpy as np
 from dotmap import DotMap
@@ -76,7 +73,7 @@ class Field():
 
     def update_irr_tech(self, i_te):
         """
-        Update the irri
+        Update the irrigation technology.
 
         Parameters
         ----------
@@ -106,8 +103,8 @@ class Field():
         ----------
         irr : 3darray
             An array outputted from OptModel() that represent the irrigation
-            depth for the following year [cm]. The dimension of the array should be
-            (n_s, n_c, 1).
+            depth for the following year [cm]. The dimension of the array
+            should be (n_s, n_c, 1).
         i_crop : 3darray
             An array outputted from OptModel() that represent the indicator
             matrix for the crop choices in following year. The dimension of the
@@ -117,11 +114,11 @@ class Field():
             matrix for the irrigation technology choices in following year. The
             dimension of the array should be (n_te).
         prec_aw : float
-            The precipitation amount in the growing season [cm].
+            The precipitation in the growing season [cm].
         prec : float
-            The annual precipitation amount [cm].
+            The annual precipitation [cm].
         temp : DataFrame
-            The daily mean temperature storing in DataFrame format with
+            The daily mean temperature storing in a DataFrame format with
             datetime index [degC].
 
         Returns
@@ -133,7 +130,7 @@ class Field():
         v : float
             Irrigation amount [m-ha].
         inflow : float
-            Inflow to the aquifer [ m-ha].
+            Inflow to the aquifer [m-ha].
 
         """
         # Crop yield
@@ -182,10 +179,12 @@ class Field():
         self.q = q  # m-ha/d
 
         # Annual ET for aquifer
-        # !!!! Calculate et + remember to average over the corner
+        # Calculate et + (ignore the corner. we will introduce an empirical
+        # coeficient to adjust the inflow~
         wv = np.sum(w * unit_area) * cm2m
         pet = self.cal_pet_Hamon(temp, self.lat, self.dz)
-        Kc = 1 # not yet decide how
+        # We did not consider Kc variation here. Assume to have minor impact.
+        Kc = 1
 
         # Adopt the stress coeficient from GWLF
         Ks = np.ones(w_.shape)

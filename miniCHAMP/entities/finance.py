@@ -1,7 +1,7 @@
 r"""
 The code is developed by Chung-Yi Lin at Virginia Tech, in April 2023.
 Email: chungyi@vt.edu
-Last modified on May 1, 2023
+Last modified on Jun 9, 2023
 
 WARNING: This code is not yet published, please do not distributed the code
 without permission.
@@ -17,9 +17,6 @@ class Finance():
     ----------
     config : dict or DotMap
         General info of the model.
-    crop_options : list, optional
-        A list of crop type options. They must exist in the config. The
-        default is ["corn", "sorghum", "soybean", "fallow"].
 
     """
     def __init__(self, config):
@@ -27,6 +24,22 @@ class Finance():
         self.cf = config.finance
 
     def step(self, fields, wells):
+        """
+        Calculate the profit of the current step.
+
+        Parameters
+        ----------
+        fields : DotMap
+            A dictionary stored as a DotMap object that contains field objects.
+        wells : DotMap
+            A dictionary stored as a DotMap object that contains well objects.
+
+        Returns
+        -------
+        profit : float
+            [1e4$].
+
+        """
         # Calulate profit and pumping cost
         y = sum([field.y for f, field in fields.items()])
         e = sum([well.e for w, well in wells.items()])
@@ -68,32 +81,3 @@ class Finance():
         profit = rev - cost_e - cost_tech - tech_change_cost - crop_change_cost
         self.profit = profit
         return profit
-
-    # def sim_step_old(self, e, y):
-    #     """
-    #     Simulate a single timestep.
-
-    #     Parameters
-    #     ----------
-    #     e : float
-    #         Total energy consumption [PJ].
-    #     y : 3darray
-    #         Crop yield with the dimension (n_s, n_c, 1) [1e4 bu].
-
-    #     Returns
-    #     -------
-    #     profit : float
-    #         Annual profit (Million).
-
-    #     """
-    #     ep = self.energy_price          # [1e6$/PJ]
-    #     cp = self.crop_profit           # [$/bu]
-    #     crop_options = self.crop_options
-
-    #     cost_e = e * ep     # 1e6$
-    #     rev = sum([y[i,j,:] * cp[c] * 1e-2 for i in range(y.shape[0]) \
-    #                for j, c in enumerate(crop_options)])    # 1e6$
-    #     profit = rev - cost_e
-    #     profit = profit[0]
-    #     self.profit = profit    # 1e6$
-    #     return profit

@@ -1101,7 +1101,7 @@ class OptModel():
         NO. Wells:          {self.n_wells}
         NO. Water rights:   {self.n_water_rights}\n
         Decision settings:\n{msg}\n
-        Solutions (gap {m.MIPGap}%):\n{decisions}\n
+        Solutions (gap {round(m.MIPGap * 100, 4)}%):\n{decisions}\n
         Satisfication:\n{sas}\n
         ###################################
             """
