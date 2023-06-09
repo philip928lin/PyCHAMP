@@ -9,15 +9,18 @@ without permission.
 import random
 import numpy as np
 from dotmap import DotMap
+import mesa
 from ..opt_model import OptModel
 from .field import Field
 from .well import Well
 from .finance import Finance
 
-class Farmer():#ap.Agent):
-    def setup(self, agt_id, config, agt_attrs, prec_aw_dict, prec_dict, temp_dict, aquifers,
-              crop_options=["corn", "sorghum", "soybeans", "fallow"],
-              tech_options=["center pivot", "center pivot LEPA"]):
+class Farmer(mesa.Agent):#ap.Agent):
+    # def setup(self, agt_id, config, agt_attrs, prec_aw_dict, prec_dict, temp_dict, aquifers,
+    #           crop_options=["corn", "sorghum", "soybeans", "fallow"],
+    #           tech_options=["center pivot", "center pivot LEPA"]):
+    def __init__(self, agt_id, config, agt_attrs,
+                 prec_aw_dict, prec_dict, temp_dict, aquifers):
         """
         Setup an agent (farmer).
 
@@ -66,6 +69,10 @@ class Farmer():#ap.Agent):
         None.
 
         """
+        # MESA required attributes
+        self.unique_id = agt_id
+        self.running = True     # Required for batch run
+
         self.agt_id = agt_id
         agt_attrs = DotMap(agt_attrs)
         # self.fdict & self.wdict & agtdict can be deleted to save memory
@@ -75,18 +82,15 @@ class Farmer():#ap.Agent):
 
         self.field_list = list(agt_attrs.fields.keys())
         self.well_list = list(agt_attrs.wells.keys())
-        self.horizon = agt_attrs.horizon
-        self.n_dwl = agt_attrs.n_dwl
-        self.eval_metric = agt_attrs.eval_metric
-        self.crop_options = crop_options
-        self.tech_options = tech_options
+
         config = DotMap(config)
         self.config = config
         self.perceived_prec_aw = agt_attrs.perceived_prec_aw
-        if agt_attrs.alphas is None:
-            self.alphas = config.consumat.alpha
-        else:
-            self.alphas = agt_attrs.alphas
+        if agt_attrs.decision_making.alphas is None:
+            self.agt_attrs.decision_making.alphas = config.consumat.alpha
+        dm_args = self.agt_attrs.decision_making
+        crop_options = dm_args.crop_options
+        tech_options = dm_args.tech_options
 
         # Create containers for simulation objects
         fields = DotMap()
@@ -146,9 +150,14 @@ class Farmer():#ap.Agent):
 
             dm_sols[f]["pre_i_te"] = v.init.tech
         self.dm_sols = self.make_dm(None, dm_sols=dm_sols, init=True)
+
+        self.prec_aw_dict, self.prec_dict, self.temp_dict = prec_aw_dict, prec_dict, temp_dict
         self.run_simulation(prec_aw_dict, prec_dict, temp_dict) # aquifers
 
-    def sim_step(self, prec_aw_dict, prec_dict, temp_dict):
+    def update_climate_input(self, prec_aw_dict, prec_dict, temp_dict):
+        self.prec_aw_dict, self.prec_dict, self.temp_dict = prec_aw_dict, prec_dict, temp_dict
+
+    def step(self): #, prec_aw_dict, prec_dict, temp_dict):
         """
         Simulate a single timestep.
 
@@ -186,13 +195,11 @@ class Farmer():#ap.Agent):
         elif state == "Deliberation":
             self.make_dm_deliberation()
 
-        ### Simulation
-        self.run_simulation(prec_aw_dict, prec_dict, temp_dict)
+        ### Simulation (note prec_aw_dict, prec_dict, temp_dict have to be updated)
+        self.run_simulation(self.prec_aw_dict, self.prec_dict, self.temp_dict)
 
     def run_simulation(self, prec_aw_dict, prec_dict, temp_dict):  # aquifers
         aquifers = self.aquifers
-        eval_metric = self.eval_metric
-        alphas = self.alphas
         fields = self.fields
         wells = self.wells
 
@@ -202,7 +209,7 @@ class Farmer():#ap.Agent):
             irr = dm_sols[f].irr
             i_crop = dm_sols[f].i_crop
             i_te = dm_sols[f].i_te
-            field.sim_step(irr=irr, i_crop=i_crop, i_te=i_te,
+            field.step(irr=irr, i_crop=i_crop, i_te=i_te,
                            prec_aw=prec_aw_dict[f],
                            prec=prec_dict[f], temp=temp_dict[f])
 
@@ -224,10 +231,10 @@ class Farmer():#ap.Agent):
             # v = dm_sols[w].v
             # q = dm_sols[w].q
             # l_pr = dm_sols[w].l_pr
-            well.sim_step(v=v, dwl=dwl, q=q, l_pr=l_pr)
+            well.step(v=v, dwl=dwl, q=q, l_pr=l_pr)
 
         # Calulate profit and pumping cost
-        self.finance.sim_step(fields=self.fields, wells=self.wells)
+        self.finance.step(fields=self.fields, wells=self.wells)
         profit = self.finance.profit
 
         y_y = sum([field.y_y for f, field in fields.items()])/len(fields)
@@ -237,10 +244,11 @@ class Farmer():#ap.Agent):
 
         # Calculate satisfaction and uncertainty
         needs = self.needs
-        eval_metric = self.eval_metric
+        dm_args = self.agt_attrs.decision_making
+        eval_metric = dm_args.eval_metric
         def func(x, alpha=1):
             return 1-np.exp(-alpha * x)
-        for a, alpha in alphas.items():
+        for a, alpha in dm_args.alphas.items():
             if alpha is None:
                 continue
             needs[a] = func(eval_metric_vars[a], alpha=alpha)
@@ -283,88 +291,104 @@ class Farmer():#ap.Agent):
         """
         aquifers = self.aquifers
         config = self.config
-        horizon = self.horizon
-        n_dwl = self.n_dwl
-        crop_options = self.crop_options
-        tech_options = self.tech_options
-        perceived_prec_aw = self.perceived_prec_aw
-        eval_metric = self.eval_metric
+        dm_args = self.agt_attrs.decision_making
+
         fields = self.fields
         wells = self.wells
-        alphas = self.alphas
+
 
         # Locally create OptModel to make the Farmer object pickable for parallel computing
         dm = OptModel(name=self.agt_id)
-        dm.setup_ini_model(config=config, horizon=horizon, eval_metric=eval_metric,
-                           crop_options=crop_options, tech_options=tech_options,
-                           approx_horizon=True)
+        dm.setup_ini_model(
+            config=config, horizon=dm_args.horizon,
+            eval_metric=dm_args.eval_metric, crop_options=dm_args.crop_options,
+            tech_options=dm_args.tech_options,
+            approx_horizon=dm_args.approx_horizon
+            )
 
         for f, field in fields.items():
             for f, field in fields.items():
                 if init:
-                    dm.setup_constr_field(field_id=f, prec_aw=perceived_prec_aw,
-                                          pre_i_crop=dm_sols[f].pre_i_crop,
-                                          pre_i_te=dm_sols[f].pre_i_te,
-                                          rain_fed_option=field.rain_fed_option,
-                                          i_crop=dm_sols[f].i_crop,
-                                          i_rain_fed=None,
-                                          i_te=dm_sols[f].i_te)
+                    dm.setup_constr_field(
+                        field_id=f,
+                        prec_aw=dm_args.perceived_prec_aw,
+                        pre_i_crop=dm_sols[f].pre_i_crop,
+                        pre_i_te=dm_sols[f].pre_i_te,
+                        rain_fed_option=field.rain_fed_option,
+                        i_crop=dm_sols[f].i_crop,
+                        i_rain_fed=None,
+                        i_te=dm_sols[f].i_te)
                     continue
 
                 if state == "Deliberation":
-                    dm.setup_constr_field(field_id=f, prec_aw=perceived_prec_aw,
-                                          pre_i_crop=dm_sols[f].pre_i_crop,
-                                          pre_i_te=dm_sols[f].pre_i_te,
-                                          rain_fed_option=field.rain_fed_option,
-                                          i_crop=None,
-                                          i_rain_fed=None,
-                                          i_te=None)
+                    dm.setup_constr_field(
+                        field_id=f,
+                        prec_aw=dm_args.perceived_prec_aw,
+                        pre_i_crop=dm_sols[f].pre_i_crop,
+                        pre_i_te=dm_sols[f].pre_i_te,
+                        rain_fed_option=field.rain_fed_option,
+                        i_crop=None,
+                        i_rain_fed=None,
+                        i_te=None
+                        )
                 else:
-                    dm.setup_constr_field(field_id=f, prec_aw=perceived_prec_aw,
-                                          pre_i_crop=dm_sols[f].pre_i_crop,
-                                          pre_i_te=dm_sols[f].pre_i_te,
-                                          rain_fed_option=field.rain_fed_option,
-                                          i_crop=dm_sols[f].i_crop,
-                                          i_rain_fed=dm_sols[f].i_rain_fed,
-                                          i_te=dm_sols[f].i_te)
+                    dm.setup_constr_field(
+                        field_id=f,
+                        prec_aw=dm_args.perceived_prec_aw,
+                        pre_i_crop=dm_sols[f].pre_i_crop,
+                        pre_i_te=dm_sols[f].pre_i_te,
+                        rain_fed_option=field.rain_fed_option,
+                        i_crop=dm_sols[f].i_crop,
+                        i_rain_fed=dm_sols[f].i_rain_fed,
+                        i_te=dm_sols[f].i_te
+                        )
 
         for w, well in wells.items():
             #proj_dwl = 0
             aquifer_id = aquifer_id = well.aquifer_id
-            proj_dwl = np.mean(aquifers[aquifer_id].dwl_list[-n_dwl:])
-            dm.setup_constr_well(well_id=w, dwl=proj_dwl, st=well.st,
-                                 l_wt=well.l_wt, r=well.r, k=well.k,
-                                 sy=well.sy, eff_pump=well.eff_pump,
-                                 eff_well=well.eff_well,
-                                 pumping_capacity=well.pumping_capacity)
+            proj_dwl = np.mean(aquifers[aquifer_id].dwl_list[-dm_args.n_dwl:])
+            dm.setup_constr_well(
+                well_id=w, dwl=proj_dwl, st=well.st,
+                l_wt=well.l_wt, r=well.r, k=well.k,
+                sy=well.sy, eff_pump=well.eff_pump,
+                eff_well=well.eff_well,
+                pumping_capacity=well.pumping_capacity
+                )
 
-        wrs = dm_sols.wrs
+        water_rights = dm_sols.water_rights
         for wr_id, v in self.agt_attrs.water_rights.items():
             if v.status: # Check whether the wr is activated
                 # Extract the water right setting from the previous opt run,
                 # which we record the remaining water right fromt the previous
                 # year. If the wr is newly activate in a simulation, then we
                 # use the input to setup the wr.
-                wr_args = wrs.get(wr_id)
+                wr_args = water_rights.get(wr_id)
                 if wr_args is None:
-                    dm.setup_constr_wr(water_right_id=wr_id, wr=v.wr,
-                                       field_id_list=v.field_id_list,
-                                       time_window=v.time_window, i_tw=v.i_tw,
-                                       remaining_wr=v.remaining_wr,
-                                       tail_method=v.tail_method)
+                    dm.setup_constr_wr(
+                        water_right_id=wr_id, wr=v.wr,
+                        field_id_list=v.field_id_list,
+                        time_window=v.time_window, i_tw=v.i_tw,
+                        remaining_wr=v.remaining_wr,
+                        tail_method=v.tail_method
+                        )
                 else:
-                    dm.setup_constr_wr(water_right_id=wr_id, wr=wr_args.wr,
-                                       field_id_list=wr_args.field_id_list,
-                                       time_window=wr_args.time_window,
-                                       i_tw=wr_args.i_tw,
-                                       remaining_wr=wr_args.remaining_wr,
-                                       tail_method=wr_args.tail_method)
-                    #dm.setup_constr_wr(water_right_id=wr_id, *wr_args)
+                    dm.setup_constr_wr(
+                        water_right_id=wr_id, wr=wr_args.wr,
+                        field_id_list=wr_args.field_id_list,
+                        time_window=wr_args.time_window,
+                        i_tw=wr_args.i_tw,
+                        remaining_wr=wr_args.remaining_wr,
+                        tail_method=wr_args.tail_method
+                        )
 
         dm.setup_constr_finance()
-        dm.setup_obj(alpha_dict=alphas)
-        dm.finish_setup()
-        dm.solve(keep_gp_model=False, keep_gp_output=False)
+        dm.setup_obj(alpha_dict=dm_args.alphas)
+        dm.finish_setup(display_summary=dm_args.display_summary)
+        dm.solve(
+            keep_gp_model=dm_args.keep_gp_model,
+            keep_gp_output=dm_args.keep_gp_output,
+            display_report=dm_args.display_report
+            )
         dm_sols = dm.sols
         dm.depose_gp_env() # Release memory
         return dm_sols

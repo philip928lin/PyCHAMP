@@ -568,6 +568,7 @@ class OptModel():
             dwls = np.array([dwl*(i) for i in range(n_h)])
         # Assume a linear projection to the future
         l_wt = l_wt - dwls
+        self.l_wt = l_wt
 
         # Calculate proportion of the irrigation water (v), daily pumping rate
         # (q), and head for irr tech (l_pr) of this well.
@@ -726,12 +727,20 @@ class OptModel():
         None.
 
         """
+        # As the msg said.
+        if time_window != 1 and self.approx_horizon:
+            raise ValueError("Approximation is not allow with the water rights "
+                             +"constraints that have time_window larger than 1."
+                             +" Please set approx_horizon to False.")
+
         m = self.model
         fids = field_id_list
         n_h = self.n_h
         n_c = self.n_c
         n_s = self.n_s
         vars = self.vars
+
+        # Collect irrigation depth over the constrainted fields.
         if fids == "all":
             irr_sub = self.vars.irr         # (n_s, n_c, n_h)
         else:
@@ -750,11 +759,11 @@ class OptModel():
         c_i = 0
         if start_index !=0 and remaining_wr is not None:
             if start_index > n_h: # Ensure within the planning horizon
-                start_index = max(n_h, start_index+1) - 1
+                start_index = min(n_h, start_index + 1) - 1
                 print("Warning: start_index is larger than (horizon - 1).")
-            m.addConstrs((gp.quicksum(irr_sub[i,j,h] \
-                        for i in range(n_s) for j in range(n_c))/n_s <= remaining_wr \
-                        for h in range(0, start_index + 1)),
+            m.addConstr(gp.quicksum(irr_sub[i,j,h] \
+                        for i in range(n_s) for j in range(n_c) \
+                        for h in range(0, start_index + 1))/n_s <= remaining_wr,
                         name=f"c.{water_right_id}.wr_{c_i}(cm)")
             c_i += 1
         else:
@@ -762,12 +771,11 @@ class OptModel():
             start_index = 0
 
         remaining_length = n_h - start_index
-
         # Middle period
         while remaining_length > time_window:
-            m.addConstrs((gp.quicksum(irr_sub[i,j,h] \
-                        for i in range(n_s) for j in range(n_c))/n_s <= wr \
-                        for h in range(start_index, start_index+time_window)),
+            m.addConstr(gp.quicksum(irr_sub[i,j,h] \
+                        for i in range(n_s) for j in range(n_c) \
+                        for h in range(start_index, start_index+time_window))/n_s <= wr,
                         name=f"c.{water_right_id}.wr_{c_i}(cm)")
             c_i += 1
             start_index += time_window
@@ -781,9 +789,9 @@ class OptModel():
                 wr_tail = wr
             # Otherwise, we expect a value given by users.
 
-            m.addConstrs((gp.quicksum(irr_sub[i,j,h] \
-                        for i in range(n_s) for j in range(n_c))/n_s <= wr_tail \
-                        for h in range(start_index, n_h)),
+            m.addConstr(gp.quicksum(irr_sub[i,j,h] \
+                        for i in range(n_s) for j in range(n_c) \
+                        for h in range(start_index, n_h))/n_s <= wr_tail,
                         name=f"c.{water_right_id}.wr_{c_i}(cm)")
 
         self.water_right_ids.append(water_right_id)
@@ -791,12 +799,18 @@ class OptModel():
 
         # Record for the next run. Assume the simulation runs annually and will
         # apply the irr solved by the opt model.
-        self.vars.wrs[water_right_id] = DotMap({"wr": wr,
-                                               "field_id_list": field_id_list,
-                                               "time_window": time_window,
-                                               "i_tw": i_tw%time_window + 1,
-                                               "remaining_wr": remaining_wr,
-                                               "tail_method": tail_method})
+        # This record will be updated in solve() and add to the sols.
+        if time_window == 1 or i_tw == time_window:
+            # i_tw == time_window => Next year start a new round.
+            remaining_wr = None
+        self.wrs[water_right_id] = DotMap({
+            "wr": wr,
+            "field_id_list": field_id_list,
+            "time_window": time_window,
+            "i_tw": i_tw,
+            "remaining_wr": remaining_wr,
+            "tail_method": tail_method
+            })
 
     def setup_obj(self, alpha_dict=None):
         """
@@ -933,7 +947,7 @@ class OptModel():
         if display_summary:
             print(summary)
 
-    def solve(self, keep_gp_model=False, keep_gp_output=False, display_report=False, **kwargs):
+    def solve(self, keep_gp_model=False, keep_gp_output=False, display_report=True, **kwargs):
         """
         Solve the optimization problem. Default NonConvex = 2 (solve for a
         nonconvex model).
@@ -1030,20 +1044,21 @@ class OptModel():
             # Update remaining water rights
             wrs = self.wrs
             for k, v in wrs.items():
-                fids = v.field_id_list
-                if fids == "all":
-                    irr_sub = sols.irr         # (n_s, n_c, n_h)
-                else:
-                    for i, fid in enumerate(fids):
-                        if i == 0:
-                            irr_sub = sols[fid].irr.copy()
-                        else:
-                            irr_sub += sols[fid].irr
-                    irr_sub = irr_sub/len(fids)
-
+                if v.remaining_wr is not None:
+                    fids = v.field_id_list
+                    if fids == "all":
+                        irr_sub = sols.irr         # (n_s, n_c, n_h)
+                    else:
+                        for i, fid in enumerate(fids):
+                            if i == 0:
+                                irr_sub = sols[fid].irr.copy()
+                            else:
+                                irr_sub += sols[fid].irr
+                        irr_sub = irr_sub/len(fids)
+                    v.remaining_wr = v.remaining_wr - np.sum(irr_sub[:, :, 0])
                 v.i_tw = v.i_tw % v.time_window + 1
-                v.remaining_wr = v.remaining_wr - np.sum(irr_sub[:, :, 0])
             sols.water_rights = wrs
+
             # Display report
             crop_options = self.crop_options
             tech_options = self.tech_options
@@ -1077,7 +1092,7 @@ class OptModel():
         NO. Wells:          {self.n_wells}
         NO. Water rights:   {self.n_water_rights}\n
         Decision settings:\n{msg}\n
-        Solutions:\n{decisions}\n
+        Solutions (gap {m.MIPGap}%):\n{decisions}\n
         Satisfication:\n{sas}\n
         ###################################
             """

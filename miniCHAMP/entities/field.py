@@ -98,7 +98,7 @@ class Field():
         self.pre_te = self.te
         self.te = new_te
 
-    def sim_step(self, irr, i_crop, i_te, prec_aw, prec, temp):
+    def step(self, irr, i_crop, i_te, prec_aw, prec, temp):
         """
         Simulate a single timestep.
 

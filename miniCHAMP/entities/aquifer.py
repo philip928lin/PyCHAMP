@@ -44,7 +44,7 @@ class Aquifer():
         self.dwl_list = [ini_dwl]
         self.dwl = ini_dwl
 
-    def sim_step(self, inflow, v):
+    def step(self, inflow, v):
         """
         Simulate a single timestep.
 

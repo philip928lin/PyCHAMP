@@ -57,7 +57,7 @@ class Well():
 
         self.t = 0
 
-    def sim_step(self, v, dwl, q, l_pr):
+    def step(self, v, dwl, q, l_pr):
         """
         Simulate a single timestep.
 

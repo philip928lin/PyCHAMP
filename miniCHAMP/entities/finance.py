@@ -26,7 +26,7 @@ class Finance():
         config = DotMap(config)
         self.cf = config.finance
 
-    def sim_step(self, fields, wells):
+    def step(self, fields, wells):
         # Calulate profit and pumping cost
         y = sum([field.y for f, field in fields.items()])
         e = sum([well.e for w, well in wells.items()])
