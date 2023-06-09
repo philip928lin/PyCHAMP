@@ -71,7 +71,6 @@ class Farmer(mesa.Agent):#ap.Agent):
         """
         # MESA required attributes
         self.unique_id = agt_id
-        self.running = True     # Required for batch run
 
         self.agt_id = agt_id
         agt_attrs = DotMap(agt_attrs)

@@ -2,82 +2,69 @@
 """
 The code is developed by Chung-Yi Lin at Virginia Tech, in April 2023.
 Email: chungyi@vt.edu
-Last modified on May 1, 2023
+Last modified on Jun 9, 2023
 
 WARNING: This code is not yet published, please do not distributed the code
 without permission.
-
-To do:
-    Add example documentation (wait for the completion of the miniCHAMP)
 """
-#import os
 import json
 import numpy as np
 import gurobipy as gp
 from dotmap import DotMap
-#from .util import dict_to_string
-def dict_to_string(dictionary, prefix="", indentor="  ", level=2, roun=None):
-    """Ture a dictionary into a printable string.
-    Parameters
-    ----------
-    dictionary : dict
-        A dictionary.
-    indentor : str, optional
-        Indentor, by default "  ".
 
-    Returns
-    -------
-    str
-        A printable string.
-    """
-    def dict_to_string_list(dictionary, indentor="  ", count=1, string=[]):
-        for key, value in dictionary.items():
-            string.append(prefix + indentor * count + str(key))
-            if isinstance(value, dict) and count < level:
-                string = dict_to_string_list(value, indentor, count+1, string)
-            elif isinstance(value, dict) is False and count == level:
-                string[-1] += ":\t" + str(value)
-            else:
-                if roun is not None and isinstance(value, float):
-                    string.append(prefix + indentor * (count+1) + str(round(value, roun)))
-                else:
-                    string.append(prefix + indentor * (count+1) + str(value))
-        return string
-    return "\n".join(dict_to_string_list(dictionary, indentor))
+
 #################
 
 class OptModel():
     """
-    A class to represent a farmer making decisions on irrigation depth, crop
-    types, rain-fed option, and irrigation technologies by solving an
-    optimization model to maximize a farmer's satisfication (profit or yield_pct).
-    The optimization problem is formulated on an annual scale. Crop types,
-    rain-fed option, and irrigation technologies are optional decision
-    variables. They can be given.
+    This class represents a farmer making decisions on irrigation depth,
+    crop types, rain-fed or irrigated, and irrigation technologies. The
+    farmer's objective is to solve a nonlinear mixed interger optimization
+    model that maximizes their satisfaction, which can be measured by metrics
+    like profit or yield percentage. The optimization problem is formulated on
+    an annual scale. Optional decision variables include crop types, rain-fed
+    option, and irrigation technologies, which can be provided as input to the
+    class.
 
-    The model can be built to address a farmer with multiple crop fields and
-    groundwater wells. Water rights can be added as contraints to all fields or
-    a subset of fields. The water rights on the point of diversion can be
-    implemented by assigning pumping capacity to a well.
+    Specifically, this class is designed to accommodate a farmer with multiple
+    crop fields and groundwater wells. Each field can have multiple area
+    splits, where each split has its own set of decision variables. Water
+    rights can be incorporated as constraints for all fields or a selected
+    subset of fields with an optional time_window argument allowing farmer to
+    allocate their water rights across multiple years. To enforce water rights
+    at the point of diversion, pumping capacity can be assigned to individual
+    wells.
 
-    Multiple crop types can be planted in a single field if the attribute
-    'n_s' is larger then 1. For example, if n_s = 4, a field is
-    uniformly split into 4 subfields. The farmer can make individual crop and
-    irrigation decision for each of the subfields. n_s is extract from
-    the area_split in 'config.'
+    If the 'horizon' parameter is set to a value greater than 1, only the
+    irrigation depth is varied each year. Other decision variables such as the
+    crop types, rain-fed option, and irrigation technologies remain fixed over
+    the planning horizon. If necessary, the user has the flexibility to rerun
+    the optimization model in the subsequent years to update the decision based
+    on any changes or new information.
 
-    If the 'horizon' is larger than 1, only the irrigation depth are varied in
-    each year. crop types, rain-fed option, and irrigation technologies are
-    fixed over the planning horizon. User can run the optimization model again
-    in the next year to update the decision if needed.
+    This class provides an option to approximate the solving process by setting
+    the "approx_horizon" parameter to True. This approximation assumes a linear
+    decrement in water levels and helps speed up the solving process. However,
+    it's important to note that if there is a water right constraint with a
+    time_window argument larger than 1, the approximation option is restricted
+    and cannot be used. This ensures accurate handling of water right
+    constraints over multiple time periods.
+
+    Notations
+    ---------
+    n_s: Number of the splits in a field.
+    n_c: Number of the crop choices.
+    n_h: Planning horizon or approximated horizon.
+    n_te: Number of the irrigation technology choices.
 
     Notes
     -----
-    This class solves the optimization problem through Gurobi solver. It is a
-    commercial solver. However, Gurobi provides full feature solver for
-    academic use with no cost. Users will need to register a academic license
-    and download the solver as well as install gurobipy python package to be
-    able to run the code.
+    This class utilizes the Gurobi solver to solve the optimization problem.
+    Gurobi is a commercial solver, but it also offers a full-featured solver
+    for academic use at no cost. Users interested in running the code will need
+    to register for an academic license and download the solver. Additionally,
+    they will need to install the gurobipy Python package to interface with
+    Gurobi and execute the code successfully.
 
     More information can be found here:
     https://www.gurobi.com/academia/academic-program-and-licenses/
@@ -85,7 +72,7 @@ class OptModel():
     Attributes
     ----------
     name : str, optional
-        Name of the model. The default is "".
+        Model name. The default is "".
 
     Methods
     -------
@@ -98,8 +85,9 @@ class OptModel():
     """
     def __init__(self, name=""):
         """
-        Create an optimization environment and object for a farmer.
+        Instantiate an optimization environment and object for a farmer.
         """
+        # Model name
         self.name = name
         # Create a gurobi environment to ensure thread safety for parallel
         # computing.
@@ -114,11 +102,13 @@ class OptModel():
         # multi-threaded program, since environments are not thread safe. In
         # this case, you will need a separate environment for each of your
         # threads.
+
     def depose_gp_env(self):
         """
-        Clean gurobi environment. Run only when no longer need the instance.
-        New optimization model (i.e., setup_ini_model) CANNOT be created
-        after calling this method.
+        Depose the Gurobi environment, ensuring that it is executed only when
+        the instance is no longer needed. It's important to note that once this
+        method is invoked, a new optimization model (setup_ini_model) cannot be
+        created anymore.
 
         Returns
         -------
@@ -127,38 +117,42 @@ class OptModel():
         """
         self.gpenv.dispose()
 
-    def setup_ini_model(self, config, horizon=5, eval_metric="profit",
+    def setup_ini_model(self, config, horizon=1, eval_metric="profit",
                         crop_options=["corn", "sorghum", "soybeans", "fallow"],
                         tech_options=["center pivot", "center pivot LEPA"],
-                        approx_horizon=True):
+                        approx_horizon=False):
         """
-        Setup initial setting for an optimization model. This will
-        automatically dispose the model created in the previous run. However,
-        the model will be created in the same gurobi environment initialized
-        with the creation of the class instance.
-
+        Set up the initial settings for an optimization model. The new
+        optimization model will be created within the same Gurobi environment
+        that was initialized when the class instance was created.
 
         Parameters
         ----------
         config : dict or DotMap
             General info of the model.
         horizon : str, optional
-            The planing horizon [yr]. The default is 5.
+            The planing horizon [yr]. The default is 1.
         eval_metric : str, optional
             "profit" or "yield_pct". The default is "profit".
         crop_options : list, optional
             A list of crop type options. They must exist in the config. The
             default is ["corn", "sorghum", "soybeans", "fallow"].
         tech_options : list, optional
-            A list of irrigation technologies. They must exist in the config. The
-            default is ["center pivot", "center pivot LEPA"].
+            A list of irrigation technologies. They must exist in the config.
+            The default is ["center pivot", "center pivot LEPA"].
         approx_horizon : bool, optional
-            If True, the model will calculate two (start & end) points over the
-            given horizon to calcalate the objective, which is the average over
-            the horizon. This will significantly improve solving speed with
-            long horizon. Most of the time this is equivalent to the original
-            problem. This is built upon the assumption that groundwater level
-            linearly decrease in the projected future.
+            When set to True, the model will calculate two points (start and
+            end) over the given horizon to determine the objective, which is
+            the average over the horizon. This approach can significantly
+            enhance the solving speed, particularly for long horizons. In most
+            cases, this approximation is equivalent to solving the original
+            problem. It relies on the assumption that the groundwater level
+            will linearly decrease in the projected future. However, it's
+            important to note that if there is a water right constraint with a
+            time_window argument larger than 1, the approximation option is
+            restricted and cannot be used. This ensures accurate handling of
+            water right constraints over multiple time periods. The default is
+            False.
 
         Returns
         -------
@@ -170,22 +164,20 @@ class OptModel():
         self.crop_options = crop_options
         self.tech_options = tech_options
         self.eval_metric = eval_metric
+        self.approx_horizon = approx_horizon
+        self.horizon = horizon # Original planning horizon
 
-        ## gurobi pars
+        ## The gurobi parameters. These will be fed to the solver in solve().
         self.gurobi_pars = config.get("gurobi")
         if self.gurobi_pars is None:
             self.gurobi_pars = {}
 
         ## Dimension coefficients
-        self.n_c = len(crop_options)    # NO. crop options (not distinguished
-                                        # by rain-fed or irrigated)
-        self.n_te = len(tech_options)   # NO. irr tech options
-        self.approx_horizon = approx_horizon
-        self.horizon = horizon          # Original planning horizon
-
+        self.n_s = config.field.area_split
+        self.n_c = len(crop_options)    # No. of crop choice options
+        self.n_te = len(tech_options)   # No. of irr tech options
         if approx_horizon and horizon > 2:
             # calculate obj with start and end points
-            # Assume a linear relationship
             self.n_h = 2
         else:
             self.n_h = horizon
@@ -206,13 +198,12 @@ class OptModel():
         self.b = crop[:, 3].reshape((-1, 1))        # (n_c, 1)
         self.c = crop[:, 4].reshape((-1, 1))        # (n_c, 1)
         self.growth_period_ratio = {c: config.field.growth_period_ratio[c] for c in crop_options}
-        self.n_s = config.field.area_split
-        self.unit_area = config.field.field_area/self.n_s
 
+        self.unit_area = config.field.field_area/self.n_s
         self.alphas = config.consumat.alpha
         self.eval_metrics = [metric for metric, v in self.alphas.items() if v is not None]
 
-        ## Form changing matrix from the config
+        ## Form tech and crop change cost matrix from the config
         n_te = self.n_te
         irr_tech_change_cost = config.finance.irr_tech_change_cost
         tech_change_cost_matrix = np.zeros((n_te, n_te))
@@ -238,9 +229,9 @@ class OptModel():
         self.crop_change_cost_matrix = crop_change_cost_matrix
 
         ## Optimization Model
-        #self.model.dispose()    # release the memory of the previous model
+        # self.model.dispose()    # release the memory of the previous model
         self.model = gp.Model(name=self.name, env=self.gpenv)
-        self.vars = DotMap()
+        self.vars = DotMap()    # A container to store variables.
         self.bounds = DotMap()
         self.bounds.ub_w = np.max(self.wmax)
         self.inf = float('inf')
@@ -248,22 +239,23 @@ class OptModel():
         ## Add shared variables
         m = self.model
         inf = self.inf
+        n_s = self.n_s
         n_c = self.n_c
         n_h = self.n_h
-        n_s = self.n_s
-        # total irrigation depth per crop per yr
+        # Total irrigation depth per crop per yr
         irr = m.addMVar((n_s, n_c, n_h), vtype="C", name="irr(cm)", lb=0, ub=inf)
-        # total irrigation volumn per yr
+        # Total irrigation volumn per yr
         v = m.addMVar((n_h), vtype="C", name="v(m-ha)", lb=0, ub=inf)
-        # total yield per crop type per yr
-        y = m.addMVar((n_s, n_c, n_h), vtype="C", name="y", lb=0, ub=inf)
-        # average y_ (i.e., y/ymax) per yr
+        # Total yield per crop type per yr
+        y = m.addMVar((n_s, n_c, n_h), vtype="C", name="y(1e4bu)", lb=0, ub=inf)
+        # Average y_ (i.e., y/ymax) per yr
         y_y = m.addMVar((n_h), vtype="C", name="y_y", lb=0, ub=1)
-        # total used electricity (pumping) per yr
+        # Total used electricity (pumping) per yr
         e = m.addMVar((n_h), vtype="C", name="e(PJ)", lb=0, ub=inf)
-        # total profit
+        # Total profit
         profit = m.addMVar((n_h), vtype="C", name="profit(1e4$)", lb=-inf, ub=inf)
 
+        ## Record variables
         self.vars.irr = irr
         self.vars.v = v
         self.vars.y = y
@@ -271,45 +263,49 @@ class OptModel():
         self.vars.e = e
         self.vars.profit = profit
 
-        ## Add input msg
+        ## Record msg about the user inputs.
         self.msg = {}
 
-        ## Record water rights info
+        ## Record water rights info.
         self.wrs = DotMap()
 
-    def setup_constr_field(self, field_id, prec_aw,
-                           pre_i_crop, pre_i_te,
-                           rain_fed_option=True,
-                           i_crop=None, i_rain_fed=None, i_te=None):
+    def setup_constr_field(self, field_id, prec_aw, pre_i_crop, pre_i_te,
+                           rain_fed_option=True, i_crop=None, i_rain_fed=None,
+                           i_te=None):
         """
-        Add crop field constriants. Multiple fields can be assigned by calling
-        this function multiple times with different field id. If i_crop (and
-        i_rain_fed) is (are) given, the model will not optimize over different
-        crop type options (and rain-fed options). If te is given, the model
-        will not optimize over different irrigation technologies.
+        Add crop field constriants. You can assign multiple fields by calling
+        this function repeatedly with different field_id. If
+        i_crop/i_rain_fed/i_te is provided, the model will not optimize over
+        different crop type options/rain-fed or irrigated/irrigation
+        technologies.
 
         Parameters
         ----------
         field_id : str or int
-            Field id distinguishing equation sets for different fields.
+            The field id serves as a means to differentiate the equation sets
+            for different fields.
         prec_aw : float
-            Percieved precipitation amount in the growing season [cm].
-        i_crop : 3darray, optional
-            Indicator matrix with the dimension of (area_split, number of crop
-            type options, 1). 1 means the corresponding crop type is selected.
-            The default is None.
-        i_rain_fed : 3darray, optional
-            Indicator matrix with the dimension of (area_split, number of crop
-            type options, 1). 1 means the unit area in a field is rainfed.
-            i_rain_fed is only used when rain_fed_option is True. Also, if it
-            is given, make sure 1 only exists at where i_crop is also 1. If
-            given, rain_fed_option will be forced to be True. The
-            default is None.
+            Percieved precipitation in the growing season [cm].
+        pre_i_crop: str or 3darray
+            Crop name or the i_crop from the previous time step.
+        pre_i_te: str or 3darray
+            Irrigation technology or i_te from the previous time step.
         rain_fed_option : bool, optional
-            True if allow rain_fed crop field options. The default is False.
+            True if allow the rain-fed crop field option. The default is True.
+        i_crop : 3darray, optional
+            The indicator matrix has a dimension of (n_s, n_c, 1). In this
+            matrix, a value of 1 indicates that the corresponding crop type
+            is selected or chosen. The default is None.
+        i_rain_fed : 3darray, optional
+            The indicator matrix has a dimension of (n_s, n_c, 1). In this
+            matrix, a value of 1 indicates that the unit area in a field is
+            rainfed. Given i_rain_fed will force rain_fed_option to be True.
+            Also, if it is given, make sure 1 only exists at where i_crop is
+            also 1. The default is None.
         i_te : 1darray or str, optional
-            Irrigation technology. If given, the program will not optimize over
-            different irrigation technologies. The default is None.
+            The indicator matrix has a dimension of (n_te). In this
+            matrix, a value of 1 indicates that the corresponnding irrigation
+            technology is selected. The default is None.
 
         Returns
         -------
@@ -323,10 +319,12 @@ class OptModel():
         fid = field_id
         if i_rain_fed is not None:
             rain_fed_option = True
-        self.msg[fid] = {"Crop types": "optimize",
-                         "Irr tech": "optimize",
-                         "Rain-fed option": rain_fed_option,
-                         "Rain-fed areas": (lambda o: "optimize" if o else None)(rain_fed_option)}
+        self.msg[fid] = {
+            "Crop types": "optimize",
+            "Irr tech": "optimize",
+            "Rain-fed option": rain_fed_option,
+            "Rain-fed areas": (lambda o: "optimize" if o else None)(rain_fed_option)
+            }
 
         n_c = self.n_c
         n_h = self.n_h
@@ -348,33 +346,29 @@ class OptModel():
 
         unit_area = self.unit_area
 
-        # Adjust growing period
+        # Adjust prec_aw by the crop's growing period
         prec_aw = np.ones((n_s, n_c, n_h)) * prec_aw
         for c, crop in enumerate(self.crop_options):
             prec_aw[:, c, :] = prec_aw[:, c, :] * growth_period_ratio[crop]
 
         ### Add general variables
-        irr = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.irr(cm)", lb=0, ub=ub_irr)
-        w   = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.w(cm)", lb=0, ub=ub_w)
-        w_temp = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.w_temp", lb=0, ub=inf)
-        w_  = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.w_", lb=0, ub=1)
-        y   = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.y(1e4bu)", lb=0, ub=inf)
-        y_  = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.y_", lb=0, ub=1)
-        yw_temp  = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.yw_temp", lb=-inf, ub=1)
-        yw_  = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.yw_", lb=0, ub=1)
-        v_c = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.v_c(m-ha)", lb=0, ub=inf)
-        y_y = m.addMVar((n_h), vtype="C", name=f"{fid}.y_y", lb=0, ub=1)    # avg y_ per yr
-        v   = m.addMVar((n_h), vtype="C", name=f"{fid}.v(m-ha)", lb=0, ub=inf)
-        i_crop = m.addMVar((n_s, n_c, 1), vtype="B", name=f"{fid}.i_crop")
+        irr     = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.irr(cm)", lb=0, ub=ub_irr)
+        w       = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.w(cm)", lb=0, ub=ub_w)
+        w_temp  = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.w_temp", lb=0, ub=inf)
+        w_      = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.w_", lb=0, ub=1)
+        y       = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.y(1e4bu)", lb=0, ub=inf)
+        y_      = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.y_", lb=0, ub=1)
+        yw_temp = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.yw_temp", lb=-inf, ub=1)
+        yw_     = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.yw_", lb=0, ub=1)
+        v_c     = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.v_c(m-ha)", lb=0, ub=inf)
+        y_y     = m.addMVar((n_h), vtype="C", name=f"{fid}.y_y", lb=0, ub=1)    # avg y_ per yr
+        v       = m.addMVar((n_h), vtype="C", name=f"{fid}.v(m-ha)", lb=0, ub=inf)
+        i_crop  = m.addMVar((n_s, n_c, 1), vtype="B", name=f"{fid}.i_crop")
         i_rain_fed = m.addMVar((n_s, n_c, 1), vtype="B", name=f"{fid}.i_rain_fed")
 
-        # Given i_crop as an input (i.e., don't optimize over crop type
-        # choices)
-        # Otherwise, optimize i_crop (i.e., optimize over crop type choices)
-        # Currently, crop type choice has to be the same accross planning
-        # horizon.
+        # Crop type is set to be the same accross the planning horizon.
         if i_crop_input is not None:
-            #i_crop_input = np.repeat(i_crop_input[:, :, np.newaxis], 1, axis=2)
+            # Fix i_crop if it is given.
             m.addConstr(i_crop == i_crop_input, name=f"c.{fid}.i_crop_input")
             self.msg[fid]["Crop types"] = "user input"
         # One unit area can only be planted one type of crops.
@@ -385,8 +379,6 @@ class OptModel():
         if rain_fed_option:
             # Given i_rain_fed,
             if i_rain_fed_input is not None:
-                # i_rain_fed_input = np.repeat(
-                #     i_rain_fed_input[:, :, np.newaxis], 1, axis=2)
                 m.addConstr(i_rain_fed == i_rain_fed_input,
                             name=f"c.{fid}.i_rain_fed_input")
                 self.msg[fid]["Rain-fed areas"] = "user input"
@@ -395,16 +387,10 @@ class OptModel():
             # Otherwise, it has to be zero.
             m.addConstr(i_crop - i_rain_fed >= 0,
                         name=f"c.{fid}.i_rain_fed")
-
             m.addConstr(irr * i_rain_fed == 0, name=f"c.{fid}.irr_rain_fed")
         else:
             m.addConstr(i_rain_fed == 0,
                         name=f"c.{fid}.no_i_rain_fed")
-
-        # This is logically incorrect
-        # m.addConstr(gp.quicksum(irr[s, c, :] * (1 - i_rain_fed[s, c, 0]) \
-        #                         for s in range(n_s) for c in range(n_c)) >= 1,
-        #             name=f"c.{fid}.ensure_irr")
 
         # See the numpy broadcast rules:
         # https://numpy.org/doc/stable/user/basics.broadcasting.html
@@ -458,10 +444,9 @@ class OptModel():
         techs = self.config.field.tech
         tech_options = self.tech_options
 
-        q = m.addMVar((n_h), vtype="C", name=f"{fid}.q(m-ha/d)", lb=0, ub=inf)
-        l_pr = m.addVar(vtype="C", name=f"{fid}.l_pr(m)", lb=0, ub=inf)
-
-        i_te  = m.addMVar((n_te), vtype="B", name=f"{fid}.i_te")
+        q       = m.addMVar((n_h), vtype="C", name=f"{fid}.q(m-ha/d)", lb=0, ub=inf)
+        l_pr    = m.addVar(vtype="C", name=f"{fid}.l_pr(m)", lb=0, ub=inf)
+        i_te    = m.addMVar((n_te), vtype="B", name=f"{fid}.i_te")
         m.addConstr(q == gp.quicksum((techs[te][0] * v + techs[te][1]) * i_te[i] \
                     for i, te in enumerate(tech_options)), name=f"c.{fid}.q(m-ha/d)")
         m.addConstr(gp.quicksum(i_te[i] for i in range(n_te)) == 1,
@@ -469,6 +454,7 @@ class OptModel():
         m.addConstr(l_pr == gp.quicksum( techs[te][2] * i_te[i] \
                     for i, te in enumerate(tech_options) ),
                     name=f"c.{fid}.l_pr(m)")
+
         # Given tech as an input
         if i_te_input is not None:
             self.msg[fid]["Irr tech"] = "user input"
@@ -517,25 +503,27 @@ class OptModel():
     def setup_constr_well(self, well_id, dwl, st, l_wt, r, k, sy, eff_pump,
                           eff_well, pumping_capacity=None):
         """
-        Add well constraints. Multiple wells can be assigned by calling
-        this function multiple times with different well id.
+        Add well constraints. You can assign multiple wells by calling
+        this function repeatedly with different well_id.
 
         Parameters
         ----------
         well_id : str or int
-            Well id distinguishing equation sets for different wells.
+            The well id serves as a means to differentiate the equation sets
+            for different wells.
         dwl : float
             Percieved annual water level change rate [m/yr].
         l_wt : float
-            Initial head for the lift from the water table to the ground
-            surface at the start of the pumping season [m].
+            The head required to lift water from the water table to the ground
+            surface at the start of the pumping season at the initial time step
+            [m].
         st: float
-            Aquifer saturated thickness [m].
+            Aquifer saturated thickness at the initial time step [m].
         r : float
             Well radius [m].
         k : float
             Hydraulic conductivity [m/d]. This will be used to calculate
-            transmissivity [m2/d] by multiply saturated thickness [m].
+            transmissivity [m2/d] by multiply the saturated thickness [m].
         sy : float
             Specific yield.
         eff_pump : float
@@ -555,12 +543,13 @@ class OptModel():
 
         m = self.model
         n_h = self.n_h
-
         inf = self.inf
+
         cw = self.config.well
         rho = cw.rho
         g = cw.g
 
+        # Project the future lift head.
         approx_horizon = self.approx_horizon
         if approx_horizon and self.horizon > 2:
             dwls = np.array([0, dwl*(self.horizon-1)])
@@ -572,8 +561,8 @@ class OptModel():
 
         # Calculate proportion of the irrigation water (v), daily pumping rate
         # (q), and head for irr tech (l_pr) of this well.
-        v = m.addMVar((n_h), vtype="C", name=f"{wid}.v(m-ha)", lb=0, ub=inf)
-        q = m.addMVar((n_h), vtype="C", name=f"{wid}.q(m-ha/d)", lb=0, ub=inf)
+        v    = m.addMVar((n_h), vtype="C", name=f"{wid}.v(m-ha)", lb=0, ub=inf)
+        q    = m.addMVar((n_h), vtype="C", name=f"{wid}.q(m-ha/d)", lb=0, ub=inf)
         l_pr = m.addVar(vtype="C", name=f"{wid}.l_pr(m)", lb=0, ub=inf)
         # The allocation constraints are added when run finish setup.
         # E.g., m.addConstr((v == v * a_r[w_c, :]), name=f"c.{wid}.v")
@@ -583,34 +572,30 @@ class OptModel():
 
         tr = st * k
         fpitr = 4 * np.pi * tr
-        e = m.addMVar((n_h), vtype="C", name=f"{wid}.e(PJ)", lb=0, ub=inf)
-        l_t = m.addMVar((n_h), vtype="C", name=f"{wid}.l_t(m)", lb=0, ub=inf)
+        e     = m.addMVar((n_h), vtype="C", name=f"{wid}.e(PJ)", lb=0, ub=inf)
+        l_t   = m.addMVar((n_h), vtype="C", name=f"{wid}.l_t(m)", lb=0, ub=inf)
         q_lnx = m.addMVar((n_h),vtype="C", name=f"{wid}.q_lnx", lb=0, ub=inf)
         # The upper bound of q_lny is set to -0.5772 to avoid l_cd_l_wd to be
         # negative.
-        q_lny = m.addMVar((n_h),vtype="C", name=f"{wid}.q_lny", lb=-inf, ub=-0.5772)
+        q_lny     = m.addMVar((n_h),vtype="C", name=f"{wid}.q_lny", lb=-inf, ub=-0.5772)
         l_cd_l_wd = m.addMVar((n_h), vtype="C", name=f"{wid}.l_cd_l_wd(m)", lb=0, ub=inf)
 
-        # 10000 is to convert m*ha to m3
+        # 10000 is to convert m-ha to m3
         m_ha_2_m3 = 10000
         m.addConstr((q_lnx == r**2*sy/fpitr), name=f"c.{wid}.q_lnx")
         # y = ln(x)  addGenConstrLog(x, y)
+        # m.addConstr((q_lny == np.log(r**2*sy/fpitr)), name=f"c.{wid}.q_lny")
         # Due to TypeError: unsupported operand type(s) for *: 'MLinExpr' and
         # 'gurobipy.LinExpr'
         for h in range(n_h):
             m.addGenConstrLog(q_lnx[h], q_lny[h])
-
-        #m.addConstr((q_lny == np.log(r**2*sy/fpitr)), name=f"c.{wid}.q_lny")
         m.addConstr(l_cd_l_wd == (1+eff_well) * q/fpitr * (-0.5772 - q_lny) * m_ha_2_m3,
                     name=f"c.{wid}.l_cd_l_wd(m)")
-
         m.addConstr((l_t == l_wt + l_cd_l_wd + l_pr), name=f"c.{wid}.l_t(m)")
         # e could be large. Make sure no numerical issue here.
         # J to PJ (1e-15)
         r_g_m_ha_2_m3_eff = rho * g * m_ha_2_m3 / eff_pump / 1e15
         m.addConstr((e ==  r_g_m_ha_2_m3_eff * v * l_t), name=f"c.{wid}.e(PJ)")
-        #m.addConstr((e == rho * g * v * cm_ha_2_m3 * l_t / eff_pump), name=f"c.{wid}.e")
-        #m.addConstr((e == 10), name=f"c.{wid}.e_fixed")
 
         self.vars[wid].e = e
         self.vars[wid].v = v
@@ -620,8 +605,7 @@ class OptModel():
 
     def setup_constr_finance(self):
         """
-        Add financial constraints that output profits.
-        Output in 1e4$.
+        Add financial constraints. The output is in 1e4$.
 
         Returns
         -------
@@ -691,36 +675,42 @@ class OptModel():
                         time_window=1, i_tw=1, remaining_wr=None,
                         tail_method="proportion"):
         """
-        Add water rights constraints.
-
-        1. 1 field 1 year: field_id=id, time_window=1
-        2. 1 field m years: field_id=id, time_window=m
-        3. All fields m years: field_id=None, time_window=m
-
-        We do not support adding water rights for a subset of fields.
+        Add water rights constraints. You can assign multiple water rights
+        constraints by calling this function repeatedly with different
+        water_right_id. Water rights can constrain for all fields or a selected
+        subset of fields with an optional time_window argument allowing farmer
+        to allocate their water rights across multiple years. To enforce water
+        rights at the point of diversion, pumping capacity can be assigned to
+        individual wells in setup_constr_well().
 
         Parameters
         ----------
         water_right_id : str or int
-            Water right id distinguishing equation sets for different water
-            rights.
+            The water right id serves as a means to differentiate the equation
+            sets for different water rights.
         wr : float
             Depth of the water right [cm].
         field_id_list : "all" or list, optional
-            If given, the water right constraints apply only to the subset
-            of the fields. Otherwise, apply to all fields The default is "all".
+            A list of field ids. If given, the water right constraints apply
+            only to the subset of the fields. The default is "all".
         time_window : int, optional
             If given, the water right constrains the total irrigation depth
-            over the time window. The default is 5.
+            over the time window. The default is 1.
         i_tw : int, optional
-            In which year of the time window. This is useful when the
-            previous time window has not yet used up. The default is 1.
+            In which year of the time window. For example, i_tw=2 means the
+            starting time step of this optimization is in the second year of
+            this constraint's time window. This is useful the continueous
+            simulation. The default is 1.
         remaining_wr : float, optional
-            The remaining water rights in the previous time window [cm]. The
-            default is None.
+            The remaining water rights left in the previous unused time window
+            [cm]. The default is None.
         tail_method : "proportion" or "all" or float, optional
-            Method to allocate incomplete time window if happened. If a float
-            is given, the value will be used. The default is "proportion".
+            Method to allocate incomplete time window at the end of the
+            planning period. "proportion" means wr*(tail length/time_window) is
+            apply to the tail part of planning period. "all" means wr is apply
+            to the tail part of planning period. If a float is given, the value
+            will be applied directly to the tail part of planning period. The
+            default is "proportion".
 
         Returns
         -------
@@ -761,10 +751,12 @@ class OptModel():
             if start_index > n_h: # Ensure within the planning horizon
                 start_index = min(n_h, start_index + 1) - 1
                 print("Warning: start_index is larger than (horizon - 1).")
-            m.addConstr(gp.quicksum(irr_sub[i,j,h] \
-                        for i in range(n_s) for j in range(n_c) \
-                        for h in range(0, start_index + 1))/n_s <= remaining_wr,
-                        name=f"c.{water_right_id}.wr_{c_i}(cm)")
+            m.addConstr(
+                gp.quicksum(irr_sub[i,j,h] \
+                for i in range(n_s) for j in range(n_c) \
+                for h in range(0, start_index + 1))/n_s <= remaining_wr,
+                name=f"c.{water_right_id}.wr_{c_i}(cm)"
+                )
             c_i += 1
         else:
             remaining_wr = wr
@@ -773,10 +765,12 @@ class OptModel():
         remaining_length = n_h - start_index
         # Middle period
         while remaining_length > time_window:
-            m.addConstr(gp.quicksum(irr_sub[i,j,h] \
-                        for i in range(n_s) for j in range(n_c) \
-                        for h in range(start_index, start_index+time_window))/n_s <= wr,
-                        name=f"c.{water_right_id}.wr_{c_i}(cm)")
+            m.addConstr(
+                gp.quicksum(irr_sub[i,j,h] \
+                for i in range(n_s) for j in range(n_c) \
+                for h in range(start_index, start_index+time_window))/n_s <= wr,
+                name=f"c.{water_right_id}.wr_{c_i}(cm)"
+                )
             c_i += 1
             start_index += time_window
             remaining_length -= time_window
@@ -785,14 +779,16 @@ class OptModel():
         if remaining_length > 0:
             if tail_method == "proportion":
                 wr_tail = wr * remaining_length/time_window
-            elif tail_method == "wr":
+            elif tail_method == "all":
                 wr_tail = wr
             # Otherwise, we expect a value given by users.
 
-            m.addConstr(gp.quicksum(irr_sub[i,j,h] \
-                        for i in range(n_s) for j in range(n_c) \
-                        for h in range(start_index, n_h))/n_s <= wr_tail,
-                        name=f"c.{water_right_id}.wr_{c_i}(cm)")
+            m.addConstr(
+                gp.quicksum(irr_sub[i,j,h] \
+                for i in range(n_s) for j in range(n_c) \
+                for h in range(start_index, n_h))/n_s <= wr_tail,
+                name=f"c.{water_right_id}.wr_{c_i}(cm)"
+                )
 
         self.water_right_ids.append(water_right_id)
         self.n_water_rights += 1
@@ -815,14 +811,16 @@ class OptModel():
     def setup_obj(self, alpha_dict=None):
         """
         Add the objective to maximize the agent's expected satisfication. Note
-        that the satisfication is calculate after the optimization which is
-        much faster. The solution is equivalent to using satisfication directly
-        as objective.
+        that the satisfication is calculated after the optimization which
+        significantly speeds up the optimization process. The resulting
+        solution is equivalent to directly using satisfaction as the objective
+        function.
 
         Parameters
         ----------
         alpha_dict : dict, optional
-            Overwrite alpha values retrieved from the config. The default is None.
+            Overwrite alpha values retrieved from the config. The default is
+            None.
 
         Returns
         -------
@@ -871,12 +869,16 @@ class OptModel():
 
     def finish_setup(self, display_summary=True):
         """
-        This will add the summary sets of constraints and update the pending
-        assigments to the gurobi model.
+        Complete the model setup.
+
+        Parameters
+        ----------
+        display_summary : bool, optional
+            Display the model summary. The default is True.
 
         Returns
         -------
-        A high-level summary of the model.
+        None
 
         """
         m = self.model
@@ -947,10 +949,12 @@ class OptModel():
         if display_summary:
             print(summary)
 
-    def solve(self, keep_gp_model=False, keep_gp_output=False, display_report=True, **kwargs):
+    def solve(self, keep_gp_model=False, keep_gp_output=False,
+              display_report=True, **kwargs):
         """
-        Solve the optimization problem. Default NonConvex = 2 (solve for a
-        nonconvex model).
+        Solve the optimization problem.
+        Note that defaultly we set the gurobi parameter NonConvex = 2 for a
+        nonconvex model.
 
         Parameters
         ----------
@@ -962,8 +966,11 @@ class OptModel():
             If True, the gurobi model output will be stored at "gp_output" in a
             dictionary format.
 
+        display_report : bool
+            Display the summary report if True. The default is True.
+
         **kwargs : **kwargs
-            Pass specific parameters to the gurobi solver.
+            Pass the gurobi parameters to the gurobi solver.
 
         Returns
         -------
@@ -990,6 +997,7 @@ class OptModel():
             get_inner_dict(vars, sols)
             return sols
 
+        ## Solving model
         m = self.model
         gurobi_pars = self.gurobi_pars
         gurobi_pars.update(kwargs)
@@ -999,6 +1007,7 @@ class OptModel():
             m.setParam(k, v)
         m.optimize()
 
+        ## Collect the results and do some post calculations.
         if m.Status == 2:   # Optimal solution found
             self.optimal_obj_value = m.objVal
             self.sols = extract_sol(self.vars)
@@ -1215,7 +1224,7 @@ class OptModel():
 
     def write_mps(self, filename):
         """
-        Output the solution of the model to .lp.
+        Output the model to .mps.
 
         Parameters
         ----------
@@ -1232,110 +1241,33 @@ class OptModel():
         m = self.model
         m.write(filename)
 
+# Utility code
+def dict_to_string(dictionary, prefix="", indentor="  ", level=2, roun=None):
+    """Ture a dictionary into a printable string.
+    Parameters
+    ----------
+    dictionary : dict
+        A dictionary.
+    indentor : str, optional
+        Indentor, by default "  ".
 
-#%% ===========================================================================
-# Archive code
-# =============================================================================
-    # def add_starts(self, var_starts=[]):
-    #     """
-    #     Add initial starts for optimization
-
-    #     Parameters
-    #     ----------
-    #     var_starts : list, optional
-    #         A list of dictionaries. Each dictionary is a start contains varable
-    #         names as keys and start values as values. If a varable name is
-    #         nested like field1.irr, a tuple should be given like
-    #         ("field1", "irr"). The default is [].
-
-    #     Returns
-    #     -------
-    #     None.
-
-    #     """
-    #     m = self.model
-    #     vars = self.vars
-    #     m.NumStart = len(var_starts)
-    #     m.update()
-    #     for i, d in enumerate(var_starts):
-    #         m.params.StartNumber = i
-    #         for k, v in d.items():
-    #             if isinstance(k, tuple):
-    #                 vars[k[0]][k[1]].Start = v
-    #             else:
-    #                 vars[k].Start = v
-
-    # def setup_obj_Sa(self, alpha_dict=None):
-    #     """
-    #     Add the objective to maximize the agent's expected satisfication.
-    #     The calculation of satisfication involves exp, which require using the
-    #     general expression in gurobi. The piecewise process will introduct
-    #     additional binary integers that can significantly slow down the solving
-    #     process and may encounter unexpected numerical issue. We suggest to use
-    #     setup_obj instead and calculate satisfication afterward. Same solution
-    #     should be expected.
-
-    #     Parameters
-    #     ----------
-    #     alpha_dict : dict, optional
-    #         Overwrite alpha values retrieved from the config. The default is None.
-
-    #     Returns
-    #     -------
-    #     None.
-
-    #     """
-    #     eval_metric = self.eval_metric
-    #     alphas = self.alphas
-    #     vars = self.vars
-
-    #     # Update alpha list
-    #     if alpha_dict is not None:
-    #         alphas.update(alpha_dict)
-    #         self.eval_metrics = [metric for metric, v in self.alphas.items() if v is not None]
-
-    #     # Check the selected eval_metric exist
-    #     eval_metrics = self.eval_metrics
-    #     eval_metric = self.eval_metric
-    #     if eval_metric not in eval_metrics:
-    #         raise ValueError(f"Alpha value of metric '{eval_metric}' is not given.")
-
-    #     # Currently supported metrices
-    #     eval_metric_vars = {
-    #         "profit": vars.profit,
-    #         "yield_pct": vars.y_y
-    #         }
-
-    #     inf = self.inf
-    #     m = self.model
-    #     n_h = self.n_h
-
-    #     # Caluculate all active metrics
-    #     def add_metric(metric, alpha):
-    #         N_yr_x =  m.addMVar((n_h), vtype="C", name=f"N_yr_x.{metric}", lb=-inf, ub=0)
-    #         N_yr_y = m.addMVar((n_h), vtype="C", name=f"N_yr_y.{metric}", lb=0, ub=inf)
-    #         N_yr = m.addMVar((n_h), vtype="C", name=f"N_yr.{metric}", lb=0, ub=1)
-    #         Sa = m.addVar(vtype="C", name=f"Sa.{metric}", lb=0, ub=1)
-
-    #         metric_var = eval_metric_vars.get(metric)
-    #         if metric_var is None:
-    #             raise ValueError(f"""'{eval_metric}' is not supported.
-    #                              Available metrics includes {list(eval_metric_vars.keys())}""")
-    #         m.addConstr((N_yr_x == -alpha * metric_var), name=f"c.N_yr_x.{metric}")
-    #         for h in range(n_h):   # y = exp(x)  addGenConstrLog(x, y)
-    #             m.addGenConstrExp(N_yr_x[h], N_yr_y[h])
-    #         m.addConstr(N_yr == 1 - N_yr_y, name=f"c.N_yr.{metric}")
-    #         m.addConstr((Sa == gp.quicksum(N_yr[h] for h in range(n_h))/n_h),
-    #                     name=f"c.Sa.{metric}")
-    #         vars.Sa[metric] = Sa
-
-    #     for metric in eval_metrics:
-    #         # It will be super slow if calculate all needs within opt model.
-    #         #add_metric(metric, alphas[metric])
-
-    #         # Add objective
-    #         if metric == eval_metric:
-    #             add_metric(metric, alphas[metric])
-    #             m.setObjective(vars.Sa[metric], gp.GRB.MAXIMIZE)
-    #     self.obj_post_calculation = False
+    Returns
+    -------
+    str
+        A printable string.
+    """
+    def dict_to_string_list(dictionary, indentor="  ", count=1, string=[]):
+        for key, value in dictionary.items():
+            string.append(prefix + indentor * count + str(key))
+            if isinstance(value, dict) and count < level:
+                string = dict_to_string_list(value, indentor, count+1, string)
+            elif isinstance(value, dict) is False and count == level:
+                string[-1] += ":\t" + str(value)
+            else:
+                if roun is not None and isinstance(value, float):
+                    string.append(prefix + indentor * (count+1) + str(round(value, roun)))
+                else:
+                    string.append(prefix + indentor * (count+1) + str(value))
+        return string
+    return "\n".join(dict_to_string_list(dictionary, indentor))
 
