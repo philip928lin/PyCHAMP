@@ -56,6 +56,7 @@ class Well():
         self.g = config.well.g
 
         self.t = 0
+        self.withdrawal = None
 
     def step(self, v, dwl, q, l_pr):
         """
@@ -83,6 +84,7 @@ class Well():
         self.l_wt -= dwl
         self.st += dwl
         self.tr = self.st * self.k
+        self.withdrawal = v
         l_wt = self.l_wt
 
         r, tr, sy = self.r, self.tr, self.sy

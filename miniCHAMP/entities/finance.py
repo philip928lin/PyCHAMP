@@ -23,6 +23,12 @@ class Finance():
         config = DotMap(config)
         self.cf = config.finance
 
+        self.cost_e = None
+        self.cost_tech = None
+        self.tech_change_cost = None
+        self.crop_change_cost = None
+        self.profit = None
+
     def step(self, fields, wells):
         """
         Calculate the profit of the current step.
@@ -79,5 +85,9 @@ class Finance():
         rev = sum([y[i,j,:] * cp[c] for i in range(y.shape[0]) \
                    for j, c in enumerate(crop_options)])[0]
         profit = rev - cost_e - cost_tech - tech_change_cost - crop_change_cost
+        self.cost_e = cost_e
+        self.cost_tech = cost_tech
+        self.tech_change_cost = tech_change_cost
+        self.crop_change_cost = crop_change_cost
         self.profit = profit
         return profit

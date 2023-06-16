@@ -38,11 +38,12 @@ class Field():
     """
 
     def __init__(self, field_id, config, te, crop,
-                 crop_options, tech_options, lat=39.4, dz=None):
+                 crop_options, tech_options, aquifer_id, lat=39.4, dz=None):
         # for name_, value_ in vars().items():
         #     if name_ != 'self' and name_ != 'config':
         #         setattr(self, name_, value_)
         self.field_id = field_id
+        self.aquifer_id = aquifer_id
         self.lat = lat
         self.dz = dz
         self.crop_options = crop_options
@@ -70,6 +71,9 @@ class Field():
         i_crop = np.zeros((self.n_s, self.n_c, 1))
         i_crop[:, i_c, :] = 1
         self.i_crop = i_crop
+        self.crops = []
+        self.irr_or_rainfed = []
+        self.irrigation = None
 
     def update_irr_tech(self, i_te):
         """
@@ -94,6 +98,12 @@ class Field():
         self.a_te, self.b_te, self.l_pr = self.techs[new_te]
         self.pre_te = self.te
         self.te = new_te
+
+    def update_crops(self, i_crop):
+        n_s = self.n_s
+        crop_options = self.crop_options
+        crops = [crop_options[np.where(i_crop[s, :, 0]==1)[0][0]] for s in range(n_s)]
+        self.crops = crops
 
     def step(self, irr, i_crop, i_te, prec_aw, prec, temp):
         """
@@ -146,6 +156,7 @@ class Field():
         # Keep the record
         self.pre_i_crop = self.i_crop
         self.i_crop = i_crop
+        self.update_crops(i_crop)
 
         irr = irr.copy()[:,:,[0]]
 
@@ -190,7 +201,9 @@ class Field():
         Ks = np.ones(w_.shape)
         Ks[w_ <= 0.5] = 2 * w_[w_ <= 0.5]
 
-        et = Ks * Kc * sum(pet) * unit_area * cm2m  # m-ha
+        et = np.sum(Ks * Kc * sum(pet) * (unit_area) * cm2m)  # m-ha sum all n_s
         inflow = wv - et                            # m-ha
+        inflow = max(0, inflow) # cannot be negative
         self.inflow = inflow                        # m-ha
+        self.irrigation = v
         return y, y_y, v, inflow

@@ -44,7 +44,7 @@ class Aquifer():
         self.dwl_list = [ini_dwl]
         self.dwl = ini_dwl
 
-    def step(self, inflow, v):
+    def step(self, inflow, withdrawal):
         """
         Simulate a single timestep.
 
@@ -52,7 +52,7 @@ class Aquifer():
         ----------
         inflow : float
             Inflow to the aquifer [m-ha].
-        v : float
+        withdrawal : float
             The total water withdraw from the aquifer [m-ha].
 
         Returns
@@ -66,7 +66,7 @@ class Aquifer():
 
         in_list.append(inflow)
         inflow_lag = in_list.pop(0)
-        dwl = 1/(area * sy) * (inflow_lag - v)
+        dwl = 1/(area * sy) * (inflow_lag - withdrawal)
 
         self.dwl_list.append(dwl)
         self.st += dwl

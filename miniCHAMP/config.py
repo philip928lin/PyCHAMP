@@ -29,6 +29,7 @@ config = {
             "center pivot":      [0.0051, 0.268744, 28.12],
             "center pivot LEPA": [0.0058, 0.212206, 12.65]
             },
+        "growth_period": ["4/1", "10/31"],
         "growth_period_ratio": {
             "corn":     1,
             "sorghum":  0.822,

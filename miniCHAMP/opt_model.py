@@ -270,7 +270,7 @@ class OptModel():
         self.wrs = DotMap()
 
     def setup_constr_field(self, field_id, prec_aw, pre_i_crop, pre_i_te,
-                           rain_fed_option=True, i_crop=None, i_rain_fed=None,
+                           rain_fed=None, i_crop=None, i_rain_fed=None,
                            i_te=None):
         """
         Add crop field constriants. You can assign multiple fields by calling
@@ -290,8 +290,9 @@ class OptModel():
             Crop name or the i_crop from the previous time step.
         pre_i_te: str or 3darray
             Irrigation technology or i_te from the previous time step.
-        rain_fed_option : bool, optional
-            True if allow the rain-fed crop field option. The default is True.
+        rain_fed : bool or None, optional
+            True if it is a rain-fed field. False if it is an irrigated field.
+            None to let the model optimize it. The default is None.
         i_crop : 3darray, optional
             The indicator matrix has a dimension of (n_s, n_c, 1). In this
             matrix, a value of 1 indicates that the corresponding crop type
@@ -299,7 +300,7 @@ class OptModel():
         i_rain_fed : 3darray, optional
             The indicator matrix has a dimension of (n_s, n_c, 1). In this
             matrix, a value of 1 indicates that the unit area in a field is
-            rainfed. Given i_rain_fed will force rain_fed_option to be True.
+            rainfed. Given i_rain_fed will force rain_fed to be True.
             Also, if it is given, make sure 1 only exists at where i_crop is
             also 1. The default is None.
         i_te : 1darray or str, optional
@@ -317,13 +318,13 @@ class OptModel():
 
         self.field_ids.append(field_id)
         fid = field_id
+
         if i_rain_fed is not None:
-            rain_fed_option = True
+            rain_fed = True
         self.msg[fid] = {
             "Crop types": "optimize",
             "Irr tech": "optimize",
-            "Rain-fed option": rain_fed_option,
-            "Rain-fed areas": (lambda o: "optimize" if o else None)(rain_fed_option)
+            "Rain-fed": (lambda o: "optimize" if o is None else o)(rain_fed)
             }
 
         n_c = self.n_c
@@ -376,7 +377,7 @@ class OptModel():
                     name=f"c.{fid}.i_crop")
 
         ### Include rain-fed option
-        if rain_fed_option:
+        if rain_fed == True:
             # Given i_rain_fed,
             if i_rain_fed_input is not None:
                 m.addConstr(i_rain_fed == i_rain_fed_input,
@@ -387,10 +388,16 @@ class OptModel():
             # Otherwise, it has to be zero.
             m.addConstr(i_crop - i_rain_fed >= 0,
                         name=f"c.{fid}.i_rain_fed")
-            m.addConstr(irr * i_rain_fed == 0, name=f"c.{fid}.irr_rain_fed")
-        else:
+            m.addConstr(irr == 0, name=f"c.{fid}.irr_rain_fed")
+        elif rain_fed == False:
             m.addConstr(i_rain_fed == 0,
                         name=f"c.{fid}.no_i_rain_fed")
+        else: # None => means optimize
+            # i_rain_fed[i, j, h] can be 1 only when i_crop[i, j, h] is 1.
+            # Otherwise, it has to be zero.
+            m.addConstr(i_crop - i_rain_fed >= 0,
+                        name=f"c.{fid}.i_rain_fed")
+            m.addConstr(irr * i_rain_fed == 0, name=f"c.{fid}.irr_rain_fed")
 
         # See the numpy broadcast rules:
         # https://numpy.org/doc/stable/user/basics.broadcasting.html
@@ -496,7 +503,7 @@ class OptModel():
         self.vars[fid].i_crop_change = i_crop_change
         self.vars[fid].i_tech_change = i_tech_change
 
-        self.vars[fid].rain_fed_option = rain_fed_option
+        self.vars[fid].rain_fed = rain_fed
 
         self.n_fields += 1
 
@@ -1011,9 +1018,11 @@ class OptModel():
         if m.Status == 2:   # Optimal solution found
             self.optimal_obj_value = m.objVal
             self.sols = extract_sol(self.vars)
-            self.sols.obj = m.objVal
-            self.sols.field_ids = self.field_ids
-            self.sols.well_ids = self.well_ids
+            sols = self.sols
+            sols.obj = m.objVal
+            sols.field_ids = self.field_ids
+            sols.well_ids = self.well_ids
+            sols.gp_status = m.Status
 
             # Calculate satisfication
             if self.obj_post_calculation:
@@ -1023,16 +1032,16 @@ class OptModel():
                 # Currently supported metrices
                 if self.approx_horizon and self.horizon > 2:
                     horizon = self.horizon
-                    profits = self.sols.profit
-                    y_ys = self.sols.y_y
+                    profits = sols.profit
+                    y_ys = sols.y_y
                     eval_metric_vars = {
                         "profit": np.linspace(profits[0], profits[1], num=horizon),
                         "yield_pct": np.linspace(y_ys[0], y_ys[1], num=horizon)
                         }
                 else:
                     eval_metric_vars = {
-                        "profit": self.sols.profit,
-                        "yield_pct": self.sols.y_y
+                        "profit": sols.profit,
+                        "yield_pct": sols.y_y
                         }
                 for metric in eval_metrics:
                     alpha = alphas[metric]
@@ -1041,11 +1050,10 @@ class OptModel():
                     metric_var[metric_var<0] = 0
                     N_yr = 1 - np.exp(-alpha * metric_var)
                     Sa = np.mean(N_yr)
-                    self.sols.Sa[metric] = Sa
+                    sols.Sa[metric] = Sa
             # Update rainfed info
-            sols = self.sols
             for fid in self.field_ids:
-                if sols[fid].rain_fed_option:
+                if sols[fid].rain_fed is True or sols[fid].rain_fed is None:
                     irr = sols[fid].irr[:,:,0].sum(axis=1)
                     i_rain_fed = sols[fid].i_rain_fed
                     i_rain_fed[np.where(irr == 0), :, :] = 1
@@ -1087,7 +1095,7 @@ class OptModel():
             self.decisions = decisions
             decisions = dict_to_string(decisions, prefix="\t\t", level=2)
             msg = dict_to_string(self.msg, prefix="\t\t", level=2)
-            sas = dict_to_string(self.sols.Sa, prefix="\t\t", level=2, roun=4)
+            sas = dict_to_string(sols.Sa, prefix="\t\t", level=2, roun=4)
             if self.approx_horizon:
                 h_msg = str(self.horizon) + " (approximate with 2)"
             else:
