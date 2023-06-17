@@ -7,6 +7,7 @@ Last modified on May 1, 2023
 WARNING: This code is not yet published, please do not distributed the code
 without permission.
 """
+import time
 import numpy as np
 from pandas import to_numeric
 import pandas as pd
@@ -93,6 +94,22 @@ def cal_pet_Hamon(temp, lat, dz=None):
     pet = np.array(pet/10)         # Convert from mm to cm
     pet[np.where(temp <= 0)] = 0   # Force pet = 0 when temperature is below 0.
     return pet      # [cm/day]
+
+class TimeRecorder():
+    def __init__(self):
+        self.start = time.monotonic()
+        self.records = {}
+    def get_elapsed_time(self, event=None, strf=True):
+        elapsed_time = time.monotonic() - self.start
+        if strf:
+            elapsed_time = time.strftime("%H:%M:%S", time.gmtime(elapsed_time))
+        if event is not None:
+            self.records[event] = elapsed_time
+        return elapsed_time
+    @staticmethod
+    def sec2str(secs, fmt="%H:%M:%S"):
+        return time.strftime(fmt, time.gmtime(secs))
+
 
 # Indicator module ( adopt)
 # by Chung-Yi Lin @ Lehigh University (philip928lin@gmail.com)

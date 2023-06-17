@@ -94,7 +94,7 @@ class Field():
         if isinstance(i_te, str):
             new_te = i_te
         else:
-            new_te = self.tech_options[np.where(i_te==1)[0][0]]
+            new_te = self.tech_options[np.where(i_te.astype(int)==1)[0][0]]
         self.a_te, self.b_te, self.l_pr = self.techs[new_te]
         self.pre_te = self.te
         self.te = new_te
@@ -102,7 +102,7 @@ class Field():
     def update_crops(self, i_crop):
         n_s = self.n_s
         crop_options = self.crop_options
-        crops = [crop_options[np.where(i_crop[s, :, 0]==1)[0][0]] for s in range(n_s)]
+        crops = [crop_options[np.where(i_crop[s, :, 0].astype(int)==1)[0][0]] for s in range(n_s)]
         self.crops = crops
 
     def step(self, irr, i_crop, i_te, prec_aw, prec, temp):

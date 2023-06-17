@@ -171,7 +171,7 @@ class Farmer(mesa.Agent):
 
         Returns
         -------
-        None
+        self (for parallel computing purpose)
 
         """
         self.current_step += 1
@@ -191,6 +191,7 @@ class Farmer(mesa.Agent):
         ### Simulation
         # Note prec_aw_dict, prec_dict, temp_dict have to be updated first.
         self.run_simulation(self.prec_aw_dict, self.prec_dict, self.temp_dict)
+        return self
 
     def run_simulation(self, prec_aw_dict, prec_dict, temp_dict):
 
@@ -299,7 +300,8 @@ class Farmer(mesa.Agent):
 
         # Locally create OptModel to make the Farmer object pickable for
         # parallel computing.
-        dm = OptModel(name=self.agt_id)
+        console_output = config.gurobi.get("LogToConsole")
+        dm = OptModel(name=self.agt_id, LogToConsole=console_output)
         dm.setup_ini_model(
             config=config, horizon=dm_args.horizon,
             eval_metric=dm_args.eval_metric, crop_options=dm_args.crop_options,

@@ -83,15 +83,26 @@ class OptModel():
     Left blank
 
     """
-    def __init__(self, name=""):
+    def __init__(self, name="", LogToConsole=1):
         """
         Instantiate an optimization environment and object for a farmer.
+
+        To suppress all Gurobi logging including the license connection
+        parameters, you can set the parameter OutputFlag or LogToConsole to 0
+        on an empty environment before it is started.  Please note that this
+        only works if you set these parameters before starting the environment.
         """
         # Model name
         self.name = name
         # Create a gurobi environment to ensure thread safety for parallel
         # computing.
-        self.gpenv = gp.Env()
+        #self.gpenv = gp.Env()
+
+        self.gpenv = gp.Env(empty=True)
+        if LogToConsole is not None:
+            self.gpenv.setParam("LogToConsole", LogToConsole)
+        self.gpenv.start()
+
         self.model = gp.Model(name=name, env=self.gpenv)
 
         # Note from gurobi
