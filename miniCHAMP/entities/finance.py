@@ -28,6 +28,7 @@ class Finance():
         self.tech_change_cost = None
         self.crop_change_cost = None
         self.profit = None
+        self.y = None
 
     def step(self, fields, wells):
         """
@@ -47,15 +48,15 @@ class Finance():
 
         """
         # Calulate profit and pumping cost
-        y = sum([field.y for f, field in fields.items()])
-        e = sum([well.e for w, well in wells.items()])
+        y = sum([field.y for _, field in fields.items()]) # 1e4 bu
+        e = sum([well.e for _, well in wells.items()])
 
         cf = self.cf
-        cost_tech = sum([cf.irr_tech_operational_cost[field.te] for f, field in fields.items()])
+        cost_tech = sum([cf.irr_tech_operational_cost[field.te] for _, field in fields.items()])
 
         tech_change_cost = 0
         crop_change_cost = 0
-        for f, field in fields.items():
+        for _, field in fields.items():
             # Assume crop_options are the same accross fields.
             crop_options = field.crop_options
 
@@ -85,6 +86,8 @@ class Finance():
         rev = sum([y[i,j,:] * cp[c] for i in range(y.shape[0]) \
                    for j, c in enumerate(crop_options)])[0]
         profit = rev - cost_e - cost_tech - tech_change_cost - crop_change_cost
+        self.y = y#!!!!
+        self.rev = rev
         self.cost_e = cost_e
         self.cost_tech = cost_tech
         self.tech_change_cost = tech_change_cost

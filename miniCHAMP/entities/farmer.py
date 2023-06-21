@@ -39,6 +39,8 @@ class Farmer(mesa.Agent):
         value.
     aquifers : dict
         A dictionary contain aquifer objects. The key is aquifer id.
+    model : object
+        MESA model object for a datacollector.
     """
     # def __init__(self, agt_id, config, agt_attrs,
     #              prec_aw_dict, prec_dict, temp_dict, aquifers):
@@ -59,36 +61,34 @@ class Farmer(mesa.Agent):
         agt_attrs = DotMap(agt_attrs)
         self.agt_attrs = agt_attrs
         self.aquifers = DotMap(aquifers)
-        self.update_climate_input(prec_aw_dict, prec_dict, temp_dict)
 
-        self.field_list = list(agt_attrs.fields.keys())
-        self.well_list = list(agt_attrs.wells.keys())
         self.perceived_prec_aw = agt_attrs.perceived_prec_aw
         if agt_attrs.decision_making.alphas is None:
             self.agt_attrs.decision_making.alphas = config.consumat.alpha
+        self.agt_attrs.decision_making.scale = config.consumat.scale
         dm_args = self.agt_attrs.decision_making
         crop_options = dm_args.crop_options
         tech_options = dm_args.tech_options
 
         # Initiate simulation objects
         fields = DotMap()
-        for f, v in agt_attrs.fields.items():
-            fields[f] = Field(
-                field_id=f, config=config, te=v.init.tech, crop=v.init.crop,
+        for fk, v in agt_attrs.fields.items():
+            fields[fk] = Field(
+                field_id=fk, config=config, te=v.init.tech, crop=v.init.crop,
                 lat=v.lat, dz=v.dz, crop_options=crop_options,
                 tech_options=tech_options, aquifer_id=v.aquifer_id
                 )
-            fields[f].rain_fed = v.rain_fed # for later convenience
+            fields[fk].rain_fed = v.rain_fed # for later convenience
 
         wells = DotMap()
-        for w, v in agt_attrs.wells.items():
-            wells[w] = Well(
-                well_id=w, config=config, r=v.r, k=v.k,
+        for wk, v in agt_attrs.wells.items():
+            wells[wk] = Well(
+                well_id=wk, config=config, r=v.r, k=v.k,
                 st=aquifers[v.aquifer_id].st, sy=v.sy, l_wt=v.l_wt,
                 eff_pump=v.eff_pump, eff_well=v.eff_well,
                 aquifer_id=v.aquifer_id
                 )
-            wells[w].pumping_capacity = v.pumping_capacity
+            wells[wk].pumping_capacity = v.pumping_capacity
         self.fields = fields
         self.wells = wells
         self.finance = Finance(config=config)
@@ -114,7 +114,7 @@ class Farmer(mesa.Agent):
         n_te = len(tech_options)
 
         dm_sols = DotMap()
-        for f, v in agt_attrs.fields.items():
+        for fk, v in agt_attrs.fields.items():
             i_crop = np.zeros((n_s, n_c, 1))
             crop = v.init.crop
             if isinstance(crop, str):
@@ -124,18 +124,19 @@ class Farmer(mesa.Agent):
                 for i, c in enumerate(crop):
                     i_c = crop_options.index(c)
                     i_crop[i, i_c, 0] = 1
-            dm_sols[f]["i_crop"] = i_crop
-            dm_sols[f]["pre_i_crop"] = crop
+            dm_sols[fk]["i_crop"] = i_crop
+            dm_sols[fk]["pre_i_crop"] = crop
 
             i_te = np.zeros(n_te)
             i_te[tech_options.index(v.init.tech)] = 1
-            dm_sols[f]["i_te"] = i_te
-            dm_sols[f]["pre_i_te"] = v.init.tech
+            dm_sols[fk]["i_te"] = i_te
+            dm_sols[fk]["pre_i_te"] = v.init.tech
         # Run the optimization to solve irr depth with every other variables
         # fixed.
         self.dm_sols = self.make_dm(None, dm_sols=dm_sols, init=True)
         # Run the simulation to calculate satisfication and uncertainty
-        self.run_simulation(prec_aw_dict, prec_dict, temp_dict) # aquifers
+        self.update_climate_input(prec_aw_dict, prec_dict, temp_dict)
+        self.run_simulation() # aquifers
 
         # Some other attributes
         self.current_step = 0
@@ -190,10 +191,12 @@ class Farmer(mesa.Agent):
 
         ### Simulation
         # Note prec_aw_dict, prec_dict, temp_dict have to be updated first.
-        self.run_simulation(self.prec_aw_dict, self.prec_dict, self.temp_dict)
+        self.run_simulation()
         return self
 
-    def run_simulation(self, prec_aw_dict, prec_dict, temp_dict):
+    def run_simulation(self):
+        prec_aw_dict, prec_dict, temp_dict = \
+            self.prec_aw_dict, self.prec_dict, self.temp_dict
 
         aquifers = self.aquifers
         fields = self.fields
@@ -203,13 +206,13 @@ class Farmer(mesa.Agent):
         dm_sols = self.dm_sols
 
         # Simulate fields
-        for f, field in fields.items():
-            irr = dm_sols[f].irr
-            i_crop = dm_sols[f].i_crop
-            i_te = dm_sols[f].i_te
+        for fk, field in fields.items():
+            irr = dm_sols[fk].irr
+            i_crop = dm_sols[fk].i_crop
+            i_te = dm_sols[fk].i_te
             field.step(
-                irr=irr, i_crop=i_crop, i_te=i_te, prec_aw=prec_aw_dict[f],
-                prec=prec_dict[f], temp=temp_dict[f]
+                irr=irr, i_crop=i_crop, i_te=i_te, prec_aw=prec_aw_dict[fk],
+                prec=prec_dict[fk], temp=temp_dict[fk]
                 )
 
         # Simulate wells
@@ -217,7 +220,7 @@ class Farmer(mesa.Agent):
         allo_r_w = dm_sols.allo_r_w     # Well allocation ratio from opt
         field_ids = dm_sols.field_ids
         well_ids = dm_sols.well_ids
-        total_v = sum([field.v for f, field in fields.items()])
+        total_v = sum([field.v for _, field in fields.items()])
         self.irrigation = total_v
         for k, wid in enumerate(well_ids):
             well = wells[wid]
@@ -235,15 +238,16 @@ class Farmer(mesa.Agent):
 
         # Form evaluation metric
         profit = self.finance.profit
-        y_y = sum([field.y_y for f, field in fields.items()])/len(fields)
+        y_y = sum([field.y_y for _, field in fields.items()])/len(fields)
         self.yield_pct = y_y
-        eval_metric_vars = {
-            "profit": profit,
-            "yield_pct": y_y}
 
         # Calculate satisfaction and uncertainty
         needs = self.needs
         dm_args = self.agt_attrs.decision_making
+        eval_metric_vars = {
+            "profit": profit/dm_args.scale.profit,
+            "yield_pct": y_y/dm_args.scale.yield_pct}
+        self.eval_metric_vars = DotMap(eval_metric_vars)
 
         def func(x, alpha=1):
             return 1-np.exp(-alpha * x)
@@ -251,6 +255,7 @@ class Farmer(mesa.Agent):
             if alpha is None:
                 continue
             needs[a] = func(eval_metric_vars[a], alpha=alpha)
+        self.needs = DotMap(needs)
 
         eval_metric = dm_args.eval_metric
         satisfaction = needs[eval_metric]
@@ -258,6 +263,7 @@ class Farmer(mesa.Agent):
         uncertainty = abs(expected_sa - satisfaction)
 
         # Update CONSUMAT state
+        #self.expected_sa = expected_sa
         self.satisfaction = satisfaction
         self.uncertainty = uncertainty
         sa_thre = self.sa_thre

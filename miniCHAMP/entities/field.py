@@ -162,16 +162,17 @@ class Field():
 
         # Adjust growing period
         prec_aw_ = np.ones(irr.shape) * prec_aw
-        for c, crop in enumerate(self.crop_options):
-            prec_aw_[:, c, :] = prec_aw_[:, c, :] * growth_period_ratio[crop]
+        for ci, crop in enumerate(self.crop_options):
+            prec_aw_[:, ci, :] = prec_aw_[:, ci, :] * growth_period_ratio[crop]
 
         w = irr + prec_aw_
         w = w * i_crop
-        w_ = w/wmax     # see if we want to set the max 1 here
+        w_ = w/wmax
+        w_ = np.minimum(w_, 1)  # can be removed to create uncertainty.
         y_ = (a * w_**2 + b * w_ + c)
         y_ = np.maximum(0, y_)
         y_ = y_ * i_crop
-        y = y_ * ymax * unit_area * 1e-4            # 1e4 bu
+        y = y_ * ymax * unit_area * 1e-4  # 1e4 bu
         cm2m = 0.01
         v_c = irr * unit_area * cm2m    # m-ha
         v = np.sum(v_c)                 # m-ha

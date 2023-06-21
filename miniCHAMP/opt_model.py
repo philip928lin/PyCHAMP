@@ -96,8 +96,9 @@ class OptModel():
         self.name = name
         # Create a gurobi environment to ensure thread safety for parallel
         # computing.
-        #self.gpenv = gp.Env()
+        # self.gpenv = gp.Env()
 
+        # This will remove all output from gurobi to the console.
         self.gpenv = gp.Env(empty=True)
         if LogToConsole is not None:
             self.gpenv.setParam("LogToConsole", LogToConsole)
@@ -202,16 +203,18 @@ class OptModel():
         self.n_water_rights = 0
 
         ## Extract parameters from "config"
-        crop = np.array([config.field.crop[c] for c in crop_options])
-        self.ymax = crop[:, 0].reshape((-1, 1))     # (n_c, 1)
-        self.wmax = crop[:, 1].reshape((-1, 1))     # (n_c, 1)
-        self.a = crop[:, 2].reshape((-1, 1))        # (n_c, 1)
-        self.b = crop[:, 3].reshape((-1, 1))        # (n_c, 1)
-        self.c = crop[:, 4].reshape((-1, 1))        # (n_c, 1)
+        crop_par = np.array([config.field.crop[c] for c in crop_options])
+        self.ymax = crop_par[:, 0].reshape((-1, 1))     # (n_c, 1)
+        self.wmax = crop_par[:, 1].reshape((-1, 1))     # (n_c, 1)
+        self.a = crop_par[:, 2].reshape((-1, 1))        # (n_c, 1)
+        self.b = crop_par[:, 3].reshape((-1, 1))        # (n_c, 1)
+        self.c = crop_par[:, 4].reshape((-1, 1))        # (n_c, 1)
         self.growth_period_ratio = {c: config.field.growth_period_ratio[c] for c in crop_options}
 
         self.unit_area = config.field.field_area/self.n_s
+        # For consumat
         self.alphas = config.consumat.alpha
+        self.scales = config.consumat.scale
         self.eval_metrics = [metric for metric, v in self.alphas.items() if v is not None]
 
         ## Form tech and crop change cost matrix from the config
@@ -941,7 +944,7 @@ class OptModel():
             return acc
         m.addConstr(irr == get_sum(fids, vars, "irr"), name="c.irr(cm)")
         m.addConstr(v == get_sum(fids, vars, "v"), name="c.v(m-ha)")
-        m.addConstr(y == get_sum(fids, vars, "y"), name="c.y")
+        m.addConstr(y == get_sum(fids, vars, "y"), name="c.y(1e4bu)")
         m.addConstr(y_y == get_sum(fids, vars, "y_y")/n_f, name="c.y_y")
         m.addConstr(e == get_sum(wids, vars, "e"), name="c.e(PJ)")
 
@@ -1034,11 +1037,13 @@ class OptModel():
             sols.field_ids = self.field_ids
             sols.well_ids = self.well_ids
             sols.gp_status = m.Status
+            sols.gp_MIPGap = m.MIPGap
 
             # Calculate satisfication
             if self.obj_post_calculation:
                 eval_metrics = self.eval_metrics
                 alphas = self.alphas
+                scales = self.scales
 
                 # Currently supported metrices
                 if self.approx_horizon and self.horizon > 2:
@@ -1046,13 +1051,13 @@ class OptModel():
                     profits = sols.profit
                     y_ys = sols.y_y
                     eval_metric_vars = {
-                        "profit": np.linspace(profits[0], profits[1], num=horizon),
-                        "yield_pct": np.linspace(y_ys[0], y_ys[1], num=horizon)
+                        "profit": np.linspace(profits[0], profits[1], num=horizon)/scales.profit,
+                        "yield_pct": np.linspace(y_ys[0], y_ys[1], num=horizon)/scales.yield_pct
                         }
                 else:
                     eval_metric_vars = {
-                        "profit": sols.profit,
-                        "yield_pct": sols.y_y
+                        "profit": sols.profit/scales.profit,
+                        "yield_pct": sols.y_y/scales.yield_pct
                         }
                 for metric in eval_metrics:
                     alpha = alphas[metric]
@@ -1131,6 +1136,7 @@ class OptModel():
         else:
             print("Optimal solution is not found.")
             self.optimal_obj_value = None
+        sols.report = report
 
         if keep_gp_output:
             self.gp_output = json.loads(m.getJSONSolution())
