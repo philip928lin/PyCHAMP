@@ -18,9 +18,9 @@ config = {
         "field_area": 50.,  # [ha]  Field size for a grid.
         "area_split": 1,    # [--]  Num of decision set for a field. The solving process will slow down starting from 3.
         "crop": {   # (ymax [bu], wmax[cm], a, b, c)
-            "corn":     (455.0162437162218, 93.70410821239668, -3.792352328384122, 6.784495928053121, -2.0343557910784873),
-            "sorghum":  (252.99787566746383, 82.1193601089726, -3.6572818850257454, 6.228651607058931, -1.651976389963492),
-            "soybeans": (133.65537966632013, 89.15443022069083, -3.4664151483341152, 6.184045213667842, -1.758066588119619),
+            "corn":     [442.3622, 87.5434, -3.7665, 6.8402, -2.2518],
+            "sorghum":  [236.7314, 69.2231, -4.0735, 7.1203, -2.168],
+            "soybeans": [129.7327, 80.6519, -3.3889, 6.1155, -1.9509],
             "fallow":   (0., 100., 0, 0, 0.),
             },
         "tech": {   # (a [m3 -> m-ha], b [m3 -> m-ha], Lpr [m]) (McCarthy et al., 2020)
@@ -79,7 +79,7 @@ config = {
             "yield_pct": 1
             },
         "scale": {  # Normalize "need" for "satisfication" calculation.
-            "profit":    2.8 * 50,
+            "profit":    0.23 * 50, # Use corn 1e4$*bu*ha
             "yield_pct": 1
             },
         "satisfaction_threshold": 1,    # [0-1]

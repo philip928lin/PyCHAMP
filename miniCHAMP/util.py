@@ -438,7 +438,7 @@ class Visual():
     """
     @staticmethod
     def plot_reg(x_obv, y_sim, title=None, xy_labal=None, same_xy_limit=True,
-                 return_reg_par=False, save_fig_path=None, show=True):
+                 indicators_list=None, return_reg_par=False, save_fig_path=None, show=True):
         """Plot regression.
 
         Parameters
@@ -453,6 +453,8 @@ class Visual():
             List of x and y labels, by default None.
         same_xy_limit : bool, optional
             If True same limit will be applied to x and y axis, by default True.
+        indicators_list : list, optional
+            List of indicator to show, by default None.
         return_reg_par : bool, optional
             If True, slope and interception will be return, by default False.
         save_fig_path : str, optional
@@ -513,12 +515,10 @@ class Visual():
                 "CP": "CP",
                 "RSR": "RSR",
                 "KGE": "KGE"}
-        indicators = {}
-        indicators["r"] = Indicator.r(x_obv, y_sim)
-        indicators["r2"] = Indicator.r2(x_obv, y_sim)
-        indicators["rmse"] = Indicator.rmse(x_obv, y_sim)
-        indicators["NSE"] = Indicator.NSE(x_obv, y_sim)
-        indicators["KGE"] = Indicator.KGE(x_obv, y_sim)
+
+        indicators = Indicator.cal_indicator_df(
+            x_obv=x_obv, y_sim=y_sim, indicators_list=indicators_list)
+        indicators = {col: indicators[col][0] for col in indicators}
 
         string = "\n".join(['{:^4}: {}'.format(name[keys], round(values,5))
                             for keys,values in indicators.items()])

@@ -8,7 +8,6 @@ without permission.
 """
 import numpy as np
 from dotmap import DotMap
-from ..util import cal_pet_Hamon
 
 class Field():
     """
@@ -65,8 +64,6 @@ class Field():
         self.te = te    # this will serve as tech in the previous year
         self.update_irr_tech(te)
 
-        self.cal_pet_Hamon = cal_pet_Hamon
-
         i_c = self.crop_options.index(crop)
         i_crop = np.zeros((self.n_s, self.n_c, 1))
         i_crop[:, i_c, :] = 1
@@ -105,7 +102,7 @@ class Field():
         crops = [crop_options[np.where(i_crop[s, :, 0].astype(int)==1)[0][0]] for s in range(n_s)]
         self.crops = crops
 
-    def step(self, irr, i_crop, i_te, prec_aw, prec, temp):
+    def step(self, irr, i_crop, i_te, prec_aw, prec):
         """
         Simulate a single timestep.
 
@@ -127,9 +124,6 @@ class Field():
             The precipitation in the growing season [cm].
         prec : float
             The annual precipitation [cm].
-        temp : DataFrame
-            The daily mean temperature storing in a DataFrame format with
-            datetime index [degC].
 
         Returns
         -------
@@ -179,32 +173,119 @@ class Field():
         y_y = np.sum(y_) / n_s
 
         self.y, self.y_y, self.v = y, y_y, v
-        # Can be deleted in the future
-        #assert w_ >= 0 and w_ <= 1, f"w_ in [0, 1] expected, got: {w_}"
-        #assert y_ >= 0 and y_ <= 1, f"y_ in [0, 1]  expected, got: {y_}"
 
-        # Tech
+        # Tech (for the pumping cost calculation in Finance module)
         self.update_irr_tech(i_te)  # update tech
         a_te = self.a_te
         b_te = self.b_te
         q = a_te * v + b_te
         self.q = q  # m-ha/d
 
-        # Annual ET for aquifer
-        # Calculate et + (ignore the corner. we will introduce an empirical
-        # coeficient to adjust the inflow~
-        wv = np.sum(w * unit_area) * cm2m
-        pet = self.cal_pet_Hamon(temp, self.lat, self.dz)
-        # We did not consider Kc variation here. Assume to have minor impact.
-        Kc = 1
+        self.irrigation = v # m-ha
+        return y, y_y, v
 
-        # Adopt the stress coeficient from GWLF
-        Ks = np.ones(w_.shape)
-        Ks[w_ <= 0.5] = 2 * w_[w_ <= 0.5]
 
-        et = np.sum(Ks * Kc * sum(pet) * (unit_area) * cm2m)  # m-ha sum all n_s
-        inflow = wv - et                            # m-ha
-        inflow = max(0, inflow) # cannot be negative
-        self.inflow = inflow                        # m-ha
-        self.irrigation = v
-        return y, y_y, v, inflow
+# Archive
+#     def step(self, irr, i_crop, i_te, prec_aw, prec, temp):
+#         """
+#         Simulate a single timestep.
+
+#         Parameters
+#         ----------
+#         irr : 3darray
+#             An array outputted from OptModel() that represent the irrigation
+#             depth for the following year [cm]. The dimension of the array
+#             should be (n_s, n_c, 1).
+#         i_crop : 3darray
+#             An array outputted from OptModel() that represent the indicator
+#             matrix for the crop choices in following year. The dimension of the
+#             array should be (n_s, n_c, 1).
+#         i_te : 1darray
+#             An array outputted from OptModel() that represent the indicator
+#             matrix for the irrigation technology choices in following year. The
+#             dimension of the array should be (n_te).
+#         prec_aw : float
+#             The precipitation in the growing season [cm].
+#         prec : float
+#             The annual precipitation [cm].
+#         temp : DataFrame
+#             The daily mean temperature storing in a DataFrame format with
+#             datetime index [degC].
+
+#         Returns
+#         -------
+#         y : 3darray
+#             Crop yield with the dimension (n_s, n_c, 1) [1e4 bu].
+#         y_y : 3darray
+#             Crop yield/maximum yield with the dimension (n_s, n_c, 1).
+#         v : float
+#             Irrigation amount [m-ha].
+#         inflow : float
+#             Inflow to the aquifer [m-ha].
+
+#         """
+#         # Crop yield
+#         a = self.a
+#         b = self.b
+#         c = self.c
+#         ymax = self.ymax
+#         wmax = self.wmax
+#         n_s = self.n_s
+#         unit_area = self.unit_area
+#         growth_period_ratio = self.growth_period_ratio
+
+#         # Keep the record
+#         self.pre_i_crop = self.i_crop
+#         self.i_crop = i_crop
+#         self.update_crops(i_crop)
+
+#         irr = irr.copy()[:,:,[0]]
+
+#         # Adjust growing period
+#         prec_aw_ = np.ones(irr.shape) * prec_aw
+#         for ci, crop in enumerate(self.crop_options):
+#             prec_aw_[:, ci, :] = prec_aw_[:, ci, :] * growth_period_ratio[crop]
+
+#         w = irr + prec_aw_
+#         w = w * i_crop
+#         w_ = w/wmax
+#         w_ = np.minimum(w_, 1)  # can be removed to create uncertainty.
+#         y_ = (a * w_**2 + b * w_ + c)
+#         y_ = np.maximum(0, y_)
+#         y_ = y_ * i_crop
+#         y = y_ * ymax * unit_area * 1e-4  # 1e4 bu
+#         cm2m = 0.01
+#         v_c = irr * unit_area * cm2m    # m-ha
+#         v = np.sum(v_c)                 # m-ha
+#         y_y = np.sum(y_) / n_s
+
+#         self.y, self.y_y, self.v = y, y_y, v
+#         # Can be deleted in the future
+#         #assert w_ >= 0 and w_ <= 1, f"w_ in [0, 1] expected, got: {w_}"
+#         #assert y_ >= 0 and y_ <= 1, f"y_ in [0, 1]  expected, got: {y_}"
+
+#         # Tech
+#         self.update_irr_tech(i_te)  # update tech
+#         a_te = self.a_te
+#         b_te = self.b_te
+#         q = a_te * v + b_te
+#         self.q = q  # m-ha/d
+
+#         # Annual ET for aquifer
+#         # Calculate et + (ignore the corner. we will introduce an empirical
+#         # coeficient to adjust the inflow~
+#         wv = np.sum(w * unit_area) * cm2m
+#         pet = self.cal_pet_Hamon(temp, self.lat, self.dz)
+#         # We did not consider Kc variation here. Assume to have minor impact.
+#         Kc = 1
+
+#         # Adopt the stress coeficient from GWLF
+#         Ks = np.ones(w_.shape)
+#         Ks[w_ <= 0.5] = 2 * w_[w_ <= 0.5]
+
+#         et = np.sum(Ks * Kc * sum(pet) * (unit_area) * cm2m)  # m-ha sum all n_s
+#         inflow = wv - et                            # m-ha
+#         inflow = max(0, inflow) # cannot be negative
+#         self.inflow = inflow                        # m-ha
+#         self.irrigation = v
+#         return y, y_y, v, inflow

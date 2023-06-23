@@ -56,7 +56,7 @@ class Well():
         self.g = config.well.g
 
         self.t = 0
-        self.withdrawal = None
+        self.withdrawal = None # m-ha
 
     def step(self, v, dwl, q, l_pr):
         """
