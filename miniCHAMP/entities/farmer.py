@@ -403,7 +403,7 @@ class Farmer(mesa.Agent):
         None.
 
         """
-        self.dm_sols = self.make_dm(self.state, dm_sols=self.dm_sols)
+        self.dm_sols = self.make_dm(state=self.state, dm_sols=self.dm_sols)
 
     def make_dm_repetition(self):
         """
@@ -414,7 +414,7 @@ class Farmer(mesa.Agent):
         None.
 
         """
-        self.dm_sols = self.make_dm(self.state, self.dm_sols)
+        self.dm_sols = self.make_dm(state=self.state, dm_sols=self.dm_sols)
 
     def make_dm_social_comparison(self):
         """
@@ -431,7 +431,10 @@ class Farmer(mesa.Agent):
         dm_sols_list = []
         for agt_id in agt_ids_in_network:
             # !!! Here we assume no. fields, n_c and split are the same across agents
-            dm_sols = self.make_dm(agts_in_network[agt_id].dm_sols)
+            dm_sols = self.make_dm(
+                state=self.state,
+                dm_sols=agts_in_network[agt_id].dm_sols
+                )
             dm_sols_list.append(dm_sols)
         objs = [s.obj for s in dm_sols_list]
         selected_agt_obj = max(objs)
@@ -439,7 +442,8 @@ class Farmer(mesa.Agent):
         self.selected_agt_id_in_network = agt_ids_in_network[select_agt_index]
 
         # Agent's original choice
-        dm_sols = self.make_dm_repetition()
+        self.make_dm_repetition()
+        dm_sols = self.dm_sols
         if dm_sols.obj >= selected_agt_obj:
             self.dm_sols = dm_sols
         else:
@@ -460,7 +464,10 @@ class Farmer(mesa.Agent):
 
         agts_in_network = self.agts_in_network
 
-        dm_sols = self.make_dm(self.state, agts_in_network[selected_agt_id_in_network].dm_sols)
+        dm_sols = self.make_dm(
+            state=self.state,
+            dm_sols=agts_in_network[selected_agt_id_in_network].dm_sols
+            )
         self.dm_sols = dm_sols
 
 # Archive

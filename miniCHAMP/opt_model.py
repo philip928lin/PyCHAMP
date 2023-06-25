@@ -333,18 +333,25 @@ class OptModel():
         self.field_ids.append(field_id)
         fid = field_id
 
+        n_c = self.n_c
+        n_h = self.n_h
+        n_s = self.n_s
+        n_te = self.n_te
+
         if i_rain_fed is not None:
-            rain_fed = True
+            rain_feds = np.sum(i_rain_fed, axis=1).flatten()
+            rain_fed_list = [True if r > 0.5 else False for r in rain_feds]
+        if isinstance(rain_fed, bool) or rain_fed is None:  # Apply to all splits
+            rain_fed_list = [rain_fed] * n_s
+        else:
+            rain_fed_list = rain_fed
+
+
         self.msg[fid] = {
             "Crop types": "optimize",
             "Irr tech": "optimize",
             "Rain-fed": (lambda o: "optimize" if o is None else o)(rain_fed)
             }
-
-        n_c = self.n_c
-        n_h = self.n_h
-        n_s = self.n_s
-        n_te = self.n_te
 
         i_crop_input = i_crop
         i_rain_fed_input = i_rain_fed
@@ -391,27 +398,28 @@ class OptModel():
                     name=f"c.{fid}.i_crop")
 
         ### Include rain-fed option
-        if rain_fed == True:
-            # Given i_rain_fed,
-            if i_rain_fed_input is not None:
-                m.addConstr(i_rain_fed == i_rain_fed_input,
-                            name=f"c.{fid}.i_rain_fed_input")
-                self.msg[fid]["Rain-fed areas"] = "user input"
+        for si, rain_fed in enumerate(rain_fed_list):
+            if rain_fed == True:
+                # Given i_rain_fed,
+                if i_rain_fed_input is not None:
+                    m.addConstr(i_rain_fed[si,:,:] == i_rain_fed_input[si,:,:],
+                                name=f"c.{fid}_{si}.i_rain_fed_input")
+                    self.msg[fid]["Rain-fed areas"] = "user input"
 
-            # i_rain_fed[i, j, h] can be 1 only when i_crop[i, j, h] is 1.
-            # Otherwise, it has to be zero.
-            m.addConstr(i_crop - i_rain_fed >= 0,
-                        name=f"c.{fid}.i_rain_fed")
-            m.addConstr(irr == 0, name=f"c.{fid}.irr_rain_fed")
-        elif rain_fed == False:
-            m.addConstr(i_rain_fed == 0,
-                        name=f"c.{fid}.no_i_rain_fed")
-        else: # None => means optimize
-            # i_rain_fed[i, j, h] can be 1 only when i_crop[i, j, h] is 1.
-            # Otherwise, it has to be zero.
-            m.addConstr(i_crop - i_rain_fed >= 0,
-                        name=f"c.{fid}.i_rain_fed")
-            m.addConstr(irr * i_rain_fed == 0, name=f"c.{fid}.irr_rain_fed")
+                # i_rain_fed[i, j, h] can be 1 only when i_crop[i, j, h] is 1.
+                # Otherwise, it has to be zero.
+                m.addConstr(i_crop[si,:,:] - i_rain_fed[si,:,:] >= 0,
+                            name=f"c.{fid}_{si}.i_rain_fed")
+                m.addConstr(irr[si,:,:] == 0, name=f"c.{fid}_{si}.irr_rain_fed")
+            elif rain_fed == False:
+                m.addConstr(i_rain_fed[si,:,:] == 0,
+                            name=f"c.{fid}_{si}.no_i_rain_fed")
+            else: # None => means optimize
+                # i_rain_fed[i, j, h] can be 1 only when i_crop[i, j, h] is 1.
+                # Otherwise, it has to be zero.
+                m.addConstr(i_crop[si,:,:] - i_rain_fed[si,:,:] >= 0,
+                            name=f"c.{fid}_{si}.i_rain_fed")
+                m.addConstr(irr[si,:,:] * i_rain_fed[si,:,:] == 0, name=f"c.{fid}_{si}.irr_rain_fed")
 
         # See the numpy broadcast rules:
         # https://numpy.org/doc/stable/user/basics.broadcasting.html
@@ -1073,6 +1081,7 @@ class OptModel():
                     irr = sols[fid].irr[:,:,0].sum(axis=1)
                     i_rain_fed = sols[fid].i_rain_fed
                     i_rain_fed[np.where(irr == 0), :, :] = 1
+                    sols[fid].i_rain_fed = i_rain_fed * sols[fid].i_crop
 
             # Update remaining water rights
             wrs = self.wrs
@@ -1132,11 +1141,14 @@ class OptModel():
             self.report = report
             if display_report:
                 print(report)
-
+            sols.report = report
+            self.sols = sols
         else:
             print("Optimal solution is not found.")
             self.optimal_obj_value = None
-        sols.report = report
+            sols = DotMap()
+            sols.report = "Optimal solution is not found."
+            self.sols = sols
 
         if keep_gp_output:
             self.gp_output = json.loads(m.getJSONSolution())
@@ -1296,3 +1308,245 @@ def dict_to_string(dictionary, prefix="", indentor="  ", level=2, roun=None):
         return string
     return "\n".join(dict_to_string_list(dictionary, indentor))
 
+# Arcive
+#     def setup_constr_field(self, field_id, prec_aw, pre_i_crop, pre_i_te,
+#                            rain_fed=None, i_crop=None, i_rain_fed=None,
+#                            i_te=None):
+#         """
+#         Add crop field constriants. You can assign multiple fields by calling
+#         this function repeatedly with different field_id. If
+#         i_crop/i_rain_fed/i_te is provided, the model will not optimize over
+#         different crop type options/rain-fed or irrigated/irrigation
+#         technologies.
+
+#         Parameters
+#         ----------
+#         field_id : str or int
+#             The field id serves as a means to differentiate the equation sets
+#             for different fields.
+#         prec_aw : float
+#             Percieved precipitation in the growing season [cm].
+#         pre_i_crop: str or 3darray
+#             Crop name or the i_crop from the previous time step.
+#         pre_i_te: str or 3darray
+#             Irrigation technology or i_te from the previous time step.
+#         rain_fed : bool or None, optional
+#             True if it is a rain-fed field. False if it is an irrigated field.
+#             None to let the model optimize it. The default is None.
+#         i_crop : 3darray, optional
+#             The indicator matrix has a dimension of (n_s, n_c, 1). In this
+#             matrix, a value of 1 indicates that the corresponding crop type
+#             is selected or chosen. The default is None.
+#         i_rain_fed : 3darray, optional
+#             The indicator matrix has a dimension of (n_s, n_c, 1). In this
+#             matrix, a value of 1 indicates that the unit area in a field is
+#             rainfed. Given i_rain_fed will force rain_fed to be True.
+#             Also, if it is given, make sure 1 only exists at where i_crop is
+#             also 1. The default is None.
+#         i_te : 1darray or str, optional
+#             The indicator matrix has a dimension of (n_te). In this
+#             matrix, a value of 1 indicates that the corresponnding irrigation
+#             technology is selected. The default is None.
+
+#         Returns
+#         -------
+#         None.
+
+#         """
+#         # assert prec_aw <= np.max(self.wmax), f"""prec_aw {prec_aw} is larger than wmax
+#         # {np.max(self.wmax)}. This will lead to infeasible solution."""
+
+#         self.field_ids.append(field_id)
+#         fid = field_id
+
+#         n_c = self.n_c
+#         n_h = self.n_h
+#         n_s = self.n_s
+#         n_te = self.n_te
+
+#         if i_rain_fed is not None:
+#             if np.sum(i_rain_fed)/n_s > 0.5: # np.sum(i_rain_fed) should be 1
+#                 rain_fed = True
+#             else:
+#                 rain_fed = False
+
+#         self.msg[fid] = {
+#             "Crop types": "optimize",
+#             "Irr tech": "optimize",
+#             "Rain-fed": (lambda o: "optimize" if o is None else o)(rain_fed)
+#             }
+
+#         i_crop_input = i_crop
+#         i_rain_fed_input = i_rain_fed
+#         i_te_input = i_te
+#         m = self.model
+
+#         inf = self.inf
+#         ymax = self.ymax
+#         wmax = self.wmax
+#         growth_period_ratio = self.growth_period_ratio
+#         ub_w = self.bounds.ub_w
+#         ub_irr = ub_w #ub_w - prec_aw
+#         self.bounds[fid].ub_irr = ub_irr
+
+#         unit_area = self.unit_area
+
+#         # Adjust prec_aw by the crop's growing period
+#         prec_aw = np.ones((n_s, n_c, n_h)) * prec_aw
+#         for c, crop in enumerate(self.crop_options):
+#             prec_aw[:, c, :] = prec_aw[:, c, :] * growth_period_ratio[crop]
+
+#         ### Add general variables
+#         irr     = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.irr(cm)", lb=0, ub=ub_irr)
+#         w       = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.w(cm)", lb=0, ub=ub_w)
+#         w_temp  = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.w_temp", lb=0, ub=inf)
+#         w_      = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.w_", lb=0, ub=1)
+#         y       = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.y(1e4bu)", lb=0, ub=inf)
+#         y_      = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.y_", lb=0, ub=1)
+#         yw_temp = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.yw_temp", lb=-inf, ub=1)
+#         yw_     = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.yw_", lb=0, ub=1)
+#         v_c     = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.v_c(m-ha)", lb=0, ub=inf)
+#         y_y     = m.addMVar((n_h), vtype="C", name=f"{fid}.y_y", lb=0, ub=1)    # avg y_ per yr
+#         v       = m.addMVar((n_h), vtype="C", name=f"{fid}.v(m-ha)", lb=0, ub=inf)
+#         i_crop  = m.addMVar((n_s, n_c, 1), vtype="B", name=f"{fid}.i_crop")
+#         i_rain_fed = m.addMVar((n_s, n_c, 1), vtype="B", name=f"{fid}.i_rain_fed")
+
+#         # Crop type is set to be the same accross the planning horizon.
+#         if i_crop_input is not None:
+#             # Fix i_crop if it is given.
+#             m.addConstr(i_crop == i_crop_input, name=f"c.{fid}.i_crop_input")
+#             self.msg[fid]["Crop types"] = "user input"
+#         # One unit area can only be planted one type of crops.
+#         m.addConstr(gp.quicksum(i_crop[:,j,:] for j in range(n_c)) == 1,
+#                     name=f"c.{fid}.i_crop")
+
+#         ### Include rain-fed option
+#         if rain_fed == True:
+#             # Given i_rain_fed,
+#             if i_rain_fed_input is not None:
+#                 m.addConstr(i_rain_fed == i_rain_fed_input,
+#                             name=f"c.{fid}.i_rain_fed_input")
+#                 self.msg[fid]["Rain-fed areas"] = "user input"
+
+#             # i_rain_fed[i, j, h] can be 1 only when i_crop[i, j, h] is 1.
+#             # Otherwise, it has to be zero.
+#             m.addConstr(i_crop - i_rain_fed >= 0,
+#                         name=f"c.{fid}.i_rain_fed")
+#             m.addConstr(irr == 0, name=f"c.{fid}.irr_rain_fed")
+#         elif rain_fed == False:
+#             m.addConstr(i_rain_fed == 0,
+#                         name=f"c.{fid}.no_i_rain_fed")
+#         else: # None => means optimize
+#             # i_rain_fed[i, j, h] can be 1 only when i_crop[i, j, h] is 1.
+#             # Otherwise, it has to be zero.
+#             m.addConstr(i_crop - i_rain_fed >= 0,
+#                         name=f"c.{fid}.i_rain_fed")
+#             m.addConstr(irr * i_rain_fed == 0, name=f"c.{fid}.irr_rain_fed")
+
+#         # See the numpy broadcast rules:
+#         # https://numpy.org/doc/stable/user/basics.broadcasting.html
+#         m.addConstr((w == irr + prec_aw), name=f"c.{fid}.w(cm)")
+#         m.addConstr((w_temp == w/wmax), name=f"c.{fid}.w_temp")
+#         m.addConstrs((w_[s,c,h] == gp.min_(w_temp[s,c,h], constant=1) \
+#                     for s in range(n_s) for c in range(n_c) for h in range(n_h)),
+#                     name=f"c.{fid}.w_")
+#         # Does not really help to improve the speed.
+#         #m.addConstr((w_ == w/wmax), name=f"c.{fid}.w_")
+
+#         # We force irr to be zero but prec_aw will add to w & w_, which will
+#         # output positive y_ leading to violation for y_y (< 1)
+#         # Also, we need to seperate yw_ and y_ into two constraints. Otherwise,
+#         # gurobi will crush. No idea why.
+#         a = self.a
+#         b = self.b
+#         c = self.c
+#         m.addConstr((yw_temp == (a * w_**2 + b * w_ + c)), name=f"c.{fid}.yw_temp")
+#         m.addConstrs((yw_[s,c,h] == gp.max_(yw_temp[s,c,h], constant=0) \
+#                     for s in range(n_s) for c in range(n_c) for h in range(n_h)),
+#                     name=f"c.{fid}.yw_")
+#         # Does not really help to improve the speed.
+#         #m.addConstr((yw_ == (a * w_**2 + b * w_ + c)), name=f"c.{fid}.yw_")
+
+#         m.addConstr((y_ == yw_ * i_crop), name=f"c.{fid}.y_")
+#         m.addConstr((y == y_ * ymax * unit_area * 1e-4), name=f"c.{fid}.y") # 1e4 bu
+#         m.addConstr((irr * (1-i_crop) == 0), name=f"c.{fid}.irr(cm)")
+#         cm2m = 0.01
+#         m.addConstr((v_c == irr * unit_area * cm2m), name=f"c.{fid}.v_c(m-ha)")
+#         m.addConstr(v == gp.quicksum(v_c[i,j,:] \
+#                     for i in range(n_s) for j in range(n_c)),
+#                     name=f"c.{fid}.v(m-ha)")
+#         m.addConstr(y_y == gp.quicksum( y_[i,j,:] \
+#                     for i in range(n_s) for j in range(n_c) ) / n_s,
+#                     name=f"c.{fid}.y_y")
+
+#         # Create variable for crop type change
+#         if isinstance(pre_i_crop, str):
+#             i_c = self.crop_options.index(pre_i_crop)
+#             pre_i_crop = np.zeros((n_s, n_c, 1))
+#             pre_i_crop[:, i_c, :] = 1
+#         i_crop_change_ = m.addMVar((n_s, n_c, 1), vtype="I", name=f"{fid}.i_crop_change_", lb=-1, ub=1)
+#         i_crop_change = m.addMVar((n_s, n_c, 1), vtype="B", name=f"{fid}.i_crop_change")
+#         m.addConstr(i_crop_change_ == i_crop - pre_i_crop, name=f"c.{fid}.i_crop_change_")
+#         m.addConstrs((i_crop_change[s,c,0] == gp.max_(i_crop_change_[s,c,0], constant=0) \
+#                     for s in range(n_s) for c in range(n_c)),
+#                     name=f"c.{fid}.i_crop_change")
+
+#         # Tech decisions
+#         techs = self.config.field.tech
+#         tech_options = self.tech_options
+
+#         q       = m.addMVar((n_h), vtype="C", name=f"{fid}.q(m-ha/d)", lb=0, ub=inf)
+#         l_pr    = m.addVar(vtype="C", name=f"{fid}.l_pr(m)", lb=0, ub=inf)
+#         i_te    = m.addMVar((n_te), vtype="B", name=f"{fid}.i_te")
+#         m.addConstr(q == gp.quicksum((techs[te][0] * v + techs[te][1]) * i_te[i] \
+#                     for i, te in enumerate(tech_options)), name=f"c.{fid}.q(m-ha/d)")
+#         m.addConstr(gp.quicksum(i_te[i] for i in range(n_te)) == 1,
+#                     name=f"c.{fid}.i_te")
+#         m.addConstr(l_pr == gp.quicksum( techs[te][2] * i_te[i] \
+#                     for i, te in enumerate(tech_options) ),
+#                     name=f"c.{fid}.l_pr(m)")
+
+#         # Given tech as an input
+#         if i_te_input is not None:
+#             self.msg[fid]["Irr tech"] = "user input"
+#             if isinstance(i_te_input, str):
+#                 te = i_te_input
+#                 i_te_input = np.zeros(n_te)
+#                 i_te_input[tech_options.index(i_te)] = 1
+#             else:
+#                 te = tech_options[list(i_te_input).index(1)]
+#             m.addConstr(i_te == i_te_input, name=f"c.{fid}.i_te_input")
+#             qa_input, qb_input, l_pr_input = techs[te]
+#             m.addConstr(l_pr == l_pr_input, name=f"c.{fid}.l_pr(m)_input")
+#             m.addConstr(i_te == i_te_input, name=f"c.{fid}.i_te(m)_input")
+
+#         # Create variable for tech change
+#         if isinstance(pre_i_te, str):
+#             i_t = self.tech_options.index(pre_i_te)
+#             pre_i_te = np.zeros((n_te))
+#             pre_i_te[i_t] = 1
+#         i_tech_change_ = m.addMVar((n_te), vtype="I", name=f"{fid}.i_tech_change_", lb=-1, ub=1)
+#         i_tech_change = m.addMVar((n_te), vtype="B", name=f"{fid}.i_tech_change")
+#         m.addConstr(i_tech_change_ == i_te - pre_i_te, name=f"c.{fid}.i_tech_change_")
+#         m.addConstrs((i_tech_change[t] == gp.max_(i_tech_change_[t], constant=0) \
+#                       for t in range(n_te)),
+#                       name=f"c.{fid}.i_crop_change")
+
+#         self.vars[fid].v = v
+#         self.vars[fid].y = y
+#         self.vars[fid].y_y = y_y
+#         self.vars[fid].irr = irr
+#         self.vars[fid].i_crop = i_crop
+#         self.vars[fid].i_rain_fed = i_rain_fed
+#         self.vars[fid].i_te = i_te
+#         self.vars[fid].l_pr = l_pr
+#         self.vars[fid].q = q
+
+#         self.vars[fid].pre_i_crop = pre_i_crop
+#         self.vars[fid].pre_i_te = pre_i_te
+#         self.vars[fid].i_crop_change = i_crop_change
+#         self.vars[fid].i_tech_change = i_tech_change
+
+#         self.vars[fid].rain_fed = rain_fed
+
+#         self.n_fields += 1
