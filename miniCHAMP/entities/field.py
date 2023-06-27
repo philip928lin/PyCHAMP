@@ -147,7 +147,7 @@ class Field():
         wmax = self.wmax
         n_s = self.n_s
         unit_area = self.unit_area
-        growth_period_ratio = self.growth_period_ratio
+        #growth_period_ratio = self.growth_period_ratio
 
         # Keep the record
         self.pre_i_crop = self.i_crop
@@ -157,9 +157,12 @@ class Field():
         irr = irr.copy()[:,:,[0]]
 
         # Adjust growing period
-        prec_aw_ = np.ones(irr.shape) * prec_aw
+        # prec_aw_ = np.ones(irr.shape) * prec_aw
+        # for ci, crop in enumerate(self.crop_options):
+        #     prec_aw_[:, ci, :] = prec_aw_[:, ci, :] * growth_period_ratio[crop]
+        prec_aw_ = np.ones(irr.shape)
         for ci, crop in enumerate(self.crop_options):
-            prec_aw_[:, ci, :] = prec_aw_[:, ci, :] * growth_period_ratio[crop]
+            prec_aw_[:, ci, :] = prec_aw[crop]
 
         w = irr + prec_aw_
         w = w * i_crop

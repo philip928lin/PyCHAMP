@@ -8,6 +8,7 @@ without permission.
 """
 import random
 import numpy as np
+from scipy.stats import truncnorm
 from dotmap import DotMap
 import mesa
 from ..opt_model import OptModel
@@ -59,23 +60,36 @@ class Farmer(mesa.Agent):
         self.agt_attrs = agt_attrs
         self.aquifers = DotMap(aquifers)
 
-        self.perceived_prec_aw = agt_attrs.perceived_prec_aw
         if agt_attrs.decision_making.alphas is None:
             self.agt_attrs.decision_making.alphas = config.consumat.alpha
         self.agt_attrs.decision_making.scale = config.consumat.scale
         dm_args = self.agt_attrs.decision_making
         crop_options = dm_args.crop_options
         tech_options = dm_args.tech_options
+        self.perceived_risk = dm_args.perceived_risk
 
         # Initiate simulation objects
         fields = DotMap()
+
         for fk, v in agt_attrs.fields.items():
+            truncated_normal_pars = v.truncated_normal_pars
             fields[fk] = Field(
                 field_id=fk, config=config, te=v.init.tech, crop=v.init.crop,
                 lat=v.lat, dz=v.dz, crop_options=crop_options,
                 tech_options=tech_options, aquifer_id=v.aquifer_id
                 )
             fields[fk].rain_fed = v.rain_fed # for later convenience
+            # calculate percieved_prec_aw
+            agt_attrs[fk].perceived_prec_aw = {
+                crop: 0 if crop=="fallow" else \
+                    round(
+                        truncnorm.ppf(
+                            self.perceived_risk,
+                            truncated_normal_pars[crop][0],
+                            truncated_normal_pars[crop][1]),
+                        4
+                    ) for crop in crop_options}
+            fields[fk].perceived_prec_aw = agt_attrs[fk].perceived_prec_aw
 
         wells = DotMap()
         for wk, v in agt_attrs.wells.items():
@@ -198,6 +212,9 @@ class Farmer(mesa.Agent):
         # Optimization's output
         dm_sols = self.dm_sols
 
+        # agt dc settings
+        dm_args = self.agt_attrs.decision_making
+
         # Simulate fields
         for fk, field in fields.items():
             irr = dm_sols[fk].irr
@@ -222,7 +239,7 @@ class Farmer(mesa.Agent):
             v = total_v * allo_r_w[k, 0]
             q = sum([fields[fid].q * allo_r[f,k,0] for f, fid in enumerate(field_ids)])
             l_pr = sum([fields[fid].l_pr * allo_r[f,k,0] for f, fid in enumerate(field_ids)])
-            dwl = aquifers[well.aquifer_id].dwl
+            dwl = aquifers[well.aquifer_id].dwl * dm_args.weight_dwl
 
             well.step(v=v, dwl=dwl, q=q, l_pr=l_pr)
 
@@ -236,7 +253,7 @@ class Farmer(mesa.Agent):
 
         # Calculate satisfaction and uncertainty
         needs = self.needs
-        dm_args = self.agt_attrs.decision_making
+
         eval_metric_vars = {
             "profit": profit/dm_args.scale.profit,
             "yield_pct": y_y/dm_args.scale.yield_pct}
@@ -308,26 +325,25 @@ class Farmer(mesa.Agent):
             tech_options=dm_args.tech_options,
             approx_horizon=dm_args.approx_horizon
             )
-
-        for f, field in fields.items():
+        for fk, field in fields.items():
             if init:
                 dm.setup_constr_field(
-                    field_id=f,
-                    prec_aw=dm_args.perceived_prec_aw,
-                    pre_i_crop=dm_sols[f].pre_i_crop,
-                    pre_i_te=dm_sols[f].pre_i_te,
+                    field_id=fk,
+                    prec_aw=field.perceived_prec_aw,
+                    pre_i_crop=dm_sols[fk].pre_i_crop,
+                    pre_i_te=dm_sols[fk].pre_i_te,
                     rain_fed=field.rain_fed,
-                    i_crop=dm_sols[f].i_crop,
+                    i_crop=dm_sols[fk].i_crop,
                     i_rain_fed=None,
-                    i_te=dm_sols[f].i_te)
+                    i_te=dm_sols[fk].i_te)
                 continue
 
             if state == "Deliberation":
                 dm.setup_constr_field(
-                    field_id=f,
-                    prec_aw=dm_args.perceived_prec_aw,
-                    pre_i_crop=dm_sols[f].pre_i_crop,
-                    pre_i_te=dm_sols[f].pre_i_te,
+                    field_id=fk,
+                    prec_aw=field.perceived_prec_aw,
+                    pre_i_crop=dm_sols[fk].pre_i_crop,
+                    pre_i_te=dm_sols[fk].pre_i_te,
                     rain_fed=field.rain_fed,
                     i_crop=None,
                     i_rain_fed=None,
@@ -335,21 +351,21 @@ class Farmer(mesa.Agent):
                     )
             else:
                 dm.setup_constr_field(
-                    field_id=f,
-                    prec_aw=dm_args.perceived_prec_aw,
-                    pre_i_crop=dm_sols[f].pre_i_crop,
-                    pre_i_te=dm_sols[f].pre_i_te,
+                    field_id=fk,
+                    prec_aw=field.perceived_prec_aw,
+                    pre_i_crop=dm_sols[fk].pre_i_crop,
+                    pre_i_te=dm_sols[fk].pre_i_te,
                     rain_fed=field.rain_fed,
-                    i_crop=dm_sols[f].i_crop,
-                    i_rain_fed=dm_sols[f].i_rain_fed,
-                    i_te=dm_sols[f].i_te
+                    i_crop=dm_sols[fk].i_crop,
+                    i_rain_fed=dm_sols[fk].i_rain_fed,
+                    i_te=dm_sols[fk].i_te
                     )
 
-        for w, well in wells.items():
+        for wk, well in wells.items():
             aquifer_id = well.aquifer_id
             proj_dwl = np.mean(aquifers[aquifer_id].dwl_list[-dm_args.n_dwl:])
             dm.setup_constr_well(
-                well_id=w, dwl=proj_dwl, st=well.st,
+                well_id=wk, dwl=proj_dwl, st=well.st,
                 l_wt=well.l_wt, r=well.r, k=well.k,
                 sy=well.sy, eff_pump=well.eff_pump,
                 eff_well=well.eff_well,
@@ -807,11 +823,11 @@ class Farmer(mesa.Agent):
 #                     i_te=dm_sols[f].i_te
 #                     )
 
-#         for w, well in wells.items():
+#         for wk, well in wells.items():
 #             aquifer_id = well.aquifer_id
 #             proj_dwl = np.mean(aquifers[aquifer_id].dwl_list[-dm_args.n_dwl:])
 #             dm.setup_constr_well(
-#                 well_id=w, dwl=proj_dwl, st=well.st,
+#                 well_id=wk, dwl=proj_dwl, st=well.st,
 #                 l_wt=well.l_wt, r=well.r, k=well.k,
 #                 sy=well.sy, eff_pump=well.eff_pump,
 #                 eff_well=well.eff_well,

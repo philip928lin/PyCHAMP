@@ -298,8 +298,8 @@ class OptModel():
         field_id : str or int
             The field id serves as a means to differentiate the equation sets
             for different fields.
-        prec_aw : float
-            Percieved precipitation in the growing season [cm].
+        prec_aw : dict
+            Percieved precipitation in each crop type's growing season [cm].
         pre_i_crop: str or 3darray
             Crop name or the i_crop from the previous time step.
         pre_i_te: str or 3darray
@@ -327,8 +327,6 @@ class OptModel():
         None.
 
         """
-        # assert prec_aw <= np.max(self.wmax), f"""prec_aw {prec_aw} is larger than wmax
-        # {np.max(self.wmax)}. This will lead to infeasible solution."""
 
         self.field_ids.append(field_id)
         fid = field_id
@@ -361,7 +359,6 @@ class OptModel():
         inf = self.inf
         ymax = self.ymax
         wmax = self.wmax
-        growth_period_ratio = self.growth_period_ratio
         ub_w = self.bounds.ub_w
         ub_irr = ub_w #ub_w - prec_aw
         self.bounds[fid].ub_irr = ub_irr
@@ -369,9 +366,14 @@ class OptModel():
         unit_area = self.unit_area
 
         # Adjust prec_aw by the crop's growing period
-        prec_aw = np.ones((n_s, n_c, n_h)) * prec_aw
-        for c, crop in enumerate(self.crop_options):
-            prec_aw[:, c, :] = prec_aw[:, c, :] * growth_period_ratio[crop]
+        # growth_period_ratio = self.growth_period_ratio
+        # prec_aw = np.ones((n_s, n_c, n_h)) * prec_aw
+        # for c, crop in enumerate(self.crop_options):
+        #     prec_aw[:, c, :] = prec_aw[:, c, :] * growth_period_ratio[crop]
+
+        prec_aw_ = np.ones((n_s, n_c, n_h))
+        for ci, crop in enumerate(self.crop_options):
+            prec_aw_[:, ci, :] = prec_aw[crop]
 
         ### Add general variables
         irr     = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.irr(cm)", lb=0, ub=ub_irr)
@@ -423,7 +425,7 @@ class OptModel():
 
         # See the numpy broadcast rules:
         # https://numpy.org/doc/stable/user/basics.broadcasting.html
-        m.addConstr((w == irr + prec_aw), name=f"c.{fid}.w(cm)")
+        m.addConstr((w == irr + prec_aw_), name=f"c.{fid}.w(cm)")
         m.addConstr((w_temp == w/wmax), name=f"c.{fid}.w_temp")
         m.addConstrs((w_[s,c,h] == gp.min_(w_temp[s,c,h], constant=1) \
                     for s in range(n_s) for c in range(n_c) for h in range(n_h)),
@@ -431,7 +433,7 @@ class OptModel():
         # Does not really help to improve the speed.
         #m.addConstr((w_ == w/wmax), name=f"c.{fid}.w_")
 
-        # We force irr to be zero but prec_aw will add to w & w_, which will
+        # We force irr to be zero but prec_aw_ will add to w & w_, which will
         # output positive y_ leading to violation for y_y (< 1)
         # Also, we need to seperate yw_ and y_ into two constraints. Otherwise,
         # gurobi will crush. No idea why.

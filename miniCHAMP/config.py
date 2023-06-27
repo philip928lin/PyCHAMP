@@ -17,23 +17,30 @@ config = {
     "field": {
         "field_area": 50.,  # [ha]  Field size for a grid.
         "area_split": 1,    # [--]  Num of decision set for a field. The solving process will slow down starting from 3.
-        "crop": {   # (ymax [bu], wmax[cm], a, b, c)
-            "corn":     [442.3622, 87.5434, -3.7665, 6.8402, -2.2518],
-            "sorghum":  [236.7314, 69.2231, -4.0735, 7.1203, -2.168],
-            "soybeans": [129.7327, 80.6519, -3.3889, 6.1155, -1.9509],
-            "fallow":   (0., 100., 0, 0, 0.),
+        "crop": {       # (ymax [bu], wmax[cm], a, b, c) fitted from the Risk Management Agency (RMS)
+            "corn":     [453.4061, 69.8681, -2.2622, 4.0141, -0.9845],
+            "sorghum":  [232.735,  54.8928, -1.9883, 3.3775, -0.5945],
+            "soybeans": [143.4198, 59.8992, -1.821,  3.1337, -0.6253],
+            "wheat":    [124.7009, 47.7474, -1.0605, 1.6898, -0.0674],
+            "fallow":   [0., 100., 0, 0, 0.],
             },
         "tech": {   # (a [m3 -> m-ha], b [m3 -> m-ha], Lpr [m]) (McCarthy et al., 2020)
             "center pivot":      [0.0051, 0.268744, 28.12],
             "center pivot LEPA": [0.0058, 0.212206, 12.65]
             },
-        "growth_period": ["5/1", "10/15"],  # (Deines et al., 2021)
-        "growth_period_ratio": {    # If we want to incorporate wheat, explicit dates are required for prec_aw.
-            "corn":     1,
-            "sorghum":  0.822,
-            "soybeans": 0.934,
-            "fallow":   1,
-            }
+        "growth_period": {
+            "corn":     ["5/1", "10/3"],
+            "sorghum":  ["6/2", "11/3"],
+            "soybeans": ["6/2", "10/15"],
+            "wheat":    ["10/3", "6/27"]
+            #["5/1", "10/15"],  # (Deines et al., 2021)
+            },
+        # "growth_period_ratio": {    # If we want to incorporate wheat, explicit dates are required for prec_aw.
+        #     "corn":     1,
+        #     "sorghum":  0.822,
+        #     "soybeans": 0.934,
+        #     "fallow":   1,
+        #     }
         },
     "well": {
         "rho": 1000.,   # [kg/m3]
@@ -42,9 +49,10 @@ config = {
     "finance": {
         "energy_price": 2777.777778,    # [1e4$/PJ] $0.10/kWh = $ 2777.777778 1e4/PJ (Aguilar et al., 2015)
         "crop_profit": {
-            "corn":     6.10,   # $/bu  2023    Northwest KS (can vary from 2.5-~6; Aguilar et al., 2015)
-            "sorghum":  6.16,   # $/bu  2023    Northwest KS
-            "soybeans": 12.87,  # $/bu  2023    Northwest KS
+            "corn":     5.394667,       # $/bu  2007    KFMA (can vary from 2.5-~6; Aguilar et al., 2015)
+            "sorghum":  6.598655566,    # $/bu  2007    KFMA
+            "soybeans": 13.3170448,     # $/bu  2007    KFMA
+            "wheat":    8.28157881,
             "fallow":   0.
             },
         "irr_tech_operational_cost": {  # [1e4$]
@@ -56,18 +64,18 @@ config = {
             ("center pivot LEPA", "center pivot"): 0
             },
         "crop_change_cost": {   # [1e4$] If not specify, 0 is the default. This is a fixed cost per unit area crop change.
-            ("corn", "sorghum"):     0,
-            ("corn", "soybeans"):    0,
-            ("corn", "fallow"):      0,
-            ("sorghum", "corn"):     0,
-            ("sorghum", "soybeans"): 0,
-            ("sorghum", "fallow"):   0,
-            ("soybeans", "corn"):    0,
-            ("soybeans", "sorghum"): 0,
-            ("soybeans", "fallow"):  0,
-            ("fallow", "corn"):      0,
-            ("fallow", "sorghum"):   0,
-            ("fallow", "soybeans"):  0
+            # ("corn", "sorghum"):     0,
+            # ("corn", "soybeans"):    0,
+            # ("corn", "fallow"):      0,
+            # ("sorghum", "corn"):     0,
+            # ("sorghum", "soybeans"): 0,
+            # ("sorghum", "fallow"):   0,
+            # ("soybeans", "corn"):    0,
+            # ("soybeans", "sorghum"): 0,
+            # ("soybeans", "fallow"):  0,
+            # ("fallow", "corn"):      0,
+            # ("fallow", "sorghum"):   0,
+            # ("fallow", "soybeans"):  0
             }
         },
     "aquifer": {
