@@ -57,7 +57,8 @@ class Field():
         self.growth_period_ratio = {c: config.field.growth_period_ratio[c] for c in crop_options}
         self.n_s = config.field.area_split
         self.n_c = len(crop_options)
-        self.unit_area = config.field.field_area/self.n_s
+        self.field_area = config.field.field_area
+        self.unit_area = self.field_area/self.n_s
 
         self.tech_options = tech_options
         self.techs = config.field.tech

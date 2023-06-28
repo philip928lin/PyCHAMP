@@ -84,9 +84,11 @@ class Farmer(mesa.Agent):
                 crop: 0 if crop=="fallow" else \
                     round(
                         truncnorm.ppf(
-                            self.perceived_risk,
-                            truncated_normal_pars[crop][0],
-                            truncated_normal_pars[crop][1]),
+                            q=self.perceived_risk,
+                            a=truncated_normal_pars[crop][0],
+                            b=truncated_normal_pars[crop][1],
+                            loc=truncated_normal_pars[crop][2],
+                            scale=truncated_normal_pars[crop][3]),
                         4
                     ) for crop in crop_options}
             fields[fk].perceived_prec_aw = agt_attrs[fk].perceived_prec_aw
@@ -147,13 +149,13 @@ class Farmer(mesa.Agent):
         # fixed.
         self.dm_sols = self.make_dm(None, dm_sols=dm_sols, init=True)
         # Run the simulation to calculate satisfication and uncertainty
-        self.update_climate_input(prec_aw_dict, prec_dict)
+        self.update_climate_input(prec_dict, prec_aw_dict)
         self.run_simulation() # aquifers
 
         # Some other attributes
         self.current_step = 0
 
-    def update_climate_input(self, prec_aw_dict, prec_dict):
+    def update_climate_input(self, prec_dict, prec_aw_dict):
         """
         Update the climate input before the step simulation.
 
