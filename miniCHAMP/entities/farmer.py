@@ -374,7 +374,11 @@ class Farmer(mesa.Agent):
                 pumping_capacity=well.pumping_capacity
                 )
 
-        water_rights = dm_sols.water_rights
+
+        if init:
+            water_rights = dm_sols.water_rights
+        else: # Use agent's own water rights (for social comparison and imitation)
+            water_rights = self.dm_sols.water_rights
         for wr_id, v in self.agt_attrs.water_rights.items():
             if v.status: # Check whether the wr is activated
                 # Extract the water right setting from the previous opt run,
@@ -382,7 +386,7 @@ class Farmer(mesa.Agent):
                 # year. If the wr is newly activate in a simulation, then we
                 # use the input to setup the wr.
                 wr_args = water_rights.get(wr_id)
-                if wr_args is None:
+                if wr_args is None: # when first time introduce the water rights
                     dm.setup_constr_wr(
                         water_right_id=wr_id, wr=v.wr,
                         field_id_list=v.field_id_list,
