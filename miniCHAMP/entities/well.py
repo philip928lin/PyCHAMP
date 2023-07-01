@@ -7,7 +7,6 @@ WARNING: This code is not yet published, please do not distributed the code
 without permission.
 """
 import numpy as np
-from dotmap import DotMap
 
 class Well():
     """
@@ -40,23 +39,42 @@ class Well():
 
     """
     def __init__(self, well_id, config, r, k, st, sy, l_wt,
-                 eff_pump=0.77, eff_well=0.5, aquifer_id=None):
-        # for name_, value_ in vars().items():
-        #     if name_ != 'self' and name_ != 'config':
-        #         setattr(self, name_, value_)
+                 eff_pump=0.77, eff_well=0.5, aquifer_id=None, **kwargs):
+
         self.well_id, self.r, self.k, self.st, self.sy, self.l_wt = \
             well_id, r, k, st, sy, l_wt
-
-        self.tr = st * k
         self.eff_pump, self.eff_well = eff_pump, eff_well
         self.aquifer_id = aquifer_id
+        self.load_config(config)
 
-        config = DotMap(config)
-        self.rho = config.well.rho
-        self.g = config.well.g
+        # Load other kwargs
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+        self.tr = st * k    # Transmissivity
 
         self.t = 0
+
+        # Container
         self.withdrawal = None # m-ha
+
+    def load_config(self, config):
+        """
+        Load config.
+
+        Parameters
+        ----------
+        config : dict
+            General configuration of the model.
+
+        Returns
+        -------
+        None.
+
+        """
+        config_well = config["well"]
+        self.rho = config_well["rho"]
+        self.g = config_well["g"]
 
     def step(self, v, dwl, q, l_pr):
         """
@@ -80,6 +98,8 @@ class Well():
             Energy consumption [PJ].
 
         """
+        self.t +=1
+
         # update groundwater level change from the last year
         self.l_wt -= dwl
         self.st += dwl
@@ -99,6 +119,6 @@ class Well():
         e = rho * g * m_ha_2_m3 / eff_pump / 1e15 * v * l_t     # PJ
 
         # record
-        self.t += 1
         self.e = e
+
         return e

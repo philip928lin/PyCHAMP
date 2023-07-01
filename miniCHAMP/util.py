@@ -14,6 +14,12 @@ import pandas as pd
 from scipy import stats
 import matplotlib.pyplot as plt
 
+class Box():
+    def __init__(self, dicts):
+        """A container that enable dotted access."""
+        for k, v in dicts.items():
+            setattr(self, k, v)
+
 def dict_to_string(dictionary, prefix="", indentor="  ", level=2):
     """Ture a dictionary into a printable string.
     Parameters

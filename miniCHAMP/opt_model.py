@@ -10,7 +10,6 @@ without permission.
 import json
 import numpy as np
 import gurobipy as gp
-from dotmap import DotMap
 
 
 #################
@@ -171,7 +170,6 @@ class OptModel():
         None.
 
         """
-        config = DotMap(config)
         self.config = config
         self.crop_options = crop_options
         self.tech_options = tech_options
@@ -184,8 +182,9 @@ class OptModel():
         if self.gurobi_pars is None:
             self.gurobi_pars = {}
 
+        config_field = config['field']
         ## Dimension coefficients
-        self.n_s = config.field.area_split
+        self.n_s = config_field['area_split']
         self.n_c = len(crop_options)    # No. of crop choice options
         self.n_te = len(tech_options)   # No. of irr tech options
         if approx_horizon and horizon > 2:
@@ -203,23 +202,24 @@ class OptModel():
         self.n_water_rights = 0
 
         ## Extract parameters from "config"
-        crop_par = np.array([config.field.crop[c] for c in crop_options])
+        crop_par = np.array([config_field['crop'][c] for c in crop_options])
         self.ymax = crop_par[:, 0].reshape((-1, 1))     # (n_c, 1)
         self.wmax = crop_par[:, 1].reshape((-1, 1))     # (n_c, 1)
         self.a = crop_par[:, 2].reshape((-1, 1))        # (n_c, 1)
         self.b = crop_par[:, 3].reshape((-1, 1))        # (n_c, 1)
         self.c = crop_par[:, 4].reshape((-1, 1))        # (n_c, 1)
-        self.growth_period_ratio = {c: config.field.growth_period_ratio[c] for c in crop_options}
 
-        self.unit_area = config.field.field_area/self.n_s
+        self.unit_area = config_field['field_area']/self.n_s
         # For consumat
-        self.alphas = config.consumat.alpha
-        self.scales = config.consumat.scale
+        config_consumat = config['consumat']
+        self.alphas = config_consumat['alpha']
+        self.scales = config_consumat['scale']
         self.eval_metrics = [metric for metric, v in self.alphas.items() if v is not None]
 
         ## Form tech and crop change cost matrix from the config
         n_te = self.n_te
-        irr_tech_change_cost = config.finance.irr_tech_change_cost
+        config_finance = config['finance']
+        irr_tech_change_cost = config_finance['irr_tech_change_cost']
         tech_change_cost_matrix = np.zeros((n_te, n_te))
         for k, v in irr_tech_change_cost.items():
             try:
@@ -231,7 +231,7 @@ class OptModel():
         self.tech_change_cost_matrix = tech_change_cost_matrix
 
         n_c = self.n_c
-        crop_change_cost = config.finance.crop_change_cost
+        crop_change_cost = config_finance['crop_change_cost']
         crop_change_cost_matrix = np.zeros((n_c, n_c))
         for k, v in crop_change_cost.items():
             try:
@@ -245,9 +245,9 @@ class OptModel():
         ## Optimization Model
         # self.model.dispose()    # release the memory of the previous model
         self.model = gp.Model(name=self.name, env=self.gpenv)
-        self.vars = DotMap()    # A container to store variables.
-        self.bounds = DotMap()
-        self.bounds.ub_w = np.max(self.wmax)
+        self.vars = {}    # A container to store variables.
+        self.bounds = {}
+        self.bounds['ub_w'] = np.max(self.wmax)
         self.inf = float('inf')
 
         ## Add shared variables
@@ -270,18 +270,18 @@ class OptModel():
         profit = m.addMVar((n_h), vtype="C", name="profit(1e4$)", lb=-inf, ub=inf)
 
         ## Record variables
-        self.vars.irr = irr
-        self.vars.v = v
-        self.vars.y = y
-        self.vars.y_y = y_y
-        self.vars.e = e
-        self.vars.profit = profit
+        self.vars['irr'] = irr
+        self.vars['v'] = v
+        self.vars['y'] = y
+        self.vars['y_y'] = y_y
+        self.vars['e'] = e
+        self.vars['profit'] = profit
 
         ## Record msg about the user inputs.
         self.msg = {}
 
         ## Record water rights info.
-        self.wrs = DotMap()
+        self.wrs_info = {}
 
     def setup_constr_field(self, field_id, prec_aw, pre_i_crop, pre_i_te,
                            rain_fed=None, i_crop=None, i_rain_fed=None,
@@ -359,17 +359,12 @@ class OptModel():
         inf = self.inf
         ymax = self.ymax
         wmax = self.wmax
-        ub_w = self.bounds.ub_w
+        ub_w = self.bounds['ub_w']
         ub_irr = ub_w #ub_w - prec_aw
-        self.bounds[fid].ub_irr = ub_irr
+        self.bounds[fid] = {}
+        self.bounds[fid]['ub_irr'] = ub_irr
 
         unit_area = self.unit_area
-
-        # Adjust prec_aw by the crop's growing period
-        # growth_period_ratio = self.growth_period_ratio
-        # prec_aw = np.ones((n_s, n_c, n_h)) * prec_aw
-        # for c, crop in enumerate(self.crop_options):
-        #     prec_aw[:, c, :] = prec_aw[:, c, :] * growth_period_ratio[crop]
 
         prec_aw_ = np.ones((n_s, n_c, n_h))
         for ci, crop in enumerate(self.crop_options):
@@ -472,7 +467,7 @@ class OptModel():
                     name=f"c.{fid}.i_crop_change")
 
         # Tech decisions
-        techs = self.config.field.tech
+        techs = self.config['field']['tech']
         tech_options = self.tech_options
 
         q       = m.addMVar((n_h), vtype="C", name=f"{fid}.q(m-ha/d)", lb=0, ub=inf)
@@ -492,7 +487,7 @@ class OptModel():
             if isinstance(i_te_input, str):
                 te = i_te_input
                 i_te_input = np.zeros(n_te)
-                i_te_input[tech_options.index(i_te)] = 1
+                i_te_input[tech_options.index(te)] = 1
             else:
                 te = tech_options[list(i_te_input).index(1)]
             m.addConstr(i_te == i_te_input, name=f"c.{fid}.i_te_input")
@@ -512,22 +507,23 @@ class OptModel():
                       for t in range(n_te)),
                       name=f"c.{fid}.i_crop_change")
 
-        self.vars[fid].v = v
-        self.vars[fid].y = y
-        self.vars[fid].y_y = y_y
-        self.vars[fid].irr = irr
-        self.vars[fid].i_crop = i_crop
-        self.vars[fid].i_rain_fed = i_rain_fed
-        self.vars[fid].i_te = i_te
-        self.vars[fid].l_pr = l_pr
-        self.vars[fid].q = q
+        self.vars[fid] = {}
+        self.vars[fid]['v'] = v
+        self.vars[fid]['y'] = y
+        self.vars[fid]['y_y'] = y_y
+        self.vars[fid]['irr'] = irr
+        self.vars[fid]['i_crop'] = i_crop
+        self.vars[fid]['i_rain_fed'] = i_rain_fed
+        self.vars[fid]['i_te'] = i_te
+        self.vars[fid]['l_pr'] = l_pr
+        self.vars[fid]['q'] = q
 
-        self.vars[fid].pre_i_crop = pre_i_crop
-        self.vars[fid].pre_i_te = pre_i_te
-        self.vars[fid].i_crop_change = i_crop_change
-        self.vars[fid].i_tech_change = i_tech_change
+        self.vars[fid]['pre_i_crop'] = pre_i_crop
+        self.vars[fid]['pre_i_te'] = pre_i_te
+        self.vars[fid]['i_crop_change'] = i_crop_change
+        self.vars[fid]['i_tech_change'] = i_tech_change
 
-        self.vars[fid].rain_fed = rain_fed
+        self.vars[fid]['rain_fed'] = rain_fed
 
         self.n_fields += 1
 
@@ -576,16 +572,16 @@ class OptModel():
         n_h = self.n_h
         inf = self.inf
 
-        cw = self.config.well
-        rho = cw.rho
-        g = cw.g
+        cw = self.config['well']
+        rho = cw['rho']
+        g = cw['g']
 
         # Project the future lift head.
         approx_horizon = self.approx_horizon
         if approx_horizon and self.horizon > 2:
-            dwls = np.array([0, dwl*(self.horizon-1)])
+            dwls = np.array([0, dwl * (self.horizon-1)])
         else:
-            dwls = np.array([dwl*(i) for i in range(n_h)])
+            dwls = np.array([dwl * (i) for i in range(n_h)])
         # Assume a linear projection to the future
         l_wt = l_wt - dwls
         self.l_wt = l_wt
@@ -605,10 +601,10 @@ class OptModel():
         fpitr = 4 * np.pi * tr
         e     = m.addMVar((n_h), vtype="C", name=f"{wid}.e(PJ)", lb=0, ub=inf)
         l_t   = m.addMVar((n_h), vtype="C", name=f"{wid}.l_t(m)", lb=0, ub=inf)
-        q_lnx = m.addMVar((n_h),vtype="C", name=f"{wid}.q_lnx", lb=0, ub=inf)
+        q_lnx = m.addMVar((n_h), vtype="C", name=f"{wid}.q_lnx", lb=0, ub=inf)
         # The upper bound of q_lny is set to -0.5772 to avoid l_cd_l_wd to be
         # negative.
-        q_lny     = m.addMVar((n_h),vtype="C", name=f"{wid}.q_lny", lb=-inf, ub=-0.5772)
+        q_lny     = m.addMVar((n_h), vtype="C", name=f"{wid}.q_lny", lb=-inf, ub=-0.5772)
         l_cd_l_wd = m.addMVar((n_h), vtype="C", name=f"{wid}.l_cd_l_wd(m)", lb=0, ub=inf)
 
         # 10000 is to convert m-ha to m3
@@ -628,10 +624,11 @@ class OptModel():
         r_g_m_ha_2_m3_eff = rho * g * m_ha_2_m3 / eff_pump / 1e15
         m.addConstr((e ==  r_g_m_ha_2_m3_eff * v * l_t), name=f"c.{wid}.e(PJ)")
 
-        self.vars[wid].e = e
-        self.vars[wid].v = v
-        self.vars[wid].q = q
-        self.vars[wid].l_pr = l_pr
+        self.vars[wid] = {}
+        self.vars[wid]['e'] = e
+        self.vars[wid]['v'] = v
+        self.vars[wid]['q'] = q
+        self.vars[wid]['l_pr'] = l_pr
         self.n_wells += 1
 
     def setup_constr_finance(self):
@@ -644,9 +641,9 @@ class OptModel():
 
         """
         m = self.model
-        cf = self.config.finance
-        energy_price = cf.energy_price    #[1e4$/PJ]
-        crop_profit = cf.crop_profit
+        cf = self.config['finance']
+        energy_price = cf['energy_price']    #[1e4$/PJ]
+        crop_profit = cf['crop_profit']
         crop_options = self.crop_options
         tech_options = self.tech_options
         n_h = self.n_h
@@ -657,30 +654,30 @@ class OptModel():
         vars = self.vars
         field_ids = self.field_ids
 
-        e = vars.e     # (n_h) [PJ]
-        y = vars.y     # (n_s, n_c, n_h) [1e4 bu]
+        e = vars['e']     # (n_h) [PJ]
+        y = vars['y']     # (n_s, n_c, n_h) [1e4 bu]
 
         cost_e = m.addMVar((n_h), vtype="C", name="cost_e(1e4$)", lb=0, ub=inf)
         rev = m.addMVar((n_h), vtype="C", name="rev(1e4$)", lb=0, ub=inf)
 
-        cost_tech = np.array([cf.irr_tech_operational_cost[te] for te in tech_options])
+        cost_tech = np.array([cf['irr_tech_operational_cost'][te] for te in tech_options])
 
         annual_tech_cost = 0
         annual_tech_change_cost = 0
         annual_crop_change_cost = 0
         for fid in field_ids:
-            i_te = vars[fid].i_te
-            annual_tech_cost += i_te*cost_tech
+            i_te = vars[fid]['i_te']
+            annual_tech_cost += i_te * cost_tech
 
-            pre_i_te = vars[fid].pre_i_te
+            pre_i_te = vars[fid]['pre_i_te']
             tech_change_cost_arr = self.tech_change_cost_matrix[np.where(pre_i_te == 1)[0][0], :]
-            i_tech_change = vars[fid].i_tech_change
+            i_tech_change = vars[fid]['i_tech_change']
             annual_tech_change_cost += tech_change_cost_arr * i_tech_change/n_h # uniformly allocate into planning horizon
 
             for s in range(n_s):
-                pre_i_crop = vars[fid].pre_i_crop[s, :, 0]
+                pre_i_crop = vars[fid]['pre_i_crop'][s, :, 0]
                 crop_change_cost_arr = self.crop_change_cost_matrix[np.where(pre_i_crop == 1)[0][0], :]
-                i_crop_change = vars[fid].i_crop_change[s, :, 0]
+                i_crop_change = vars[fid]['i_crop_change'][s, :, 0]
                 annual_crop_change_cost += crop_change_cost_arr * i_crop_change/n_h # uniformly allocate into planning horizon
         annual_cost = m.addMVar((n_h), vtype="C", name="annual_cost(1e4$)", lb=-inf, ub=inf)
         m.addConstr(annual_cost == \
@@ -691,16 +688,16 @@ class OptModel():
 
         # The profit variable is created in the initial to allow users to add
         # contraints without a specific order.
-        profit = vars.profit
+        profit = vars['profit']
 
         m.addConstr((cost_e == e * energy_price), name="c.cost_e")
         m.addConstr(rev == gp.quicksum(y[i,j,:] * crop_profit[c] \
                     for i in range(n_s) for j, c in enumerate(crop_options)),
                     name="c.rev")
         m.addConstr((profit == rev - cost_e - annual_cost), name="c.profit")
-        vars.other_cost = annual_cost
-        vars.cost_e = cost_e
-        vars.rev = rev
+        vars['other_cost'] = annual_cost
+        vars['cost_e'] = cost_e
+        vars['rev'] = rev
 
     def setup_constr_wr(self, water_right_id, wr, field_id_list="all",
                         time_window=1, i_tw=1, remaining_wr=None,
@@ -763,13 +760,13 @@ class OptModel():
 
         # Collect irrigation depth over the constrainted fields.
         if fids == "all":
-            irr_sub = self.vars.irr         # (n_s, n_c, n_h)
+            irr_sub = vars['irr']         # (n_s, n_c, n_h)
         else:
             for i, fid in enumerate(fids):
                 if i == 0:
-                    irr_sub = vars[fid].irr
+                    irr_sub = vars[fid]['irr']
                 else:
-                    irr_sub += vars[fid].irr
+                    irr_sub += vars[fid]['irr']
             irr_sub = irr_sub/len(fids)
 
         start_index = i_tw-1
@@ -794,6 +791,7 @@ class OptModel():
             start_index = 0
 
         remaining_length = n_h - start_index
+
         # Middle period
         while remaining_length > time_window:
             m.addConstr(
@@ -830,14 +828,14 @@ class OptModel():
         if time_window == 1 or i_tw == time_window:
             # i_tw == time_window => Next year start a new round.
             remaining_wr = None
-        self.wrs[water_right_id] = DotMap({
+        self.wrs_info[water_right_id] = {
             "wr": wr,
             "field_id_list": field_id_list,
             "time_window": time_window,
             "i_tw": i_tw,
             "remaining_wr": remaining_wr,
             "tail_method": tail_method
-            })
+            }
 
     def setup_obj(self, alpha_dict=None):
         """
@@ -875,27 +873,28 @@ class OptModel():
 
         # Currently supported metrices
         eval_metric_vars = {
-            "profit": vars.profit,
-            "yield_pct": vars.y_y
+            "profit": vars['profit'],
+            "yield_pct": vars['y_y']
             }
 
         inf = self.inf
         m = self.model
         n_h = self.n_h
 
+        vars['Sa'] = {}
         def add_metric(metric):
             # fakeSa will be forced to be nonnegative later on for Sa calculation
             fakeSa = m.addVar(vtype="C", name=f"fakeSa.{metric}", lb=-inf, ub=inf)
             metric_var = eval_metric_vars.get(metric)
             m.addConstr((fakeSa == gp.quicksum(metric_var[h] for h in range(n_h))/n_h),
                         name=f"c.Sa.{metric}")
-            vars.Sa[metric] = fakeSa
+            vars['Sa'][metric] = fakeSa
 
         for metric in eval_metrics:
             # Add objective
             if metric == eval_metric:
                 add_metric(metric)
-                m.setObjective(vars.Sa[metric], gp.GRB.MAXIMIZE)
+                m.setObjective(vars['Sa'][metric], gp.GRB.MAXIMIZE)
         self.obj_post_calculation = True
 
     def finish_setup(self, display_summary=True):
@@ -925,24 +924,24 @@ class OptModel():
         # satisfy v. Sum of the ratios is equal to 1.
         allo_r = m.addMVar((n_f, n_w, n_h), vtype="C", name="allo_r", lb=0, ub=1)
         allo_r_w = m.addMVar((n_w, n_h), vtype="C", name="allo_r_w", lb=0, ub=1)
-        self.vars.allo_r = allo_r
-        self.vars.allo_r_w = allo_r_w
+        vars['allo_r'] = allo_r
+        vars['allo_r_w'] = allo_r_w
         m.addConstr(allo_r_w == gp.quicksum(allo_r[f,:,:] for f in range(n_f))/n_f,
                     name="c.allo_r_w")
         m.addConstrs((gp.quicksum(allo_r[f,k,h] for k in range(n_w)) == 1 \
                       for f in range(n_f) for h in range(n_h)), name="c.allo_r")
-        v = vars.v
+        v = vars['v']
         for k, wid in enumerate(wids):
-            m.addConstr((vars[wid].v == v * allo_r_w[k,:]), name=f"c.{wid}.v(m-ha)")
-            m.addConstr((vars[wid].q == gp.quicksum(vars[fid].q * allo_r[f,k,:] \
+            m.addConstr((vars[wid]['v'] == v * allo_r_w[k,:]), name=f"c.{wid}.v(m-ha)")
+            m.addConstr((vars[wid]['q'] == gp.quicksum(vars[fid]['q'] * allo_r[f,k,:] \
                         for f, fid in enumerate(fids))), name=f"c.{wid}.q(m-ha/d)")
-            m.addConstr((vars[wid].l_pr == gp.quicksum(vars[fid].l_pr * allo_r[f,k,:] \
+            m.addConstr((vars[wid]['l_pr'] == gp.quicksum(vars[fid]['l_pr'] * allo_r[f,k,:] \
                         for f, fid in enumerate(fids))), name=f"c.{wid}.l_pr(m)")
 
-        irr = vars.irr
-        y = vars.y
-        y_y = vars.y_y
-        e = vars.e
+        irr = vars['irr']
+        y = vars['y']
+        y_y = vars['y_y']
+        e = vars['e']
         # Sum to the total
         def get_sum(ids, vars, var):
             """Sum over ids"""
@@ -1014,17 +1013,17 @@ class OptModel():
 
         """
         def extract_sol(vars):
-            sols = DotMap()
-            def get_inner_dict(d, new_dotmap):
+            sols = {}
+            def get_inner_dict(d, new_dict):
                 for k, v in d.items():
                     if isinstance(v, dict):
-                        get_inner_dict(v, new_dotmap[k])
+                        new_dict[k] = {}
+                        get_inner_dict(v, new_dict[k])
                     else:
-                        #new_dotmap[k] = v.X
                         try:
-                            new_dotmap[k] = v.X
+                            new_dict[k] = v.X   # for variables of gurobi
                         except:
-                            new_dotmap[k] = v
+                            new_dict[k] = v     # for all others
             get_inner_dict(vars, sols)
             return sols
 
@@ -1043,11 +1042,11 @@ class OptModel():
             self.optimal_obj_value = m.objVal
             self.sols = extract_sol(self.vars)
             sols = self.sols
-            sols.obj = m.objVal
-            sols.field_ids = self.field_ids
-            sols.well_ids = self.well_ids
-            sols.gp_status = m.Status
-            sols.gp_MIPGap = m.MIPGap
+            sols['obj'] = m.objVal
+            sols['field_ids'] = self.field_ids
+            sols['well_ids'] = self.well_ids
+            sols['gp_status'] = m.Status
+            sols['gp_MIPGap'] = m.MIPGap
 
             # Calculate satisfication
             if self.obj_post_calculation:
@@ -1058,16 +1057,16 @@ class OptModel():
                 # Currently supported metrices
                 if self.approx_horizon and self.horizon > 2:
                     horizon = self.horizon
-                    profits = sols.profit
-                    y_ys = sols.y_y
+                    profits = sols['profit']
+                    y_ys = sols['y_y']
                     eval_metric_vars = {
-                        "profit": np.linspace(profits[0], profits[1], num=horizon)/scales.profit,
-                        "yield_pct": np.linspace(y_ys[0], y_ys[1], num=horizon)/scales.yield_pct
+                        "profit": np.linspace(profits[0], profits[1], num=horizon)/scales['profit'],
+                        "yield_pct": np.linspace(y_ys[0], y_ys[1], num=horizon)/scales['yield_pct']
                         }
                 else:
                     eval_metric_vars = {
-                        "profit": sols.profit/scales.profit,
-                        "yield_pct": sols.y_y/scales.yield_pct
+                        "profit": sols['profit']/scales['profit'],
+                        "yield_pct": sols['y_y']/scales['yield_pct']
                         }
                 for metric in eval_metrics:
                     alpha = alphas[metric]
@@ -1076,32 +1075,33 @@ class OptModel():
                     metric_var[metric_var<0] = 0
                     N_yr = 1 - np.exp(-alpha * metric_var)
                     Sa = np.mean(N_yr)
-                    sols.Sa[metric] = Sa
+                    sols['Sa'][metric] = Sa
             # Update rainfed info
             for fid in self.field_ids:
-                if sols[fid].rain_fed is True or sols[fid].rain_fed is None:
-                    irr = sols[fid].irr[:,:,0].sum(axis=1)
-                    i_rain_fed = sols[fid].i_rain_fed
+                sols_fid = sols[fid]
+                if sols_fid['rain_fed'] is True or sols_fid['rain_fed'] is None:
+                    irr = sols_fid['irr'][:,:,0].sum(axis=1)
+                    i_rain_fed = sols_fid['i_rain_fed']
                     i_rain_fed[np.where(irr == 0), :, :] = 1
-                    sols[fid].i_rain_fed = i_rain_fed * sols[fid].i_crop
+                    sols_fid['i_rain_fed'] = i_rain_fed * sols_fid['i_crop']
 
             # Update remaining water rights
-            wrs = self.wrs
-            for k, v in wrs.items():
-                if v.remaining_wr is not None:
-                    fids = v.field_id_list
+            wrs_info = self.wrs_info
+            for k, v in wrs_info.items():
+                if v['remaining_wr'] is not None:
+                    fids = v['field_id_list']
                     if fids == "all":
-                        irr_sub = sols.irr         # (n_s, n_c, n_h)
+                        irr_sub = sols['irr']         # (n_s, n_c, n_h)
                     else:
                         for i, fid in enumerate(fids):
                             if i == 0:
-                                irr_sub = sols[fid].irr.copy()
+                                irr_sub = sols[fid]['irr'].copy()
                             else:
-                                irr_sub += sols[fid].irr
+                                irr_sub += sols[fid]['irr']
                         irr_sub = irr_sub/len(fids)
-                    v.remaining_wr = v.remaining_wr - np.sum(irr_sub[:, :, 0])
-                v.i_tw = v.i_tw % v.time_window + 1
-            sols.water_rights = wrs
+                    v['remaining_wr'] = v['remaining_wr'] - np.sum(irr_sub[:, :, 0])
+                v['i_tw'] = v['i_tw'] % v['time_window'] + 1
+            sols['water_rights'] = wrs_info
 
             # Display report
             crop_options = self.crop_options
@@ -1109,25 +1109,26 @@ class OptModel():
             n_s = self.n_s
             fids = self.field_ids
             #sols = self.sols
-            irrs = list(sols.irr.mean(axis=0).sum(axis=0).round(2))
+            irrs = list(sols['irr'].mean(axis=0).sum(axis=0).round(2))
             decisions = {"Irrigation depths": irrs}
             for fid in fids:
-                i_crop = sols[fid].i_crop[:, :, 0]
+                sols_fid = sols[fid]
+                i_crop = sols_fid['i_crop'][:, :, 0]
                 crop_type = [crop_options[np.where(i_crop[s,:].round(0) == 1)[0][0]] for s in range(n_s)]
-                tech = tech_options[np.where(sols[fid].i_te[:].round(0) == 1)[0][0]]
-                Irrigated = list((sols[fid].i_rain_fed[:, :, 0].sum(axis=1).round(0) == 0))
+                tech = tech_options[np.where(sols_fid['i_te'][:].round(0) == 1)[0][0]]
+                Irrigated = list((sols_fid['i_rain_fed'][:, :, 0].sum(axis=1).round(0) == 0))
                 decisions[fid] = {"Crop types": crop_type,
                                   "Irr tech": tech,
                                   "Irrigated": Irrigated}
             self.decisions = decisions
             decisions = dict_to_string(decisions, prefix="\t\t", level=2)
             msg = dict_to_string(self.msg, prefix="\t\t", level=2)
-            sas = dict_to_string(sols.Sa, prefix="\t\t", level=2, roun=4)
+            sas = dict_to_string(sols['Sa'], prefix="\t\t", level=2, roun=4)
             if self.approx_horizon:
                 h_msg = str(self.horizon) + " (approximate with 2)"
             else:
                 h_msg = str(self.n_h)
-            report = f"""
+            gp_report = f"""
         ########## Model Report ##########\n
         Name:   {self.name}\n
         Planning horizon:   {h_msg}
@@ -1140,16 +1141,16 @@ class OptModel():
         Satisfication:\n{sas}\n
         ###################################
             """
-            self.report = report
+            self.gp_report = gp_report
             if display_report:
-                print(report)
-            sols.report = report
-            self.sols = sols
+                print(gp_report)
+            sols['gp_report'] = gp_report
+            #self.sols = sols
         else:
             print("Optimal solution is not found.")
             self.optimal_obj_value = None
-            sols = DotMap()
-            sols.report = "Optimal solution is not found."
+            sols = {}
+            sols['gp_report'] = "Optimal solution is not found."
             self.sols = sols
 
         if keep_gp_output:
@@ -1309,246 +1310,3 @@ def dict_to_string(dictionary, prefix="", indentor="  ", level=2, roun=None):
                     string.append(prefix + indentor * (count+1) + str(value))
         return string
     return "\n".join(dict_to_string_list(dictionary, indentor))
-
-# Arcive
-#     def setup_constr_field(self, field_id, prec_aw, pre_i_crop, pre_i_te,
-#                            rain_fed=None, i_crop=None, i_rain_fed=None,
-#                            i_te=None):
-#         """
-#         Add crop field constriants. You can assign multiple fields by calling
-#         this function repeatedly with different field_id. If
-#         i_crop/i_rain_fed/i_te is provided, the model will not optimize over
-#         different crop type options/rain-fed or irrigated/irrigation
-#         technologies.
-
-#         Parameters
-#         ----------
-#         field_id : str or int
-#             The field id serves as a means to differentiate the equation sets
-#             for different fields.
-#         prec_aw : float
-#             Percieved precipitation in the growing season [cm].
-#         pre_i_crop: str or 3darray
-#             Crop name or the i_crop from the previous time step.
-#         pre_i_te: str or 3darray
-#             Irrigation technology or i_te from the previous time step.
-#         rain_fed : bool or None, optional
-#             True if it is a rain-fed field. False if it is an irrigated field.
-#             None to let the model optimize it. The default is None.
-#         i_crop : 3darray, optional
-#             The indicator matrix has a dimension of (n_s, n_c, 1). In this
-#             matrix, a value of 1 indicates that the corresponding crop type
-#             is selected or chosen. The default is None.
-#         i_rain_fed : 3darray, optional
-#             The indicator matrix has a dimension of (n_s, n_c, 1). In this
-#             matrix, a value of 1 indicates that the unit area in a field is
-#             rainfed. Given i_rain_fed will force rain_fed to be True.
-#             Also, if it is given, make sure 1 only exists at where i_crop is
-#             also 1. The default is None.
-#         i_te : 1darray or str, optional
-#             The indicator matrix has a dimension of (n_te). In this
-#             matrix, a value of 1 indicates that the corresponnding irrigation
-#             technology is selected. The default is None.
-
-#         Returns
-#         -------
-#         None.
-
-#         """
-#         # assert prec_aw <= np.max(self.wmax), f"""prec_aw {prec_aw} is larger than wmax
-#         # {np.max(self.wmax)}. This will lead to infeasible solution."""
-
-#         self.field_ids.append(field_id)
-#         fid = field_id
-
-#         n_c = self.n_c
-#         n_h = self.n_h
-#         n_s = self.n_s
-#         n_te = self.n_te
-
-#         if i_rain_fed is not None:
-#             if np.sum(i_rain_fed)/n_s > 0.5: # np.sum(i_rain_fed) should be 1
-#                 rain_fed = True
-#             else:
-#                 rain_fed = False
-
-#         self.msg[fid] = {
-#             "Crop types": "optimize",
-#             "Irr tech": "optimize",
-#             "Rain-fed": (lambda o: "optimize" if o is None else o)(rain_fed)
-#             }
-
-#         i_crop_input = i_crop
-#         i_rain_fed_input = i_rain_fed
-#         i_te_input = i_te
-#         m = self.model
-
-#         inf = self.inf
-#         ymax = self.ymax
-#         wmax = self.wmax
-#         growth_period_ratio = self.growth_period_ratio
-#         ub_w = self.bounds.ub_w
-#         ub_irr = ub_w #ub_w - prec_aw
-#         self.bounds[fid].ub_irr = ub_irr
-
-#         unit_area = self.unit_area
-
-#         # Adjust prec_aw by the crop's growing period
-#         prec_aw = np.ones((n_s, n_c, n_h)) * prec_aw
-#         for c, crop in enumerate(self.crop_options):
-#             prec_aw[:, c, :] = prec_aw[:, c, :] * growth_period_ratio[crop]
-
-#         ### Add general variables
-#         irr     = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.irr(cm)", lb=0, ub=ub_irr)
-#         w       = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.w(cm)", lb=0, ub=ub_w)
-#         w_temp  = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.w_temp", lb=0, ub=inf)
-#         w_      = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.w_", lb=0, ub=1)
-#         y       = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.y(1e4bu)", lb=0, ub=inf)
-#         y_      = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.y_", lb=0, ub=1)
-#         yw_temp = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.yw_temp", lb=-inf, ub=1)
-#         yw_     = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.yw_", lb=0, ub=1)
-#         v_c     = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.v_c(m-ha)", lb=0, ub=inf)
-#         y_y     = m.addMVar((n_h), vtype="C", name=f"{fid}.y_y", lb=0, ub=1)    # avg y_ per yr
-#         v       = m.addMVar((n_h), vtype="C", name=f"{fid}.v(m-ha)", lb=0, ub=inf)
-#         i_crop  = m.addMVar((n_s, n_c, 1), vtype="B", name=f"{fid}.i_crop")
-#         i_rain_fed = m.addMVar((n_s, n_c, 1), vtype="B", name=f"{fid}.i_rain_fed")
-
-#         # Crop type is set to be the same accross the planning horizon.
-#         if i_crop_input is not None:
-#             # Fix i_crop if it is given.
-#             m.addConstr(i_crop == i_crop_input, name=f"c.{fid}.i_crop_input")
-#             self.msg[fid]["Crop types"] = "user input"
-#         # One unit area can only be planted one type of crops.
-#         m.addConstr(gp.quicksum(i_crop[:,j,:] for j in range(n_c)) == 1,
-#                     name=f"c.{fid}.i_crop")
-
-#         ### Include rain-fed option
-#         if rain_fed == True:
-#             # Given i_rain_fed,
-#             if i_rain_fed_input is not None:
-#                 m.addConstr(i_rain_fed == i_rain_fed_input,
-#                             name=f"c.{fid}.i_rain_fed_input")
-#                 self.msg[fid]["Rain-fed areas"] = "user input"
-
-#             # i_rain_fed[i, j, h] can be 1 only when i_crop[i, j, h] is 1.
-#             # Otherwise, it has to be zero.
-#             m.addConstr(i_crop - i_rain_fed >= 0,
-#                         name=f"c.{fid}.i_rain_fed")
-#             m.addConstr(irr == 0, name=f"c.{fid}.irr_rain_fed")
-#         elif rain_fed == False:
-#             m.addConstr(i_rain_fed == 0,
-#                         name=f"c.{fid}.no_i_rain_fed")
-#         else: # None => means optimize
-#             # i_rain_fed[i, j, h] can be 1 only when i_crop[i, j, h] is 1.
-#             # Otherwise, it has to be zero.
-#             m.addConstr(i_crop - i_rain_fed >= 0,
-#                         name=f"c.{fid}.i_rain_fed")
-#             m.addConstr(irr * i_rain_fed == 0, name=f"c.{fid}.irr_rain_fed")
-
-#         # See the numpy broadcast rules:
-#         # https://numpy.org/doc/stable/user/basics.broadcasting.html
-#         m.addConstr((w == irr + prec_aw), name=f"c.{fid}.w(cm)")
-#         m.addConstr((w_temp == w/wmax), name=f"c.{fid}.w_temp")
-#         m.addConstrs((w_[s,c,h] == gp.min_(w_temp[s,c,h], constant=1) \
-#                     for s in range(n_s) for c in range(n_c) for h in range(n_h)),
-#                     name=f"c.{fid}.w_")
-#         # Does not really help to improve the speed.
-#         #m.addConstr((w_ == w/wmax), name=f"c.{fid}.w_")
-
-#         # We force irr to be zero but prec_aw will add to w & w_, which will
-#         # output positive y_ leading to violation for y_y (< 1)
-#         # Also, we need to seperate yw_ and y_ into two constraints. Otherwise,
-#         # gurobi will crush. No idea why.
-#         a = self.a
-#         b = self.b
-#         c = self.c
-#         m.addConstr((yw_temp == (a * w_**2 + b * w_ + c)), name=f"c.{fid}.yw_temp")
-#         m.addConstrs((yw_[s,c,h] == gp.max_(yw_temp[s,c,h], constant=0) \
-#                     for s in range(n_s) for c in range(n_c) for h in range(n_h)),
-#                     name=f"c.{fid}.yw_")
-#         # Does not really help to improve the speed.
-#         #m.addConstr((yw_ == (a * w_**2 + b * w_ + c)), name=f"c.{fid}.yw_")
-
-#         m.addConstr((y_ == yw_ * i_crop), name=f"c.{fid}.y_")
-#         m.addConstr((y == y_ * ymax * unit_area * 1e-4), name=f"c.{fid}.y") # 1e4 bu
-#         m.addConstr((irr * (1-i_crop) == 0), name=f"c.{fid}.irr(cm)")
-#         cm2m = 0.01
-#         m.addConstr((v_c == irr * unit_area * cm2m), name=f"c.{fid}.v_c(m-ha)")
-#         m.addConstr(v == gp.quicksum(v_c[i,j,:] \
-#                     for i in range(n_s) for j in range(n_c)),
-#                     name=f"c.{fid}.v(m-ha)")
-#         m.addConstr(y_y == gp.quicksum( y_[i,j,:] \
-#                     for i in range(n_s) for j in range(n_c) ) / n_s,
-#                     name=f"c.{fid}.y_y")
-
-#         # Create variable for crop type change
-#         if isinstance(pre_i_crop, str):
-#             i_c = self.crop_options.index(pre_i_crop)
-#             pre_i_crop = np.zeros((n_s, n_c, 1))
-#             pre_i_crop[:, i_c, :] = 1
-#         i_crop_change_ = m.addMVar((n_s, n_c, 1), vtype="I", name=f"{fid}.i_crop_change_", lb=-1, ub=1)
-#         i_crop_change = m.addMVar((n_s, n_c, 1), vtype="B", name=f"{fid}.i_crop_change")
-#         m.addConstr(i_crop_change_ == i_crop - pre_i_crop, name=f"c.{fid}.i_crop_change_")
-#         m.addConstrs((i_crop_change[s,c,0] == gp.max_(i_crop_change_[s,c,0], constant=0) \
-#                     for s in range(n_s) for c in range(n_c)),
-#                     name=f"c.{fid}.i_crop_change")
-
-#         # Tech decisions
-#         techs = self.config.field.tech
-#         tech_options = self.tech_options
-
-#         q       = m.addMVar((n_h), vtype="C", name=f"{fid}.q(m-ha/d)", lb=0, ub=inf)
-#         l_pr    = m.addVar(vtype="C", name=f"{fid}.l_pr(m)", lb=0, ub=inf)
-#         i_te    = m.addMVar((n_te), vtype="B", name=f"{fid}.i_te")
-#         m.addConstr(q == gp.quicksum((techs[te][0] * v + techs[te][1]) * i_te[i] \
-#                     for i, te in enumerate(tech_options)), name=f"c.{fid}.q(m-ha/d)")
-#         m.addConstr(gp.quicksum(i_te[i] for i in range(n_te)) == 1,
-#                     name=f"c.{fid}.i_te")
-#         m.addConstr(l_pr == gp.quicksum( techs[te][2] * i_te[i] \
-#                     for i, te in enumerate(tech_options) ),
-#                     name=f"c.{fid}.l_pr(m)")
-
-#         # Given tech as an input
-#         if i_te_input is not None:
-#             self.msg[fid]["Irr tech"] = "user input"
-#             if isinstance(i_te_input, str):
-#                 te = i_te_input
-#                 i_te_input = np.zeros(n_te)
-#                 i_te_input[tech_options.index(i_te)] = 1
-#             else:
-#                 te = tech_options[list(i_te_input).index(1)]
-#             m.addConstr(i_te == i_te_input, name=f"c.{fid}.i_te_input")
-#             qa_input, qb_input, l_pr_input = techs[te]
-#             m.addConstr(l_pr == l_pr_input, name=f"c.{fid}.l_pr(m)_input")
-#             m.addConstr(i_te == i_te_input, name=f"c.{fid}.i_te(m)_input")
-
-#         # Create variable for tech change
-#         if isinstance(pre_i_te, str):
-#             i_t = self.tech_options.index(pre_i_te)
-#             pre_i_te = np.zeros((n_te))
-#             pre_i_te[i_t] = 1
-#         i_tech_change_ = m.addMVar((n_te), vtype="I", name=f"{fid}.i_tech_change_", lb=-1, ub=1)
-#         i_tech_change = m.addMVar((n_te), vtype="B", name=f"{fid}.i_tech_change")
-#         m.addConstr(i_tech_change_ == i_te - pre_i_te, name=f"c.{fid}.i_tech_change_")
-#         m.addConstrs((i_tech_change[t] == gp.max_(i_tech_change_[t], constant=0) \
-#                       for t in range(n_te)),
-#                       name=f"c.{fid}.i_crop_change")
-
-#         self.vars[fid].v = v
-#         self.vars[fid].y = y
-#         self.vars[fid].y_y = y_y
-#         self.vars[fid].irr = irr
-#         self.vars[fid].i_crop = i_crop
-#         self.vars[fid].i_rain_fed = i_rain_fed
-#         self.vars[fid].i_te = i_te
-#         self.vars[fid].l_pr = l_pr
-#         self.vars[fid].q = q
-
-#         self.vars[fid].pre_i_crop = pre_i_crop
-#         self.vars[fid].pre_i_te = pre_i_te
-#         self.vars[fid].i_crop_change = i_crop_change
-#         self.vars[fid].i_tech_change = i_tech_change
-
-#         self.vars[fid].rain_fed = rain_fed
-
-#         self.n_fields += 1

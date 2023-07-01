@@ -18,17 +18,17 @@ config = {
         "field_area": 50.,  # [ha]  Field size for a grid.
         "area_split": 1,    # [--]  Num of decision set for a field. The solving process will slow down starting from 3.
         "crop": {       # (ymax [bu], wmax[cm], a, b, c) fitted from the Risk Management Agency (RMS)
-            "corn":     [529.4576, 86.2247, -2.5015, 4.4387, -1.0886],
-            "sorghum":  [298.4854, 74.2298, -1.9321, 3.2821, -0.5777],
-            "soybeans": [168.6044, 78.5018, -2.2211, 3.8223, -0.7627],
-            "wheat":    [165.5539, 78.3709, -1.4087, 2.2448, -0.0896],
+            "corn":     [520.179, 79.4827, -4.0874, 6.4036, -1.635],
+            "sorghum":  [293.1682, 61.8959, -2.0082, 2.9031, -0.4178],
+            "soybeans": [168.6044, 72.9901, -3.3069, 5.0755, -1.0811],
+            "wheat":    [148.9766, 69.4979, -1.5776, 2.2792, 0.0215],
             "fallow":   [0., 100., 0, 0, 0.],
             },
         "tech": {   # (a [m3 -> m-ha], b [m3 -> m-ha], Lpr [m]) (McCarthy et al., 2020)
             "center pivot":      [0.0051, 0.268744, 28.12],
             "center pivot LEPA": [0.0058, 0.212206, 12.65]
             },
-        "growth_period": {
+        "growing_season": {
             "corn":     ["5/1", "10/3"],
             "sorghum":  ["6/2", "11/3"],
             "soybeans": ["6/2", "10/15"],
