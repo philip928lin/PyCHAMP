@@ -464,7 +464,7 @@ class Farmer(mesa.Agent):
         """
         selected_agt_id_in_network = self.selected_agt_id_in_network
         if selected_agt_id_in_network is None:
-            selected_agt_id_in_network = self.random.choice(self.agt_ids_in_network)
+            selected_agt_id_in_network = self.rngen.choice(self.agt_ids_in_network)
 
         agts_in_network = self.agts_in_network
 
