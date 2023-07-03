@@ -489,7 +489,7 @@ class OptModel():
                 i_te_input = np.zeros(n_te)
                 i_te_input[tech_options.index(te)] = 1
             else:
-                te = tech_options[list(i_te_input).index(1)]
+                te = tech_options[np.argmax(i_te_input)]
             m.addConstr(i_te == i_te_input, name=f"c.{fid}.i_te_input")
             qa_input, qb_input, l_pr_input = techs[te]
             m.addConstr(l_pr == l_pr_input, name=f"c.{fid}.l_pr(m)_input")
@@ -670,13 +670,13 @@ class OptModel():
             annual_tech_cost += i_te * cost_tech
 
             pre_i_te = vars[fid]['pre_i_te']
-            tech_change_cost_arr = self.tech_change_cost_matrix[np.where(pre_i_te == 1)[0][0], :]
+            tech_change_cost_arr = self.tech_change_cost_matrix[np.argmax(pre_i_te), :] # ==1
             i_tech_change = vars[fid]['i_tech_change']
             annual_tech_change_cost += tech_change_cost_arr * i_tech_change/n_h # uniformly allocate into planning horizon
 
             for s in range(n_s):
                 pre_i_crop = vars[fid]['pre_i_crop'][s, :, 0]
-                crop_change_cost_arr = self.crop_change_cost_matrix[np.where(pre_i_crop == 1)[0][0], :]
+                crop_change_cost_arr = self.crop_change_cost_matrix[np.argmax(pre_i_crop), :] # ==1
                 i_crop_change = vars[fid]['i_crop_change'][s, :, 0]
                 annual_crop_change_cost += crop_change_cost_arr * i_crop_change/n_h # uniformly allocate into planning horizon
         annual_cost = m.addMVar((n_h), vtype="C", name="annual_cost(1e4$)", lb=-inf, ub=inf)
@@ -1082,7 +1082,7 @@ class OptModel():
                 if sols_fid['rain_fed'] is True or sols_fid['rain_fed'] is None:
                     irr = sols_fid['irr'][:,:,0].sum(axis=1)
                     i_rain_fed = sols_fid['i_rain_fed']
-                    i_rain_fed[np.where(irr == 0), :, :] = 1
+                    i_rain_fed[np.where(irr <= 0), :, :] = 1 # avoid using irr == 0
                     sols_fid['i_rain_fed'] = i_rain_fed * sols_fid['i_crop']
 
             # Update remaining water rights
@@ -1114,9 +1114,10 @@ class OptModel():
             for fid in fids:
                 sols_fid = sols[fid]
                 i_crop = sols_fid['i_crop'][:, :, 0]
-                crop_type = [crop_options[np.where(i_crop[s,:].round(0) == 1)[0][0]] for s in range(n_s)]
-                tech = tech_options[np.where(sols_fid['i_te'][:].round(0) == 1)[0][0]]
-                Irrigated = list((sols_fid['i_rain_fed'][:, :, 0].sum(axis=1).round(0) == 0))
+                # Avoid using == 0 or 1 => some time have numerical issue
+                crop_type = [crop_options[np.argmax(i_crop[s,:])] for s in range(n_s)]
+                tech = tech_options[np.argmax(sols_fid['i_te'][:])[0][0]]
+                Irrigated = list((sols_fid['i_rain_fed'][:, :, 0].sum(axis=1).round(0) <= 0))
                 decisions[fid] = {"Crop types": crop_type,
                                   "Irr tech": tech,
                                   "Irrigated": Irrigated}
