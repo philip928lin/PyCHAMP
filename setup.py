@@ -10,9 +10,9 @@ with open("README.md", "r", encoding='utf8') as fh:
   README = fh.read()
   
     
-setup(name='miniCHAMP',
-      version='0.0.0',
-      description='miniCHAMP',
+setup(name='py_champ',
+      version='1.0.0',
+      description='CHAMP',
       long_description=README,
       long_description_content_type="text/markdown",
       url='https://github.com/philip928lin/miniCHAMP',
@@ -20,7 +20,7 @@ setup(name='miniCHAMP',
       author_email='philip928lin@gmail.com',
       license='--',
       packages=find_packages(), #['miniCHAMP'],
-      install_requires = ["numpy", "pandas", "dotmap", "gurobipy"],
+      install_requires = ["numpy", "pandas", "gurobipy"],
       classifiers=[
         #"License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
         "Framework :: IPython",

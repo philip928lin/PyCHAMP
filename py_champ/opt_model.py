@@ -1116,7 +1116,7 @@ class OptModel():
                 i_crop = sols_fid['i_crop'][:, :, 0]
                 # Avoid using == 0 or 1 => some time have numerical issue
                 crop_type = [crop_options[np.argmax(i_crop[s,:])] for s in range(n_s)]
-                tech = tech_options[np.argmax(sols_fid['i_te'][:])[0][0]]
+                tech = tech_options[np.argmax(sols_fid['i_te'][:])]
                 Irrigated = list((sols_fid['i_rain_fed'][:, :, 0].sum(axis=1).round(0) <= 0))
                 decisions[fid] = {"Crop types": crop_type,
                                   "Irr tech": tech,
