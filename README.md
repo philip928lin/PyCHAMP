@@ -1,10 +1,10 @@
-# miniCHAMP
+# PyCHAMP
 
 To install a package that includes a setup.py file, open a command or terminal window and:
 
 1. cd into the root directory where setup.py is located.
 
-2. Enter: `pip install miniCHAMP`.
+2. Enter: `python setup.py install` or  `pip install py_champ`.
 
 Other required packages:
 
