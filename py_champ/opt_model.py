@@ -208,6 +208,10 @@ class OptModel():
         self.a = crop_par[:, 2].reshape((-1, 1))        # (n_c, 1)
         self.b = crop_par[:, 3].reshape((-1, 1))        # (n_c, 1)
         self.c = crop_par[:, 4].reshape((-1, 1))        # (n_c, 1)
+        try:
+            self.min_y_pct = crop_par[:, 5].reshape((-1, 1))        # (n_c, 1)
+        except:
+            self.min_y_pct = np.zeros((self.n_c, 1))
 
         self.unit_area = config_field['field_area']/self.n_s
         # For consumat
@@ -369,6 +373,11 @@ class OptModel():
         prec_aw_ = np.ones((n_s, n_c, n_h))
         for ci, crop in enumerate(self.crop_options):
             prec_aw_[:, ci, :] = prec_aw[crop]
+            
+        # Approximate robust optimization by prorating prec_aw with a ratio 
+        uncertainty_ratio = 1
+        for hi in range(n_h):
+            prec_aw_[:, :, hi] = prec_aw_[:, :, hi] * uncertainty_ratio**hi
 
         ### Add general variables
         irr     = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.irr(cm)", lb=0, ub=ub_irr)
@@ -378,6 +387,7 @@ class OptModel():
         y       = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.y(1e4bu)", lb=0, ub=inf)
         y_      = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.y_", lb=0, ub=1)
         yw_temp = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.yw_temp", lb=-inf, ub=1)
+        yw_bi   = m.addMVar((n_s, n_c, n_h), vtype="B", name=f"{fid}.yw_bi")
         yw_     = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.yw_", lb=0, ub=1)
         v_c     = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.v_c(m-ha)", lb=0, ub=inf)
         y_y     = m.addMVar((n_h), vtype="C", name=f"{fid}.y_y", lb=0, ub=1)    # avg y_ per yr
@@ -436,9 +446,20 @@ class OptModel():
         b = self.b
         c = self.c
         m.addConstr((yw_temp == (a * w_**2 + b * w_ + c)), name=f"c.{fid}.yw_temp")
-        m.addConstrs((yw_[s,c,h] == gp.max_(yw_temp[s,c,h], constant=0) \
-                    for s in range(n_s) for c in range(n_c) for h in range(n_h)),
+        
+        # Minimum yield_pct cutoff
+        min_y_pct = self.min_y_pct
+        
+        m.addConstr((yw_bi * (yw_temp - min_y_pct) + (1-yw_bi) * (min_y_pct - yw_temp) >= 0),
+                    name=f"c.{fid}.yw_bi")
+        m.addConstr((yw_ == yw_bi * yw_temp + (1-yw_bi) * min_y_pct),
                     name=f"c.{fid}.yw_")
+        
+        # m.addConstrs((yw_[s,c,h] == gp.max_(yw_temp[s,c,h], constant=0) \
+        #             for s in range(n_s) for c in range(n_c) for h in range(n_h)),
+        #             name=f"c.{fid}.yw_")
+        
+        
         # Does not really help to improve the speed.
         #m.addConstr((yw_ == (a * w_**2 + b * w_ + c)), name=f"c.{fid}.yw_")
 
@@ -700,7 +721,7 @@ class OptModel():
         vars['rev'] = rev
 
     def setup_constr_wr(self, water_right_id, wr, field_id_list="all",
-                        time_window=1, i_tw=1, remaining_wr=None,
+                        time_window=1, remaining_tw=None, remaining_wr=None,
                         tail_method="proportion"):
         """
         Add water rights constraints. You can assign multiple water rights
@@ -724,11 +745,9 @@ class OptModel():
         time_window : int, optional
             If given, the water right constrains the total irrigation depth
             over the time window. The default is 1.
-        i_tw : int, optional
-            In which year of the time window. For example, i_tw=2 means the
-            starting time step of this optimization is in the second year of
-            this constraint's time window. This is useful the continueous
-            simulation. The default is 1.
+        remaining_tw : int, optional
+            Remaining year of time window that remaining_wr will apply to. The 
+            default is None.
         remaining_wr : float, optional
             The remaining water rights left in the previous unused time window
             [cm]. The default is None.
@@ -769,31 +788,28 @@ class OptModel():
                     irr_sub += vars[fid]['irr']
             irr_sub = irr_sub/len(fids)
 
-        start_index = i_tw-1
         # Initial period
         # The structure is to fit within a larger simulation framework, which
         # we allow the remaining water rights that are not used in the previous
         # year.
         c_i = 0
-        if start_index !=0 and remaining_wr is not None:
-            if start_index > n_h: # Ensure within the planning horizon
-                start_index = min(n_h, start_index + 1) - 1
-                print("Warning: start_index is larger than (horizon - 1).")
+        
+        if remaining_tw is not None and remaining_wr is not None:
             m.addConstr(
                 gp.quicksum(irr_sub[i,j,h] \
                 for i in range(n_s) for j in range(n_c) \
-                for h in range(0, start_index + 1))/n_s <= remaining_wr,
+                for h in range(remaining_tw))/n_s <= remaining_wr,
                 name=f"c.{water_right_id}.wr_{c_i}(cm)"
                 )
             c_i += 1
+            start_index = remaining_tw
+            remaining_length = n_h - remaining_tw
         else:
-            remaining_wr = wr
             start_index = 0
-
-        remaining_length = n_h - start_index
+            remaining_length = n_h
 
         # Middle period
-        while remaining_length > time_window:
+        while remaining_length >= time_window:
             m.addConstr(
                 gp.quicksum(irr_sub[i,j,h] \
                 for i in range(n_s) for j in range(n_c) \
@@ -804,13 +820,15 @@ class OptModel():
             start_index += time_window
             remaining_length -= time_window
 
-        # Last period
+        # Last period (if any)
         if remaining_length > 0:
             if tail_method == "proportion":
                 wr_tail = wr * remaining_length/time_window
             elif tail_method == "all":
                 wr_tail = wr
             # Otherwise, we expect a value given by users.
+            else:
+                wr_tail = tail_method
 
             m.addConstr(
                 gp.quicksum(irr_sub[i,j,h] \
@@ -825,15 +843,27 @@ class OptModel():
         # Record for the next run. Assume the simulation runs annually and will
         # apply the irr solved by the opt model.
         # This record will be updated in solve() and add to the sols.
-        if time_window == 1 or i_tw == time_window:
-            # i_tw == time_window => Next year start a new round.
+        if time_window == 1: 
             remaining_wr = None
+            remaining_tw = None
+        else:
+            if remaining_tw is None: # This is the first year of the tw.
+                remaining_wr = wr  # wait to be updated
+                remaining_tw = time_window - 1
+            elif (remaining_tw - 1) == 0:
+                # remaining_tw - 1 = 0 means that next year will be a new round.
+                remaining_wr = None # will not updated
+                remaining_tw = time_window
+            else:
+                # remaining_wr = remaining_wr
+                remaining_tw -= 1
+            
         self.wrs_info[water_right_id] = {
             "wr": wr,
             "field_id_list": field_id_list,
             "time_window": time_window,
-            "i_tw": i_tw,
-            "remaining_wr": remaining_wr,
+            "remaining_tw": remaining_tw, # Assume we optimize on a rolling basis
+            "remaining_wr": remaining_wr, # If not None, the number will be updated later
             "tail_method": tail_method
             }
 
@@ -1099,8 +1129,7 @@ class OptModel():
                             else:
                                 irr_sub += sols[fid]['irr']
                         irr_sub = irr_sub/len(fids)
-                    v['remaining_wr'] = v['remaining_wr'] - np.sum(irr_sub[:, :, 0])
-                v['i_tw'] = v['i_tw'] % v['time_window'] + 1
+                    v['remaining_wr'] -= np.sum(irr_sub[:, :, 0])
             sols['water_rights'] = wrs_info
 
             # Display report

@@ -8,6 +8,13 @@ without permission.
 
 Suggestion:
     1. We could adopt yaml format in the future.
+    
+old format
+"corn":     [520.179, 79.4827, -4.0874, 6.4036, -1.635],
+"sorghum":  [293.1682, 61.8959, -2.0082, 2.9031, -0.4178],
+"soybeans": [168.6044, 72.9901, -3.3069, 5.0755, -1.0811],
+"wheat":    [148.9766, 69.4979, -1.5776, 2.2792, 0.0215],
+"fallow":   [0., 100., 0, 0, 0.],
 """
 # =============================================================================
 # config file collecting general info for miniCHAMP.
@@ -17,12 +24,13 @@ config = {
     "field": {
         "field_area": 50.,  # [ha]  Field size for a grid.
         "area_split": 1,    # [--]  Num of decision set for a field. The solving process will slow down starting from 3.
-        "crop": {       # (ymax [bu], wmax[cm], a, b, c) fitted from the Risk Management Agency (RMS)
-            "corn":     [520.179, 79.4827, -4.0874, 6.4036, -1.635],
-            "sorghum":  [293.1682, 61.8959, -2.0082, 2.9031, -0.4178],
-            "soybeans": [168.6044, 72.9901, -3.3069, 5.0755, -1.0811],
-            "wheat":    [148.9766, 69.4979, -1.5776, 2.2792, 0.0215],
-            "fallow":   [0., 100., 0, 0, 0.],
+        "crop": {       # (ymax [bu], wmax[cm], a, b, c, min_yield_pct) fitted from the Risk Management Agency (RMS)
+                        # If min_yield_pct is not given, default is zero.
+            "corn":     [491.6036, 77.7756, -3.9677, 6.1283, -1.5745, 0.1151],
+            "sorghum":  [293.1682, 60.152, -2.267, 3.2361, -0.4907, 0.4],
+            "soybeans": [168.6044, 68.7955, -3.9376, 5.6797, -1.1822, 0.1186],
+            "wheat":    [148.9766, 69.4979, -2.2698, 3.0036, -0.0893, 0.4294],
+            "fallow":   [0., 100., 0, 0, 0., 0],
             },
         "tech": {   # (a [m3 -> m-ha], b [m3 -> m-ha], Lpr [m]) (McCarthy et al., 2020)
             "center pivot":      [0.0051, 0.268744, 28.12],

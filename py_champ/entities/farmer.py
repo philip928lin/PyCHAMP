@@ -372,7 +372,7 @@ class Farmer(mesa.Agent):
                         water_right_id=wr_id, wr=v["wr"],
                         field_id_list=v['field_id_list'],
                         time_window=v['time_window'],
-                        i_tw=v['i_tw'],
+                        remaining_tw=v['remaining_tw'],
                         remaining_wr=v['remaining_wr'],
                         tail_method=v['tail_method']
                         )
@@ -381,7 +381,7 @@ class Farmer(mesa.Agent):
                         water_right_id=wr_id, wr=wr_args['wr'],
                         field_id_list=wr_args['field_id_list'],
                         time_window=wr_args['time_window'],
-                        i_tw=wr_args['i_tw'],
+                        remaining_tw=wr_args['remaining_tw'],
                         remaining_wr=wr_args['remaining_wr'],
                         tail_method=wr_args['tail_method']
                         )
