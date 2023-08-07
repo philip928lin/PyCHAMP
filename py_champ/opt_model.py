@@ -679,7 +679,7 @@ class OptModel():
         y = vars['y']     # (n_s, n_c, n_h) [1e4 bu]
 
         cost_e = m.addMVar((n_h), vtype="C", name="cost_e(1e4$)", lb=0, ub=inf)
-        rev = m.addMVar((n_h), vtype="C", name="rev(1e4$)", lb=0, ub=inf)
+        rev = m.addMVar((n_h), vtype="C", name="rev(1e4$)", lb=-inf, ub=inf)
 
         cost_tech = np.array([cf['irr_tech_operational_cost'][te] for te in tech_options])
 
