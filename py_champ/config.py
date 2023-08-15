@@ -15,6 +15,11 @@ old format
 "soybeans": [168.6044, 72.9901, -3.3069, 5.0755, -1.0811],
 "wheat":    [148.9766, 69.4979, -1.5776, 2.2792, 0.0215],
 "fallow":   [0., 100., 0, 0, 0.],
+
+"corn":     [491.6036, 77.7756, -3.9677, 6.1283, -1.5745, 0.1151],
+"sorghum":  [293.1682, 60.152, -2.267, 3.2361, -0.4907, 0.4],
+"soybeans": [168.6044, 68.7955, -3.9376, 5.6797, -1.1822, 0.1186],
+"wheat":    [148.9766, 69.4979, -2.2698, 3.0036, -0.0893, 0.4294],
 """
 # =============================================================================
 # config file collecting general info for miniCHAMP.
@@ -26,10 +31,11 @@ config = {
         "area_split": 1,    # [--]  Num of decision set for a field. The solving process will slow down starting from 3.
         "crop": {       # (ymax [bu], wmax[cm], a, b, c, min_yield_pct) fitted from the Risk Management Agency (RMS)
                         # If min_yield_pct is not given, default is zero.
-            "corn":     [491.6036, 77.7756, -3.9677, 6.1283, -1.5745, 0.1151],
-            "sorghum":  [293.1682, 60.152, -2.267, 3.2361, -0.4907, 0.4],
-            "soybeans": [168.6044, 68.7955, -3.9376, 5.6797, -1.1822, 0.1186],
-            "wheat":    [148.9766, 69.4979, -2.2698, 3.0036, -0.0893, 0.4294],
+            # 2008 - 2022 data
+            "corn":     [439.2302, 77.7756, -3.2904, 5.9082, -1.6521, 0.1294],
+            "sorghum":  [178.2362, 60.152, -1.9572, 3.5132, -0.5766, 0.6246],
+            "soybeans": [134.7049, 68.7955, -2.1413, 3.8485, -0.7292, 0.1316],
+            "wheat":    [113.7038, 69.4979, -1.5576, 2.5687, -0.0591, 0.4498],
             "fallow":   [0., 100., 0, 0, 0., 0],
             },
         "tech": {   # (a [m3 -> m-ha], b [m3 -> m-ha], Lpr [m]) (McCarthy et al., 2020)
@@ -64,8 +70,8 @@ config = {
             "fallow":   0.
             },
         "irr_tech_operational_cost": {  # [1e4$]
-            "center pivot":         0,
-            "center pivot LEPA":    0
+            "center pivot":         1.876,
+            "center pivot LEPA":    1.876
             },
         "irr_tech_change_cost": {   # If not specify, 0 is the default.
             ("center pivot", "center pivot LEPA"): 0,

@@ -46,6 +46,9 @@ class Farmer(mesa.Agent):
         # Load other kwargs
         for k, v in kwargs.items():
             setattr(self, k, v)
+        if "opt_inputs_records" not in kwargs:
+            self.opt_inputs_records = [[], [], 0]
+        self.fix_state = kwargs.get("fix_state")
         #========
         self.agt_id = agt_id
         self.crop_options = crop_options
@@ -166,6 +169,9 @@ class Farmer(mesa.Agent):
             self.make_dm_repetition()
         elif state == "Deliberation":
             self.make_dm_deliberation()
+        
+        elif state == 'FixCrop':
+            self.make_dm_deliberation()
 
         # Retrieve opt info
         dm_sols = self.dm_sols
@@ -246,15 +252,22 @@ class Farmer(mesa.Agent):
         eval_metric = dm_args["eval_metric"]
         satisfaction = needs[eval_metric]
         expected_sa = dm_sols["Sa"][eval_metric]
-        uncertainty = abs(expected_sa - satisfaction)
+        
+        #uncertainty = abs(expected_sa - satisfaction)
+        
+        expected_sa_t_1 = self.expected_sa
+        if expected_sa_t_1 is None:
+            uncertainty = abs(expected_sa - satisfaction)
+        else:
+            uncertainty = abs(expected_sa_t_1 - satisfaction)
 
         # Update CONSUMAT state
-        #self.expected_sa = expected_sa
         self.satisfaction = satisfaction
         self.expected_sa = expected_sa
         self.uncertainty = uncertainty
         sa_thre = self.sa_thre
         un_thre = self.un_thre
+        
         if satisfaction >= sa_thre and uncertainty >= un_thre:
             self.state = "Imitation"
         elif satisfaction < sa_thre and uncertainty >= un_thre:
@@ -263,7 +276,10 @@ class Farmer(mesa.Agent):
             self.state = "Repetition"
         elif satisfaction < sa_thre and uncertainty < un_thre:
             self.state = "Deliberation"
-
+        
+        if self.fix_state is not None:
+            self.state = self.fix_state # "Deliberation"
+        
     def make_dm(self, state, dm_sols, init=False):
         """
         Make decisions.
@@ -284,19 +300,170 @@ class Farmer(mesa.Agent):
             Solution dictionary from dm_model.
 
         """
-
         aquifers = self.aquifers
         dm_args = self.dm_args
-
         fields = self.fields
         wells = self.wells
+        
+        # This becomes very slow
+        # # Form opt inputs dict for comparison purpose
+        # ini = {
+        #     "config": self.config,
+        #     "horizon": dm_args["horizon"],
+        #     "eval_metric": dm_args["eval_metric"],
+        #     "crop_options": self.crop_options,
+        #     "tech_options": self.tech_options,
+        #     "approx_horizon": dm_args["approx_horizon"]
+        #     }
+        # opt_inputs = {
+        #     "init": init,
+        #     "state": state,
+        #     "fields": {},
+        #     "wells": {},
+        #     "wr": {},
+        #     }
+        # for fi, field in fields.items():
+        #     dm_sols_fi = dm_sols[fi]
+        #     if init:
+        #         opt_inputs["fields"][fi] = {
+        #             'field_id': fi,
+        #             'prec_aw': field.perceived_prec_aw,
+        #             'pre_i_crop': dm_sols_fi['pre_i_crop'],
+        #             'pre_i_te': dm_sols_fi['pre_i_te'],
+        #             'rain_fed': field.rain_fed,
+        #             'i_crop': dm_sols_fi['i_crop'],
+        #             'i_rain_fed': None,
+        #             'i_te': dm_sols_fi['i_te']
+        #             }
+        #     elif state == "FixCrop":
+        #         opt_inputs["fields"][fi] = {
+        #             'field_id': fi,
+        #             'prec_aw': field.perceived_prec_aw,
+        #             'pre_i_crop': dm_sols_fi['pre_i_crop'],
+        #             'pre_i_te': dm_sols_fi['pre_i_te'],
+        #             'rain_fed': field.rain_fed,
+        #             'i_crop': dm_sols_fi['i_crop'],
+        #             'i_rain_fed': None,
+        #             'i_te': dm_sols_fi['i_te']
+        #             }
+        #     elif state == "Deliberation": # Opt adaptation options
+        #         opt_inputs["fields"][fi] = {
+        #             'field_id': fi,
+        #             'prec_aw': field.perceived_prec_aw,
+        #             'pre_i_crop': dm_sols_fi['pre_i_crop'],
+        #             'pre_i_te': dm_sols_fi['pre_i_te'],
+        #             'rain_fed': field.rain_fed,
+        #             'i_crop': None,
+        #             'i_rain_fed': None,
+        #             'i_te': dm_sols_fi['i_te']   # !!! Fix this
+        #             }
+        #     else: # Opt only irr
+        #         opt_inputs["fields"][fi] = {
+        #             'field_id': fi,
+        #             'prec_aw': field.perceived_prec_aw,
+        #             'pre_i_crop': dm_sols_fi['pre_i_crop'],
+        #             'pre_i_te': dm_sols_fi['pre_i_te'],
+        #             'rain_fed': field.rain_fed,
+        #             'i_crop': dm_sols_fi['i_crop'],
+        #             'i_rain_fed': dm_sols_fi['i_rain_fed'],
+        #             'i_te': dm_sols_fi['i_te']   # !!! Fix this
+        #             }
+        
+        # for wi, well in wells.items():
+        #     aquifer_id = well.aquifer_id
+        #     proj_dwl = np.mean(aquifers[aquifer_id].dwl_list[-dm_args['n_dwl']:])
+        #     opt_inputs["wells"][wi] = {
+        #         'well_id': wi, 'dwl': proj_dwl, 'st': well.st,
+        #         'l_wt': well.l_wt, 'r': well.r, 'k': well.k,
+        #         'sy': well.sy, 'eff_pump': well.eff_pump,
+        #         'eff_well': well.eff_well,
+        #         'pumping_capacity': well.pumping_capacity
+        #         }
+            
+        # if init: # Inputted
+        #     water_rights = self.water_rights
+        # else: # Use agent's own water rights (for social comparison and imitation)
+        #     water_rights = self.dm_sols["water_rights"]
 
-        # Locally create OptModel to make the Farmer object pickable for
-        # parallel computing.
-        # Note that do not store OptModel(name=agt_id) as agent's attribute as
-        # OptModel is not pickable for parallel computing.
+        # for wr_id, v in self.water_rights.items():
+        #     if v["status"]: # Check whether the wr is activated
+        #         # Extract the water right setting from the previous opt run,
+        #         # which we record the remaining water right fromt the previous
+        #         # year. If the wr is newly activate in a simulation, then we
+        #         # use the input to setup the wr.
+        #         wr_args = water_rights.get(wr_id)
+        #         if wr_args is None: # when first time introduce the water rights
+        #             opt_inputs["wr"][wr_id] = {
+        #                 'water_right_id': wr_id,
+        #                 'wr': v["wr"],
+        #                 'field_id_list': v['field_id_list'],
+        #                 'time_window': v['time_window'],
+        #                 'remaining_tw': v['remaining_tw'],
+        #                 'remaining_wr': v['remaining_wr'],
+        #                 'tail_method': v['tail_method']
+        #                 }
+        #         else:
+        #             opt_inputs["wr"][wr_id] = {
+        #                 'water_right_id': wr_id,
+        #                 'wr': wr_args["wr"],
+        #                 'field_id_list': wr_args['field_id_list'],
+        #                 'time_window': wr_args['time_window'],
+        #                 'remaining_tw': wr_args['remaining_tw'],
+        #                 'remaining_wr': wr_args['remaining_wr'],
+        #                 'tail_method': wr_args['tail_method']
+        #                 }
+
+        # # Locally create OptModel to make the Farmer object pickable for
+        # # parallel computing.
+        # # Note that do not store OptModel(name=agt_id) as agent's attribute as
+        # # OptModel is not pickable for parallel computing.
+        # #opt_inputs_records = self.opt_inputs_records
+        
+        
+        # # Check whether the same setting has been solved before
+        # #import dictdiffer
+        # # this does not work so many different
+        # # try:
+        # #     idx = opt_inputs_records[0].index(opt_inputs)
+        # #     dm_sols = opt_inputs_records[1][idx]
+        # #     opt_inputs_records[2] += 1
+            
+        # #     # for diff in list(dictdiffer.diff(opt_inputs_records[0][0], opt_inputs)):
+        # #     #     print(diff)
+            
+        # # except ValueError:
+        # #     idx = None
+        
+        # #if idx is None:
+        # # Run optimization
+        # dm = OptModel(name=self.agt_id,
+        #               LogToConsole=self.config_gurobi.get("LogToConsole"))
+        # dm.setup_ini_model(**ini)
+        # for fi, field in opt_inputs["fields"].items():
+        #     dm.setup_constr_field(**field)
+        # for wi, well in opt_inputs["wells"].items():
+        #     dm.setup_constr_well(**well)
+        # for wr_id, wr in opt_inputs["wr"].items():
+        #     dm.setup_constr_wr(**wr)
+        # dm.setup_constr_finance()
+        # dm.setup_obj(alpha_dict=dm_args['alphas'])
+        # dm.finish_setup(display_summary=dm_args['display_summary'])
+        # dm.solve(
+        #     keep_gp_model=dm_args['keep_gp_model'],
+        #     keep_gp_output=dm_args['keep_gp_output'],
+        #     display_report=dm_args['display_report']
+        #     )
+        # dm_sols = dm.sols
+        # dm.depose_gp_env()  # Release memory
+            
+        #     # Save the record
+        #     # opt_inputs_records[0].append(opt_inputs)
+        #     # opt_inputs_records[1].append(dm_sols)
+            
+        # return dm_sols
+        
         dm = OptModel(name=self.agt_id,
-                      LogToConsole=self.config_gurobi.get("LogToConsole"))
+                       LogToConsole=self.config_gurobi.get("LogToConsole"))
         dm.setup_ini_model(
             config=self.config,
             horizon=dm_args["horizon"],
@@ -318,9 +485,18 @@ class Farmer(mesa.Agent):
                     i_rain_fed=None,
                     i_te=dm_sols_fi['i_te']
                     )
-                continue
-
-            if state == "Deliberation":
+            elif state == "FixCrop":
+                dm.setup_constr_field(
+                    field_id=fi,
+                    prec_aw=field.perceived_prec_aw,
+                    pre_i_crop=dm_sols_fi['pre_i_crop'],
+                    pre_i_te=dm_sols_fi['pre_i_te'],
+                    rain_fed=field.rain_fed,
+                    i_crop=dm_sols_fi['i_crop'],
+                    i_rain_fed=None,
+                    i_te=dm_sols_fi['i_te']
+                    )
+            elif state == "Deliberation":
                 dm.setup_constr_field(
                     field_id=fi,
                     prec_aw=field.perceived_prec_aw,
@@ -397,6 +573,7 @@ class Farmer(mesa.Agent):
         dm_sols = dm.sols
         dm.depose_gp_env()  # Release memory
         return dm_sols
+    
 
     def make_dm_deliberation(self):
         """
