@@ -1,89 +1,51 @@
 r"""
 The code is developed by Chung-Yi Lin at Virginia Tech, in April 2023.
 Email: chungyi@vt.edu
-Last modified on Sep 6, 2023
+Last modified on Jun 10, 2023
+
+WARNING: This code is not yet published, please do not distributed the code
+without permission.
 """
 import numpy as np
 import mesa
-from scipy.stats import truncnorm
-from .opt_model import OptModel
+from ..opt_model import OptModel
 from ..util import Box
 
 class Farmer(mesa.Agent):
     """
-    Represents a Farmer agent in an agent-based model.
+    A farmer agent class.
 
     Attributes
     ----------
     agt_id : str or int
-        Unique identifier for the agent.
+        Agent id.
     config : dict or DotMap
-        General configuration information for the model.
+        General info of the model.
     agt_attrs : dict
-        Agent-specific attributes for simulation.
+        This dictionary contains all attributes and settings to the agent's
+        simulation.
     prec_aw_dict : dict
-        Dictionary with precipitation data with field_id as its key and annual 
-        precipitation during growing season as its value.
+        A dictionary with field_id as its key and annual precipitation during
+        growing season as its value.
     aquifers : dict
         A dictionary contain aquifer objects. The key is aquifer id.
     model : object
-        Reference to the overarching MESA model instance.
+        MESA model object for a datacollector.
     """
-    def __init__(self, agt_id, mesa_model, config, agt_attrs, 
-                 fields, wells, finance, aquifers,
-                 ini_year,
+    def __init__(self, agt_id, config, agt_attrs, fields, wells, finance,
+                 aquifers, prec_aw_dict, model,
                  crop_options, tech_options, **kwargs):
         """
-        Initialize a Farmer agent.
+        Setup an agent (farmer).
 
-        Parameters
-        ----------
-        agt_id : str or int
-            Unique identifier for the agent.
-        mesa_model : object
-            Reference to the overarching MESA model instance.
-        config : dict or DotMap
-            General configuration information for the model.
-        agt_attrs : dict
-            Agent-specific attributes for simulation.
-        fields : dict
-            A dictionary contains the fields the farmer owns.
-        wells : dict
-            A dictionary contains the wells the farmer owns.
-        finance : object
-            Financial object for the agent.
-        aquifers : dict
-            A dictionary contain aquifer objects. The key is aquifer id.
-        ini_year : int
-            Initial simulation year
-        crop_options : dict
-            Available crop options for the farmer.
-        tech_options : dict
-            Available technology options for the farmer.
-        kwargs : dict, optional
-            Additional optional arguments.
-
-        Notes
-        -----
-        The `kwargs` could contain any additional attributes that you want to
-        add to the Farmer agent. Available keywords include
-        fix_state : str
-            "Imitation", "Social comparison", "Repetition", "Deliberation", 
-            and "FixCrop".  
-        rngen : object
-            Numpy random generator
-        
         """
-        super().__init__(agt_id, mesa_model)
+        super().__init__(agt_id, model)
         # MESA required attributes
         self.unique_id = agt_id
-        self.agt_type = "Farmer"
 
         # Load other kwargs
         for k, v in kwargs.items():
             setattr(self, k, v)
-            
-        self.fix_state = kwargs.get("fix_state")
         #========
         self.agt_id = agt_id
         self.crop_options = crop_options
@@ -98,6 +60,8 @@ class Farmer(mesa.Agent):
         self.load_config(config)
 
         # Assign agt's assets
+        # This container is built for dot access to fields and wells
+
         self.aquifers = aquifers
         self.fields = fields
         self.Fields = Box(fields) # same as self.fields but with dotted access
@@ -112,21 +76,13 @@ class Farmer(mesa.Agent):
         self.uncertainty = None
         self.irr_vol = None         # m-ha
         self.profit = None
-        self.yield_pct = None
-        
         self.scaled_profit = None
         self.scaled_yield_pct = None
-        
+        self.yield_pct = None
         self.needs = {}
         self.agts_in_network = {}   # This will be dynamically updated in a simulation
         self.selected_agt_id_in_network = None # This will be populated after social comparison
-        
-        # Some other attributes
-        self.t = 0
-        self.current_year = ini_year
-        self.percieved_risks = None
-        self.perceived_prec_aw = None
-        
+
         # Initialize dm_sol (mimicing opt_model's output)
         dm_sols = {}
         for fi, field in self.fields.items():
@@ -139,7 +95,11 @@ class Farmer(mesa.Agent):
         # fixed.
         self.dm_sols = self.make_dm(None, dm_sols=dm_sols, init=True)
         # Run the simulation to calculate satisfication and uncertainty
+        self.update_climate_input(prec_aw_dict)
         self.run_simulation() # aquifers
+
+        # Some other attributes
+        self.t = 0
 
     def load_config(self, config):
         """
@@ -167,57 +127,22 @@ class Farmer(mesa.Agent):
         self.config_gurobi = config["gurobi"]
         self.config = config  # for opt only
 
-    def process_percieved_risks(self, par_perceived_risk):
-        for fi, field in self.fields.items():
-            #Compute perceived_prec_aw based on perceived_risk
-            truncated_normal_pars = field.truncated_normal_pars
-            percieved_risks = {
-                crop: 0 if crop=="fallow" else \
-                    round(
-                        truncnorm.ppf(
-                            q=par_perceived_risk,
-                            a=truncated_normal_pars[crop][0],
-                            b=truncated_normal_pars[crop][1],
-                            loc=truncated_normal_pars[crop][2],
-                            scale=truncated_normal_pars[crop][3]),
-                        4
-                    ) for crop in self.crop_options}
-        self.percieved_risks = percieved_risks
-    
-    def update_perceived_prec_aw(self, par_forecast_trust, year):
-        # year != self.current_year (should be one step ahead)
-        # Blend agt's original perceived prec_aw with the perfect prec_aw
-        # forecast before the optimization.
-        fotr = par_forecast_trust
-        perceived_prec_aw = {}
-        for fi, field in self.fields.items():
-            percieved_risks = self.percieved_risks
-            prec_aw = field.prec_aw_step[year]
-            perceived_prec_aw_f = {
-                crop: round(percieved_risks[crop]*(1-fotr) + prec_aw[crop]*fotr, 4) \
-                    for crop in percieved_risks
-                }
-            perceived_prec_aw[fi] = perceived_prec_aw_f
-        self.perceived_prec_aw = perceived_prec_aw
-        
-        
-        
-    # def update_climate_input(self, prec_aw_dict):
-    #     """
-    #     Update the climate input before the step simulation.
+    def update_climate_input(self, prec_aw_dict):
+        """
+        Update the climate input before the step simulation.
 
-    #     Parameters
-    #     ----------
-    #     prec_aw_dict : dict
-    #         A dictionary with field_id as its key and annual precipitation during
-    #         growing season as its value.
+        Parameters
+        ----------
+        prec_aw_dict : dict
+            A dictionary with field_id as its key and annual precipitation during
+            growing season as its value.
 
-    #     Returns
-    #     -------
-    #     None.
+        Returns
+        -------
+        None.
 
-    #     """
-    #     self.prec_aw_dict = prec_aw_dict
+        """
+        self.prec_aw_dict = prec_aw_dict
 
     def step(self):
         """
@@ -229,8 +154,7 @@ class Farmer(mesa.Agent):
 
         """
         self.t += 1
-        self.current_year += 1
-        
+
         ### Optimization
         # Make decisions based on CONSUMAT theory
         state = self.state
@@ -241,10 +165,6 @@ class Farmer(mesa.Agent):
         elif state == "Repetition":
             self.make_dm_repetition()
         elif state == "Deliberation":
-            self.make_dm_deliberation()
-        
-        # Internal experiment
-        elif state == 'FixCrop':
             self.make_dm_deliberation()
 
         # Retrieve opt info
@@ -260,6 +180,7 @@ class Farmer(mesa.Agent):
         return self
 
     def run_simulation(self):
+        prec_aw_dict = self.prec_aw_dict
 
         aquifers = self.aquifers
         fields = self.fields
@@ -273,37 +194,40 @@ class Farmer(mesa.Agent):
 
         # Simulate fields
         for fi, field in fields.items():
-            irr_depth = dm_sols[fi]["irr_depth"][:,:,[0]]
+            irr = dm_sols[fi]["irr"][:,:,[0]]
+
             i_crop = dm_sols[fi]["i_crop"]
             i_te = dm_sols[fi]["i_te"]
+            fid = field.field_id
             field.step(
-                irr_depth=irr_depth, i_crop=i_crop, i_te=i_te, 
-                prec_aw=field.prec_aw_step[self.current_year] # Retrieve prec data
+                irr=irr, i_crop=i_crop, i_te=i_te, prec_aw=prec_aw_dict[fid]
                 )
 
-        # Simulate wells (energy consumption)
-        allo_r = dm_sols['allo_r']         # Well allocation ratio from optimization
-        allo_r_w = dm_sols["allo_r_w"]     # Well allocation ratio from optimization
+        # Simulate wells
+        allo_r = dm_sols['allo_r']         # Well allocation ratio from opt
+        allo_r_w = dm_sols["allo_r_w"]     # Well allocation ratio from opt
         field_ids = dm_sols["field_ids"]
         well_ids = dm_sols["well_ids"]
         self.irr_vol = sum([field.irr_vol for _, field in fields.items()])
 
         for k, wid in enumerate(well_ids):
             well = wells[wid]
+
             # Select the first year over the planning horizon from opt
-            withdrawal = self.irr_vol * allo_r_w[k, 0]
-            pumping_rate = sum([fields[fid].pumping_rate * allo_r[f,k,0] for f, fid in enumerate(field_ids)])
+            v = self.irr_vol * allo_r_w[k, 0]
+            q = sum([fields[fid].q * allo_r[f,k,0] for f, fid in enumerate(field_ids)])
             l_pr = sum([fields[fid].l_pr * allo_r[f,k,0] for f, fid in enumerate(field_ids)])
             dwl = aquifers[well.aquifer_id].dwl * dm_args["weight_dwl"]
-            well.step(withdrawal=withdrawal, dwl=dwl, pumping_rate=pumping_rate, l_pr=l_pr)
+
+            well.step(v=v, dwl=dwl, q=q, l_pr=l_pr)
 
         # Calulate profit and pumping cost
         self.finance.step(fields=fields, wells=wells)
 
         # Collect variables for evaluation metrices
         self.profit = self.finance.profit
-        yield_pct = sum([field.avg_y_y for _, field in fields.items()])/len(fields)
-        self.yield_pct = yield_pct
+        y_y = sum([field.y_y for _, field in fields.items()])/len(fields)
+        self.yield_pct = y_y
 
         # Calculate satisfaction and uncertainty
         needs = self.needs
@@ -322,22 +246,15 @@ class Farmer(mesa.Agent):
         eval_metric = dm_args["eval_metric"]
         satisfaction = needs[eval_metric]
         expected_sa = dm_sols["Sa"][eval_metric]
-        
-        # We define uncertainty to be the difference between expected_sa at the
-        # previous time and satisfication this year.
-        expected_sa_t_1 = self.expected_sa
-        if expected_sa_t_1 is None:
-            uncertainty = abs(expected_sa - satisfaction)
-        else:
-            uncertainty = abs(expected_sa_t_1 - satisfaction)
+        uncertainty = abs(expected_sa - satisfaction)
 
         # Update CONSUMAT state
+        #self.expected_sa = expected_sa
         self.satisfaction = satisfaction
         self.expected_sa = expected_sa
         self.uncertainty = uncertainty
         sa_thre = self.sa_thre
         un_thre = self.un_thre
-        
         if satisfaction >= sa_thre and uncertainty >= un_thre:
             self.state = "Imitation"
         elif satisfaction < sa_thre and uncertainty >= un_thre:
@@ -346,44 +263,38 @@ class Farmer(mesa.Agent):
             self.state = "Repetition"
         elif satisfaction < sa_thre and uncertainty < un_thre:
             self.state = "Deliberation"
-        
-        if self.fix_state is not None:
-            self.state = self.fix_state
-        
+
     def make_dm(self, state, dm_sols, init=False):
         """
-        Make decisions based on various input parameters and states.
-    
+        Make decisions.
+
         Parameters
         ----------
         state : str
-            The state of the CONSUMAT model, which can be one of the following:
-            - "Imitation"
-            - "Social comparison"
-            - "Repetition"
-            - "Deliberation"
-        dm_sols : dict
-            The solution dictionary from the decision-making model (dm_model).
+            State of CONSUMAT. Imitation, Social comparison, Repetition, and
+            Deliberation.
+        dm_sols : DotMap
+            Solution dictionary from dm_model.
         init : bool, optional
-            Flag indicating whether this method is being run for initialization.
-            Default is False.
-    
+            Is it for the initial run. The default is False.
+
         Returns
         -------
-        dict
-            The solution dictionary from the decision-making model (dm_model).
-    
-        Notes
-        -----
-        The method uses an optimization model (`OptModel`) to make various decisions
-        based on input fields, wells, and other configurations. The method sets up constraints
-        and objectives for the optimization model and then solves it to get the decisions.
+        DotMap
+            Solution dictionary from dm_model.
+
         """
+
         aquifers = self.aquifers
         dm_args = self.dm_args
+
         fields = self.fields
         wells = self.wells
-        
+
+        # Locally create OptModel to make the Farmer object pickable for
+        # parallel computing.
+        # Note that do not store OptModel(name=agt_id) as agent's attribute as
+        # OptModel is not pickable for parallel computing.
         dm = OptModel(name=self.agt_id,
                       LogToConsole=self.config_gurobi.get("LogToConsole"))
         dm.setup_ini_model(
@@ -394,61 +305,42 @@ class Farmer(mesa.Agent):
             tech_options=self.tech_options,
             approx_horizon=dm_args["approx_horizon"]
             )
-
-        perceived_prec_aw = self.perceived_prec_aw
         for fi, field in fields.items():
-            block_w_interval_for_corn = field.block_w_interval_for_corn
             dm_sols_fi = dm_sols[fi]
             if init:
-                # only optimize irrigation depth with others given
                 dm.setup_constr_field(
                     field_id=fi,
-                    prec_aw=field.prec_aw_step[self.current_year],
+                    prec_aw=field.perceived_prec_aw,
                     pre_i_crop=dm_sols_fi['pre_i_crop'],
                     pre_i_te=dm_sols_fi['pre_i_te'],
-                    field_type=field.field_type,
+                    rain_fed=field.rain_fed,
                     i_crop=dm_sols_fi['i_crop'],
-                    i_rainfed=None,
-                    i_te=dm_sols_fi['i_te'],
-                    block_w_interval_for_corn=block_w_interval_for_corn
+                    i_rain_fed=None,
+                    i_te=dm_sols_fi['i_te']
                     )
-            elif state == "FixCrop":
+                continue
+
+            if state == "Deliberation":
                 dm.setup_constr_field(
                     field_id=fi,
-                    prec_aw=perceived_prec_aw[fi],
+                    prec_aw=field.perceived_prec_aw,
                     pre_i_crop=dm_sols_fi['pre_i_crop'],
                     pre_i_te=dm_sols_fi['pre_i_te'],
-                    field_type=field.field_type,
-                    i_crop=dm_sols_fi['i_crop'],
-                    i_rainfed=None,
-                    i_te=dm_sols_fi['i_te'],
-                    block_w_interval_for_corn=block_w_interval_for_corn
-                    )
-            elif state == "Deliberation":
-                # optimize irrigation depth, crop choice, tech choice
-                dm.setup_constr_field(
-                    field_id=fi,
-                    prec_aw=perceived_prec_aw[fi],
-                    pre_i_crop=dm_sols_fi['pre_i_crop'],
-                    pre_i_te=dm_sols_fi['pre_i_te'],
-                    field_type=field.field_type,
+                    rain_fed=field.rain_fed,
                     i_crop=None,
-                    i_rainfed=None,
-                    i_te=None,
-                    block_w_interval_for_corn=block_w_interval_for_corn
+                    i_rain_fed=None,
+                    i_te=None
                     )
             else:
-                # only optimize irrigation depth
                 dm.setup_constr_field(
                     field_id=fi,
-                    prec_aw=perceived_prec_aw[fi],
+                    prec_aw=field.perceived_prec_aw,
                     pre_i_crop=dm_sols_fi['pre_i_crop'],
                     pre_i_te=dm_sols_fi['pre_i_te'],
-                    field_type=field.field_type,
+                    rain_fed=field.rain_fed,
                     i_crop=dm_sols_fi['i_crop'],
-                    i_rainfed=dm_sols_fi['i_rainfed'],
-                    i_te=dm_sols_fi['i_te'],
-                    block_w_interval_for_corn=block_w_interval_for_corn
+                    i_rain_fed=dm_sols_fi['i_rain_fed'],
+                    i_te=dm_sols_fi['i_te']
                     )
 
         for wi, well in wells.items():
@@ -543,8 +435,6 @@ class Farmer(mesa.Agent):
         dm_sols_list = []
         for agt_id in agt_ids_in_network:
             # !!! Here we assume no. fields, n_c and split are the same across agents
-            # Keep this for now.
-            
             dm_sols = self.make_dm(
                 state=self.state,
                 dm_sols=agts_in_network[agt_id].dm_sols
@@ -574,10 +464,7 @@ class Farmer(mesa.Agent):
         """
         selected_agt_id_in_network = self.selected_agt_id_in_network
         if selected_agt_id_in_network is None:
-            try:    # if rngen is given in the model
-                selected_agt_id_in_network = self.rngen.choice(self.agt_ids_in_network)
-            except:
-                selected_agt_id_in_network = np.random.choice(self.agt_ids_in_network)
+            selected_agt_id_in_network = self.rngen.choice(self.agt_ids_in_network)
 
         agts_in_network = self.agts_in_network
 

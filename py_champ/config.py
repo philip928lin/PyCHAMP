@@ -62,11 +62,18 @@ config = {
         },
     "finance": {
         "energy_price": 2777.777778,    # [1e4$/PJ] $0.10/kWh = $ 2777.777778 1e4/PJ (Aguilar et al., 2015)
-        "crop_profit": {
+        "crop_price": {
             "corn":     5.394667,       # $/bu  2007    KFMA (can vary from 2.5-~6; Aguilar et al., 2015)
             "sorghum":  6.598655566,    # $/bu  2007    KFMA
             "soybeans": 13.3170448,     # $/bu  2007    KFMA
             "wheat":    8.28157881,
+            "fallow":   0.
+            },
+        "crop_cost": {
+            "corn":     0,    # $/bu  
+            "sorghum":  0,    # $/bu  
+            "soybeans": 0,    # $/bu  
+            "wheat":    0,
             "fallow":   0.
             },
         "irr_tech_operational_cost": {  # [1e4$]

@@ -186,7 +186,7 @@ class OptModel():
         ## Dimension coefficients
         self.n_s = config_field['area_split']
         self.n_c = len(crop_options)    # No. of crop choice options
-        self.n_te = len(tech_options)   # No. of irr tech options
+        self.n_te = len(tech_options)   # No. of irr_depth tech options
         if approx_horizon and horizon > 2:
             # calculate obj with start and end points
             self.n_h = 2
@@ -261,7 +261,7 @@ class OptModel():
         n_c = self.n_c
         n_h = self.n_h
         # Total irrigation depth per crop per yr
-        irr = m.addMVar((n_s, n_c, n_h), vtype="C", name="irr(cm)", lb=0, ub=inf)
+        irr_depth = m.addMVar((n_s, n_c, n_h), vtype="C", name="irr_depth(cm)", lb=0, ub=inf)
         # Total irrigation volumn per yr
         v = m.addMVar((n_h), vtype="C", name="v(m-ha)", lb=0, ub=inf)
         # Total yield per crop type per yr
@@ -272,14 +272,16 @@ class OptModel():
         e = m.addMVar((n_h), vtype="C", name="e(PJ)", lb=0, ub=inf)
         # Total profit
         profit = m.addMVar((n_h), vtype="C", name="profit(1e4$)", lb=-inf, ub=inf)
-
+     
         ## Record variables
-        self.vars['irr'] = irr
+        self.vars['irr_depth'] = irr_depth
         self.vars['v'] = v
         self.vars['y'] = y
         self.vars['y_y'] = y_y
         self.vars['e'] = e
         self.vars['profit'] = profit
+        self.bigM = 100
+        self.penalties = []
 
         ## Record msg about the user inputs.
         self.msg = {}
@@ -288,12 +290,12 @@ class OptModel():
         self.wrs_info = {}
 
     def setup_constr_field(self, field_id, prec_aw, pre_i_crop, pre_i_te,
-                           rain_fed=None, i_crop=None, i_rain_fed=None,
-                           i_te=None):
+                           field_type="optimize", i_crop=None, i_rainfed=None,
+                           i_te=None, **kwargs):
         """
         Add crop field constriants. You can assign multiple fields by calling
         this function repeatedly with different field_id. If
-        i_crop/i_rain_fed/i_te is provided, the model will not optimize over
+        i_crop/i_rainfed/i_te is provided, the model will not optimize over
         different crop type options/rain-fed or irrigated/irrigation
         technologies.
 
@@ -308,28 +310,36 @@ class OptModel():
             Crop name or the i_crop from the previous time step.
         pre_i_te: str or 3darray
             Irrigation technology or i_te from the previous time step.
-        rain_fed : bool or None, optional
-            True if it is a rain-fed field. False if it is an irrigated field.
-            None to let the model optimize it. The default is None.
+        field_type : str or list, optional
+            The value can be "rainfed", "irrigated", or "optimize". A list can 
+            be given to define field type for each area split. The default is
+            "optimize".
         i_crop : 3darray, optional
             The indicator matrix has a dimension of (n_s, n_c, 1). In this
             matrix, a value of 1 indicates that the corresponding crop type
             is selected or chosen. The default is None.
-        i_rain_fed : 3darray, optional
+        i_rainfed : 3darray, optional
             The indicator matrix has a dimension of (n_s, n_c, 1). In this
             matrix, a value of 1 indicates that the unit area in a field is
-            rainfed. Given i_rain_fed will force rain_fed to be True.
+            rainfed. Given i_rainfed will force field_type to be "rainfed".
             Also, if it is given, make sure 1 only exists at where i_crop is
             also 1. The default is None.
         i_te : 1darray or str, optional
             The indicator matrix has a dimension of (n_te). In this
             matrix, a value of 1 indicates that the corresponnding irrigation
             technology is selected. The default is None.
-
+        
         Returns
         -------
         None.
-
+        
+        Notes
+        -----
+        The `kwargs` could contain any additional attributes that you want to
+        add to the Farmer agent. Available keywords include
+        block_w_interval_for_corn : list
+            An interval of (perceived) avaiable water [w_low, w_high] that 
+            the corn crop type cannot be chose.  
         """
 
         self.field_ids.append(field_id)
@@ -339,27 +349,30 @@ class OptModel():
         n_h = self.n_h
         n_s = self.n_s
         n_te = self.n_te
+        
+        # Assign field type for each split of the field. 
+        if i_rainfed is not None:
+            rain_feds = np.sum(i_rainfed, axis=1).flatten()
+            field_type_list = ["rainfed" if r > 0.5 else "irrigated" for r in rain_feds]
+        if isinstance(field_type, str):  # Apply to all splits
+            field_type_list = [field_type] * n_s
+        elif isinstance(field_type, list):
+            field_type_list = field_type
 
-        if i_rain_fed is not None:
-            rain_feds = np.sum(i_rain_fed, axis=1).flatten()
-            rain_fed_list = [True if r > 0.5 else False for r in rain_feds]
-        if isinstance(rain_fed, bool) or rain_fed is None:  # Apply to all splits
-            rain_fed_list = [rain_fed] * n_s
-        else:
-            rain_fed_list = rain_fed
-
-
+        # Summary message for the setting.
         self.msg[fid] = {
             "Crop types": "optimize",
             "Irr tech": "optimize",
-            "Rain-fed": (lambda o: "optimize" if o is None else o)(rain_fed)
+            "Field type": field_type
             }
 
+        # Record the input
         i_crop_input = i_crop
-        i_rain_fed_input = i_rain_fed
+        i_rainfed_input = i_rainfed
         i_te_input = i_te
+        
+        # Take out some values
         m = self.model
-
         inf = self.inf
         ymax = self.ymax
         wmax = self.wmax
@@ -367,20 +380,21 @@ class OptModel():
         ub_irr = ub_w #ub_w - prec_aw
         self.bounds[fid] = {}
         self.bounds[fid]['ub_irr'] = ub_irr
-
         unit_area = self.unit_area
 
+        # Create the available precipitiation for each crop. 
         prec_aw_ = np.ones((n_s, n_c, n_h))
         for ci, crop in enumerate(self.crop_options):
             prec_aw_[:, ci, :] = prec_aw[crop]
             
         # Approximate robust optimization by prorating prec_aw with a ratio 
-        uncertainty_ratio = 1
-        for hi in range(n_h):
-            prec_aw_[:, :, hi] = prec_aw_[:, :, hi] * uncertainty_ratio**hi
+        # This is only for internal testing.
+        # uncertainty_ratio = 1
+        # for hi in range(n_h):
+        #     prec_aw_[:, :, hi] = prec_aw_[:, :, hi] * uncertainty_ratio**hi
 
         ### Add general variables
-        irr     = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.irr(cm)", lb=0, ub=ub_irr)
+        irr_depth     = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.irr_depth(cm)", lb=0, ub=ub_irr)
         w       = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.w(cm)", lb=0, ub=ub_w)
         w_temp  = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.w_temp", lb=0, ub=inf)
         w_      = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.w_", lb=0, ub=1)
@@ -393,52 +407,53 @@ class OptModel():
         y_y     = m.addMVar((n_h), vtype="C", name=f"{fid}.y_y", lb=0, ub=1)    # avg y_ per yr
         v       = m.addMVar((n_h), vtype="C", name=f"{fid}.v(m-ha)", lb=0, ub=inf)
         i_crop  = m.addMVar((n_s, n_c, 1), vtype="B", name=f"{fid}.i_crop")
-        i_rain_fed = m.addMVar((n_s, n_c, 1), vtype="B", name=f"{fid}.i_rain_fed")
+        i_rainfed = m.addMVar((n_s, n_c, 1), vtype="B", name=f"{fid}.i_rainfed")
 
-        # Crop type is set to be the same accross the planning horizon.
+        # Given crop type 
+        ## Crop type is set to be the same accross the planning horizon.
         if i_crop_input is not None:
-            # Fix i_crop if it is given.
             m.addConstr(i_crop == i_crop_input, name=f"c.{fid}.i_crop_input")
             self.msg[fid]["Crop types"] = "user input"
+            
         # One unit area can only be planted one type of crops.
-        m.addConstr(gp.quicksum(i_crop[:,j,:] for j in range(n_c)) == 1,
+        m.addConstr(gp.quicksum(i_crop[:,ci,:] for ci in range(n_c)) == 1,
                     name=f"c.{fid}.i_crop")
 
         ### Include rain-fed option
-        for si, rain_fed in enumerate(rain_fed_list):
-            if rain_fed == True:
-                # Given i_rain_fed,
-                if i_rain_fed_input is not None:
-                    m.addConstr(i_rain_fed[si,:,:] == i_rain_fed_input[si,:,:],
-                                name=f"c.{fid}_{si}.i_rain_fed_input")
-                    self.msg[fid]["Rain-fed areas"] = "user input"
+        for si, field_type in enumerate(field_type_list):
+            if field_type == "rainfed":
+                # Given i_rainfed,
+                if i_rainfed_input is not None:
+                    m.addConstr(i_rainfed[si,:,:] == i_rainfed_input[si,:,:],
+                                name=f"c.{fid}_{si}.i_rainfed_input")
+                    self.msg[fid]["Rainfed field"] = "user input"
 
-                # i_rain_fed[i, j, h] can be 1 only when i_crop[i, j, h] is 1.
+                # i_rainfed[si, ci, hi] can be 1 only when i_crop[si, ci, hi] is 1.
                 # Otherwise, it has to be zero.
-                m.addConstr(i_crop[si,:,:] - i_rain_fed[si,:,:] >= 0,
-                            name=f"c.{fid}_{si}.i_rain_fed")
-                m.addConstr(irr[si,:,:] == 0, name=f"c.{fid}_{si}.irr_rain_fed")
-            elif rain_fed == False:
-                m.addConstr(i_rain_fed[si,:,:] == 0,
-                            name=f"c.{fid}_{si}.no_i_rain_fed")
-            else: # None => means optimize
-                # i_rain_fed[i, j, h] can be 1 only when i_crop[i, j, h] is 1.
+                m.addConstr(i_crop[si,:,:] - i_rainfed[si,:,:] >= 0,
+                            name=f"c.{fid}_{si}.i_rainfed")
+                m.addConstr(irr_depth[si,:,:] == 0, name=f"c.{fid}_{si}.irr_rain_fed")
+                
+            elif field_type == "irrigated":
+                m.addConstr(i_rainfed[si,:,:] == 0,
+                            name=f"c.{fid}_{si}.no_i_rainfed")
+                
+            elif field_type == "irrigated":
+                # i_rainfed[si, ci, hi] can be 1 only when i_crop[si, ci, hi] is 1.
                 # Otherwise, it has to be zero.
-                m.addConstr(i_crop[si,:,:] - i_rain_fed[si,:,:] >= 0,
-                            name=f"c.{fid}_{si}.i_rain_fed")
-                m.addConstr(irr[si,:,:] * i_rain_fed[si,:,:] == 0, name=f"c.{fid}_{si}.irr_rain_fed")
+                m.addConstr(i_crop[si,:,:] - i_rainfed[si,:,:] >= 0,
+                            name=f"c.{fid}_{si}.i_rainfed")
+                m.addConstr(irr_depth[si,:,:] * i_rainfed[si,:,:] == 0, name=f"c.{fid}_{si}.irr_rainfed")
 
         # See the numpy broadcast rules:
         # https://numpy.org/doc/stable/user/basics.broadcasting.html
-        m.addConstr((w == irr + prec_aw_), name=f"c.{fid}.w(cm)")
+        m.addConstr((w == irr_depth + prec_aw_), name=f"c.{fid}.w(cm)")
         m.addConstr((w_temp == w/wmax), name=f"c.{fid}.w_temp")
-        m.addConstrs((w_[s,c,h] == gp.min_(w_temp[s,c,h], constant=1) \
-                    for s in range(n_s) for c in range(n_c) for h in range(n_h)),
+        m.addConstrs((w_[si,ci,hi] == gp.min_(w_temp[si,ci,hi], constant=1) \
+                    for si in range(n_s) for ci in range(n_c) for hi in range(n_h)),
                     name=f"c.{fid}.w_")
-        # Does not really help to improve the speed.
-        #m.addConstr((w_ == w/wmax), name=f"c.{fid}.w_")
 
-        # We force irr to be zero but prec_aw_ will add to w & w_, which will
+        # We force irr_depth to be zero but prec_aw_ will add to w & w_, which will
         # output positive y_ leading to violation for y_y (< 1)
         # Also, we need to seperate yw_ and y_ into two constraints. Otherwise,
         # gurobi will crush. No idea why.
@@ -447,35 +462,48 @@ class OptModel():
         c = self.c
         m.addConstr((yw_temp == (a * w_**2 + b * w_ + c)), name=f"c.{fid}.yw_temp")
         
-        # Minimum yield_pct cutoff
+        # Minimum yield_pct cutoff (aim to capture fallow field)
         min_y_pct = self.min_y_pct
-        
         m.addConstr((yw_bi * (yw_temp - min_y_pct) + (1-yw_bi) * (min_y_pct - yw_temp) >= 0),
                     name=f"c.{fid}.yw_bi")
         m.addConstr((yw_ == yw_bi * yw_temp + (1-yw_bi) * min_y_pct),
                     name=f"c.{fid}.yw_")
         
-        # m.addConstrs((yw_[s,c,h] == gp.max_(yw_temp[s,c,h], constant=0) \
-        #             for s in range(n_s) for c in range(n_c) for h in range(n_h)),
-        #             name=f"c.{fid}.yw_")
-        
-        
-        # Does not really help to improve the speed.
-        #m.addConstr((yw_ == (a * w_**2 + b * w_ + c)), name=f"c.{fid}.yw_")
-
         m.addConstr((y_ == yw_ * i_crop), name=f"c.{fid}.y_")
         m.addConstr((y == y_ * ymax * unit_area * 1e-4), name=f"c.{fid}.y") # 1e4 bu
-        m.addConstr((irr * (1-i_crop) == 0), name=f"c.{fid}.irr(cm)")
+        m.addConstr((irr_depth * (1-i_crop) == 0), name=f"c.{fid}.irr_depth(cm)")
         cm2m = 0.01
-        m.addConstr((v_c == irr * unit_area * cm2m), name=f"c.{fid}.v_c(m-ha)")
+        m.addConstr((v_c == irr_depth * unit_area * cm2m), name=f"c.{fid}.v_c(m-ha)")
         m.addConstr(v == gp.quicksum(v_c[i,j,:] \
                     for i in range(n_s) for j in range(n_c)),
                     name=f"c.{fid}.v(m-ha)")
         m.addConstr(y_y == gp.quicksum( y_[i,j,:] \
                     for i in range(n_s) for j in range(n_c) ) / n_s,
                     name=f"c.{fid}.y_y")
-
-        # Create variable for crop type change
+        
+        # Add penalty for a given w interval for corn to block the choice
+        block_w_interval_for_corn = kwargs.get("block_w_interval_for_corn")
+        if block_w_interval_for_corn is not None:
+            penalty = m.addVar(vtype="C", name=f"{fid}.penalty", lb=0, ub=inf)
+            penalties = self.penalties
+            bigM = self.bigM
+            corn_idx = self.crop_options.index("corn")
+            corn_w = w[:, corn_idx, :]
+            w_bi1 = m.addMVar((n_s, 1, n_h), vtype="B", name=f"{fid}.w_bi1")
+            w_bi2 = m.addMVar((n_s, 1, n_h), vtype="B", name=f"{fid}.w_bi2")
+        
+            #if x<b then y=1
+            m.addConstr((58-corn_w <= bigM * w_bi1),
+                        name=f"c.{fid}.w_bi1")
+            #if x>b then y=1
+            m.addConstr((corn_w-42 <= bigM * w_bi2),
+                        name=f"c.{fid}.w_bi2")
+            m.addConstr(penalty == gp.quicksum(bigM*w_bi1[si,0,hi]*w_bi2[si,0,hi] \
+                        for si in range(n_s) for hi in range(n_h)),
+                        name=f"c.{fid}.penalty")
+            penalties.append(penalty)    
+            
+        # Create i_crop_change to indicate crop type change
         if isinstance(pre_i_crop, str):
             i_c = self.crop_options.index(pre_i_crop)
             pre_i_crop = np.zeros((n_s, n_c, 1))
@@ -532,9 +560,9 @@ class OptModel():
         self.vars[fid]['v'] = v
         self.vars[fid]['y'] = y
         self.vars[fid]['y_y'] = y_y
-        self.vars[fid]['irr'] = irr
+        self.vars[fid]['irr_depth'] = irr_depth
         self.vars[fid]['i_crop'] = i_crop
-        self.vars[fid]['i_rain_fed'] = i_rain_fed
+        self.vars[fid]['i_rainfed'] = i_rainfed
         self.vars[fid]['i_te'] = i_te
         self.vars[fid]['l_pr'] = l_pr
         self.vars[fid]['q'] = q
@@ -544,7 +572,7 @@ class OptModel():
         self.vars[fid]['i_crop_change'] = i_crop_change
         self.vars[fid]['i_tech_change'] = i_tech_change
 
-        self.vars[fid]['rain_fed'] = rain_fed
+        self.vars[fid]['field_type'] = field_type
 
         self.n_fields += 1
 
@@ -664,7 +692,7 @@ class OptModel():
         m = self.model
         cf = self.config['finance']
         energy_price = cf['energy_price']    #[1e4$/PJ]
-        crop_profit = cf['crop_profit']
+        crop_profit = {c: cf['crop_price'][c] - cf['crop_cost'][c] for c in self.crop_options}
         crop_options = self.crop_options
         tech_options = self.tech_options
         n_h = self.n_h
@@ -779,13 +807,13 @@ class OptModel():
 
         # Collect irrigation depth over the constrainted fields.
         if fids == "all":
-            irr_sub = vars['irr']         # (n_s, n_c, n_h)
+            irr_sub = vars['irr_depth']         # (n_s, n_c, n_h)
         else:
             for i, fid in enumerate(fids):
                 if i == 0:
-                    irr_sub = vars[fid]['irr']
+                    irr_sub = vars[fid]['irr_depth']
                 else:
-                    irr_sub += vars[fid]['irr']
+                    irr_sub += vars[fid]['irr_depth']
             irr_sub = irr_sub/len(fids)
 
         # Initial period
@@ -841,7 +869,7 @@ class OptModel():
         self.n_water_rights += 1
 
         # Record for the next run. Assume the simulation runs annually and will
-        # apply the irr solved by the opt model.
+        # apply the irr_depth solved by the opt model.
         # This record will be updated in solve() and add to the sols.
         if time_window == 1: 
             remaining_wr = None
@@ -920,11 +948,16 @@ class OptModel():
                         name=f"c.Sa.{metric}")
             vars['Sa'][metric] = fakeSa
 
+        penalties = self.penalties
+        penalty = 0
+        for p in penalties:
+            penalty += p
+        
         for metric in eval_metrics:
             # Add objective
             if metric == eval_metric:
                 add_metric(metric)
-                m.setObjective(vars['Sa'][metric], gp.GRB.MAXIMIZE)
+                m.setObjective(vars['Sa'][metric] - penalty, gp.GRB.MAXIMIZE)
         self.obj_post_calculation = True
 
     def finish_setup(self, display_summary=True):
@@ -968,7 +1001,7 @@ class OptModel():
             m.addConstr((vars[wid]['l_pr'] == gp.quicksum(vars[fid]['l_pr'] * allo_r[f,k,:] \
                         for f, fid in enumerate(fids))), name=f"c.{wid}.l_pr(m)")
 
-        irr = vars['irr']
+        irr_depth = vars['irr_depth']
         y = vars['y']
         y_y = vars['y_y']
         e = vars['e']
@@ -981,7 +1014,7 @@ class OptModel():
                 else:
                     acc += vars[v][var]
             return acc
-        m.addConstr(irr == get_sum(fids, vars, "irr"), name="c.irr(cm)")
+        m.addConstr(irr_depth == get_sum(fids, vars, "irr_depth"), name="c.irr_depth(cm)")
         m.addConstr(v == get_sum(fids, vars, "v"), name="c.v(m-ha)")
         m.addConstr(y == get_sum(fids, vars, "y"), name="c.y(1e4bu)")
         m.addConstr(y_y == get_sum(fids, vars, "y_y")/n_f, name="c.y_y")
@@ -1109,11 +1142,12 @@ class OptModel():
             # Update rainfed info
             for fid in self.field_ids:
                 sols_fid = sols[fid]
-                if sols_fid['rain_fed'] is True or sols_fid['rain_fed'] is None:
-                    irr = sols_fid['irr'][:,:,0].sum(axis=1)
-                    i_rain_fed = sols_fid['i_rain_fed']
-                    i_rain_fed[np.where(irr <= 0), :, :] = 1 # avoid using irr == 0
-                    sols_fid['i_rain_fed'] = i_rain_fed * sols_fid['i_crop']
+                if (sols_fid['field_type'] == "rainfed" 
+                    or sols_fid['field_type'] == "optimize"):
+                    irr_depth = sols_fid['irr_depth'][:,:,0].sum(axis=1)
+                    i_rainfed = sols_fid['i_rainfed']
+                    i_rainfed[np.where(irr_depth <= 0), :, :] = 1 # avoid using irr_depth == 0
+                    sols_fid['i_rainfed'] = i_rainfed * sols_fid['i_crop']
 
             # Update remaining water rights
             wrs_info = self.wrs_info
@@ -1121,13 +1155,13 @@ class OptModel():
                 if v['remaining_wr'] is not None:
                     fids = v['field_id_list']
                     if fids == "all":
-                        irr_sub = sols['irr']         # (n_s, n_c, n_h)
+                        irr_sub = sols['irr_depth']         # (n_s, n_c, n_h)
                     else:
                         for i, fid in enumerate(fids):
                             if i == 0:
-                                irr_sub = sols[fid]['irr'].copy()
+                                irr_sub = sols[fid]['irr_depth'].copy()
                             else:
-                                irr_sub += sols[fid]['irr']
+                                irr_sub += sols[fid]['irr_depth']
                         irr_sub = irr_sub/len(fids)
                     v['remaining_wr'] -= np.sum(irr_sub[:, :, 0])
             sols['water_rights'] = wrs_info
@@ -1138,7 +1172,7 @@ class OptModel():
             n_s = self.n_s
             fids = self.field_ids
             #sols = self.sols
-            irrs = list(sols['irr'].mean(axis=0).sum(axis=0).round(2))
+            irrs = list(sols['irr_depth'].mean(axis=0).sum(axis=0).round(2))
             decisions = {"Irrigation depths": irrs}
             for fid in fids:
                 sols_fid = sols[fid]
@@ -1146,7 +1180,7 @@ class OptModel():
                 # Avoid using == 0 or 1 => some time have numerical issue
                 crop_type = [crop_options[np.argmax(i_crop[s,:])] for s in range(n_s)]
                 tech = tech_options[np.argmax(sols_fid['i_te'][:])]
-                Irrigated = list((sols_fid['i_rain_fed'][:, :, 0].sum(axis=1).round(0) <= 0))
+                Irrigated = list((sols_fid['i_rainfed'][:, :, 0].sum(axis=1).round(0) <= 0))
                 decisions[fid] = {"Crop types": crop_type,
                                   "Irr tech": tech,
                                   "Irrigated": Irrigated}

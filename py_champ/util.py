@@ -8,6 +8,7 @@ WARNING: This code is not yet published, please do not distributed the code
 without permission.
 """
 import time
+import warnings
 import numpy as np
 from pandas import to_numeric
 import pandas as pd
@@ -169,7 +170,7 @@ class Indicator(object):
                     else False for x, y in zip(x_obv, y_sim)]
         x_obv = x_obv[index]
         y_sim = y_sim[index]
-        print("Usable data ratio = {}/{}.".format(len(index), len(x_obv)))
+        #print("Usable data ratio = {}/{}.".format(len(index), len(x_obv)))
         return x_obv, y_sim
 
     @staticmethod
@@ -177,20 +178,23 @@ class Indicator(object):
                          indicators_list=None, r_na=True):
         if r_na:
             x_obv, y_sim = Indicator.remove_na(x_obv, y_sim)
-        dict = {"r"   : Indicator.r(x_obv, y_sim, False),
-                "r2"  : Indicator.r2(x_obv, y_sim, False),
-                "rmse": Indicator.rmse(x_obv, y_sim, False),
-                "NSE" : Indicator.NSE(x_obv, y_sim, False),
-                "iNSE": Indicator.iNSE(x_obv, y_sim, False),
-                "KGE" : Indicator.KGE(x_obv, y_sim, False),
-                "iKGE": Indicator.iKGE(x_obv, y_sim, False),
-                "CP"  : Indicator.CP(x_obv, y_sim, False),
-                "RSR" : Indicator.RSR(x_obv, y_sim, False)}
-        df = pd.DataFrame(dict, index=[index_name])
-        if indicators_list is None:
-            return df
-        else:
-            return df.loc[:, indicators_list]
+            
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            dict = {"r"   : Indicator.r(x_obv, y_sim, False),
+                    "r2"  : Indicator.r2(x_obv, y_sim, False),
+                    "rmse": Indicator.rmse(x_obv, y_sim, False),
+                    "NSE" : Indicator.NSE(x_obv, y_sim, False),
+                    "iNSE": Indicator.iNSE(x_obv, y_sim, False),
+                    "KGE" : Indicator.KGE(x_obv, y_sim, False),
+                    "iKGE": Indicator.iKGE(x_obv, y_sim, False),
+                    "CP"  : Indicator.CP(x_obv, y_sim, False),
+                    "RSR" : Indicator.RSR(x_obv, y_sim, False)}
+            df = pd.DataFrame(dict, index=[index_name])
+            if indicators_list is None:
+                return df
+            else:
+                return df.loc[:, indicators_list]
 
     @staticmethod
     def r(x_obv, y_sim, r_na=True):
@@ -281,6 +285,8 @@ class Indicator(object):
         """
         if r_na:
             x_obv, y_sim = Indicator.remove_na(x_obv, y_sim)
+        
+
         mu_xObv = np.nanmean(x_obv)
         return 1 - np.nansum((y_sim-x_obv)**2) / np.nansum((x_obv-mu_xObv)**2)
 
@@ -314,6 +320,7 @@ class Indicator(object):
             y_sim = 1 / (y_sim + 0.0000001)
         else:
             y_sim = 1 / (y_sim + 0.01*np.nanmean(y_sim))
+        
         mu_xObv = np.nanmean(x_obv)
         return 1 - np.nansum((y_sim-x_obv)**2) / np.nansum((x_obv-mu_xObv)**2)
 
@@ -385,7 +392,7 @@ class Indicator(object):
         """
         if r_na:
             x_obv, y_sim = Indicator.remove_na(x_obv, y_sim)
-
+        
         mu_ySim = np.nanmean(y_sim); mu_xObv = np.nanmean(x_obv)
         sig_ySim = np.nanstd(y_sim); sig_xObv = np.nanstd(x_obv)
         kge = 1 - ((Indicator.r(x_obv, y_sim, False) - 1)**2
@@ -424,7 +431,7 @@ class Indicator(object):
             y_sim = 1/(y_sim + 0.0000001)
         else:
             y_sim = 1/(y_sim + 0.01*np.nanmean(y_sim))
-
+        
         mu_ySim = np.nanmean(y_sim); mu_xObv = np.nanmean(x_obv)
         sig_ySim = np.nanstd(y_sim); sig_xObv = np.nanstd(x_obv)
         ikge = 1 - ((Indicator.r(x_obv, y_sim, False) - 1)**2
