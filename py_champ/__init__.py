@@ -5,7 +5,6 @@ from .entities.well import Well
 from .entities.finance import Finance
 from .entities.aquifer import Aquifer
 from .config import config
-from .util import TimeRecorder, Box, Indicator, Visual
-#from .opt_model import OptModel
+from .util import TimeRecorder, Box, Indicator
 
 

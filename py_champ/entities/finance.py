@@ -30,7 +30,14 @@ class Finance():
     """
 
     def __init__(self, config):
+        """
+        Initialize a Finance object.
 
+        Parameters
+        ----------
+        config : dict
+            General configuration information for the model.
+        """
         self.load_config(config)
         
         self.cost_e = None
@@ -43,13 +50,12 @@ class Finance():
 
     def load_config(self, config):
         """
-        Initialize the Finance class with a given configuration.
+        Load a given configuration.
 
         Parameters
         ----------
         config : dict
             General configuration information for the model.
-
         """
         self.config_finance = config["finance"]
 
@@ -74,6 +80,23 @@ class Finance():
         Assumes that all fields have the same crop choice options and that crop 
         costs and prices are specified in config for all relevant crops and 
         technologies.
+
+        Attributes Modified
+        -------------------
+        cost_e : float
+            Updated energy cost.
+        cost_tech : float
+            Updated technology operational cost.
+        tech_change_cost : float
+            Updated technology change cost.
+        crop_change_cost : float
+            Updated crop change cost.
+        profit : float
+            Updated profit.
+        y : float
+            Updated total crop yield.
+        t : int
+            Updated time step.
         """
         
         self.t +=1

@@ -144,7 +144,7 @@ class OptModel():
         horizon : str, optional
             The planing horizon [yr]. The default is 1.
         eval_metric : str, optional
-            "profit" or "yield_pct". The default is "profit".
+            "profit" or "yield_rate". The default is "profit".
         crop_options : list, optional
             A list of crop type options. They must exist in the config. The
             default is ["corn", "sorghum", "soybeans", "fallow"].
@@ -462,7 +462,7 @@ class OptModel():
         c = self.c
         m.addConstr((yw_temp == (a * w_**2 + b * w_ + c)), name=f"c.{fid}.yw_temp")
         
-        # Minimum yield_pct cutoff (aim to capture fallow field)
+        # Minimum yield_rate cutoff (aim to capture fallow field)
         min_y_pct = self.min_y_pct
         m.addConstr((yw_bi * (yw_temp - min_y_pct) + (1-yw_bi) * (min_y_pct - yw_temp) >= 0),
                     name=f"c.{fid}.yw_bi")
@@ -932,7 +932,7 @@ class OptModel():
         # Currently supported metrices
         eval_metric_vars = {
             "profit": vars['profit'],
-            "yield_pct": vars['y_y']
+            "yield_rate": vars['y_y']
             }
 
         inf = self.inf
@@ -1124,12 +1124,12 @@ class OptModel():
                     y_ys = sols['y_y']
                     eval_metric_vars = {
                         "profit": np.linspace(profits[0], profits[1], num=horizon)/scales['profit'],
-                        "yield_pct": np.linspace(y_ys[0], y_ys[1], num=horizon)/scales['yield_pct']
+                        "yield_rate": np.linspace(y_ys[0], y_ys[1], num=horizon)/scales['yield_rate']
                         }
                 else:
                     eval_metric_vars = {
                         "profit": sols['profit']/scales['profit'],
-                        "yield_pct": sols['y_y']/scales['yield_pct']
+                        "yield_rate": sols['y_y']/scales['yield_rate']
                         }
                 for metric in eval_metrics:
                     alpha = alphas[metric]

@@ -105,11 +105,11 @@ config = {
     "consumat": {
         "alpha": {  # [0-1] Sensitivity factor for the "satisfication" calculation.
             "profit":    1,
-            "yield_pct": 1
+            "yield_rate": 1
             },
         "scale": {  # Normalize "need" for "satisfication" calculation.
             "profit":    0.23 * 50, # Use corn 1e4$*bu*ha
-            "yield_pct": 1
+            "yield_rate": 1
             },
         "satisfaction_threshold": 1,    # [0-1]
         "uncertainty_threshold":  1     # [0-1]

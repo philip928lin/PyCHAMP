@@ -4,56 +4,78 @@ Email: chungyi@vt.edu
 Last modified on Sep 6, 2023
 """
 import numpy as np
+import mesa
 
-class Well():
+class Well(mesa.Agent):
     """
-    A simulator for a groundwater well.
-    
-    This class simulates energy consumption and other attributes of a well based
-    on various parameters like well radius, hydraulic conductivity, and more.
+    A class to simulate a well in an agricultural system.
 
     Attributes
     ----------
     well_id : str or int
         Unique identifier for the well.
-    config : dict
-        General configuration information for the model.
     r : float
         Radius of the well in meters.
     k : float
-        Hydraulic conductivity in m/day. Used to calculate transmissivity as 
-        T = k * saturated_thickness.
+        Hydraulic conductivity of the aquifer in m/d.
     st : float
         Saturated thickness of the aquifer in meters.
     sy : float
         Specific yield of the aquifer.
     l_wt : float
-        Initial lift from the water table to the ground surface at the start of
-        the pumping season in meters.
+        Water table lift in meters.
     eff_pump : float, optional
         Pumping efficiency. Default is 0.77.
     eff_well : float, optional
         Well efficiency. Default is 0.5.
-    aquifer_id : Union[str, int], optional
-        Identifier for the associated aquifer. Default is None.
+    aquifer_id : str or int, optional
+        Unique identifier for the associated aquifer.
+    kwargs : dict, optional
+        Additional optional arguments.
+    rho : float
+        Density of water in kg/m^3.
+    g : float
+        Acceleration due to gravity in m/s^2.
+    t : int
+        Current time step.
+    e : float
+        Energy consumption in PJ.
     """
 
-    def __init__(self, well_id, config, r, k, st, sy, l_wt,
+    def __init__(self, well_id, mesa_model, config, r, k, st, sy, l_wt,
                  eff_pump=0.77, eff_well=0.5, aquifer_id=None, **kwargs):
         """
         Initialize a Well object.
 
-        Parameters are set as attributes. Additional keyword arguments can be 
-        passed to set other attributes.
-
         Parameters
         ----------
-        ...
-        Same as class attributes.
+        well_id : str or int
+            Unique identifier for the well.
+        mesa_model : object
+            Reference to the overarching MESA model instance.
+        config : dict
+            General configuration information for the model.
+        r : float
+            Radius of the well in meters.
+        k : float
+            Hydraulic conductivity of the aquifer in m/d.
+        st : float
+            Saturated thickness of the aquifer in meters.
+        sy : float
+            Specific yield of the aquifer.
+        l_wt : float
+            Water table lift in meters.
+        eff_pump : float, optional
+            Pumping efficiency. Default is 0.77.
+        eff_well : float, optional
+            Well efficiency. Default is 0.5.
+        aquifer_id : str or int, optional
+            Unique identifier for the associated aquifer.
+        kwargs : dict, optional
+            Additional optional arguments.
         """
-        #super().__init__(agt_id, mesa_model)
-        # MESA required attributes
-        self.unique_id = well_id
+        # MESA required attributes => (unique_id, model)
+        super().__init__(well_id, mesa_model)
         self.agt_type = "Well"
 
         self.well_id, self.r, self.k, self.st, self.sy, self.l_wt = \
@@ -93,24 +115,36 @@ class Well():
 
     def step(self, withdrawal, dwl, pumping_rate, l_pr):
         """
-        Simulate the well for a single time step.
+        Simulate the well for one time step based on water withdrawal and other parameters.
 
         Parameters
         ----------
         withdrawal : float
-            Volume of irrigation water to be withdrawn from this well in m-ha.
+            The total volume of water to be withdrawn from the well in m-ha.
         dwl : float
             Change in groundwater level in meters.
         pumping_rate : float
-            Average daily pumping rate in m-ha.
+            Pumping rate in m^3/d.
         l_pr : float
-            The effective lift due to pressurization and of water and pipe
-            losses necessary for the allocated irrigation system
+            Pressure lift in meters.
 
         Returns
         -------
         float
-            Energy consumption for the step in PJ (PetaJoules).
+            Energy consumption for the current time step in PJ.
+
+        Attributes Modified
+        -------------------
+        t : int
+            Updated time step.
+        l_wt : float
+            Updated water table lift.
+        st : float
+            Updated saturated thickness.
+        tr : float
+            Updated transmissivity.
+        e : float
+            Updated energy consumption.
         """
         self.t +=1
 

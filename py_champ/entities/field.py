@@ -4,55 +4,67 @@ Email: chungyi@vt.edu
 Last modified on Sep 6, 2023
 """
 import numpy as np
+import mesa
 
-class Field():
+class Field(mesa.Agent):
     """
-    This class simulates a field with different crop types and irrigation technologies.
+    A class to simulate a field in an agricultural system.
 
     Attributes
     ----------
     field_id : str or int
         Unique identifier for the field.
-    config : dict
-        Configuration dictionary containing field, crop, and technology parameters.
-    te : str
-        Initial irrigation technology used in the field. Default is set through the config dictionary.
-    crop : str or list of str
-        Initial crop type(s) planted in the field.
-    crop_options : list of str, optional
-        List of allowed crop types. Default is ["corn", "sorghum", "soybeans", "fallow"].
-    tech_options : list of str, optional
-        List of allowed irrigation technologies. Default is ["center pivot", "center pivot LEPA"].
+    crop_options : list
+        List of available crop options.
+    tech_options : list
+        List of available technology options.
+    t : int
+        Current time step.
+    irr_vol : float
+        Irrigation volume.
+    yield_rate_per_field : float
+        Average yield rate per field.
+    irr_vol_per_field : float
+        Irrigation volume per field.
+
+    Methods
+    -------
+    load_config(config)
+        Load configuration parameters.
+    update_irr_tech(i_te)
+        Update irrigation technology.
+    update_crops(i_crop)
+        Update crops.
+    step(irr_depth, i_crop, i_te, prec_aw)
+        Simulate the field for one time step based on various parameters.
     """
 
     # aquifer_id, lat, dz => They are for dynamic inflow calculation (deprecated)
-    def __init__(self, field_id, config, ini_crop, ini_te, ini_field_type,
+    def __init__(self, field_id, mesa_model, config, ini_crop, ini_te, ini_field_type,
                  crop_options, tech_options, **kwargs):
         """
-        Initialize the Field object with given attributes and configuration.
-
-        Parameters are set as attributes. Additional keyword arguments can be 
-        passed to set other attributes.
+        Initialize a Field object.
 
         Parameters
         ----------
         field_id : str or int
             Unique identifier for the field.
+        mesa_model : object
+            Reference to the overarching MESA model instance.
         config : dict
-            Configuration dictionary containing field, crop, and technology parameters.
-        
-        ini_crop : str or list of str
-            Initial crop type(s) planted in the field.
+            General configuration information for the model.
+        crop_options : list
+            List of available crop options.
+        tech_options : list
+            List of available technology options.
         ini_te : str
-            Initial irrigation technology used in the field. 
+            Initial technology.
+        ini_crop : str or list
+            Initial crop or list of crops.
         ini_field_type : str
-            Initial field type. "irrigated", "rainfed", or "optimized" 
-        crop_options : list of str, optional
-            List of allowed crop types.
-        tech_options : list of str, optional
-            List of allowed irrigation technologies.
-        **kwargs : dict, optional
-            Additional keyword arguments can be passed to set other attributes for the field.
+            Initial field type.
+        kwargs : dict, optional
+            Additional optional arguments.
             
         Notes
         -----
@@ -62,9 +74,8 @@ class Field():
             An interval of (perceived) avaiable water [w_low, w_high] that 
             the corn crop type cannot be chose.  
         """
-        #super().__init__(agt_id, mesa_model)
-        # MESA required attributes
-        self.unique_id = field_id
+        # MESA required attributes => (unique_id, model)
+        super().__init__(field_id, mesa_model)
         self.agt_type = "Field"
 
         # Initialize attributes
@@ -82,7 +93,9 @@ class Field():
         if isinstance(ini_crop, str):
             i_c = self.crop_options.index(ini_crop)
             i_crop[:, i_c, 0] = 1
+            self.crops = [ini_crop]*self.n_s
         else:
+            self.crops = ini_crop
             for s, c in enumerate(ini_crop):
                 i_c = self.crop_options.index(c)
                 i_crop[s, i_c, 0] = 1
@@ -99,7 +112,6 @@ class Field():
 
         # Initialize other variables
         self.t = 0
-        self.crops = []
         self.irr_vol = None
 
     def load_config(self, config):
@@ -129,6 +141,9 @@ class Field():
         self.field_area = config_field["field_area"]
         self.unit_area = self.field_area/self.n_s
         self.tech_par = config_field["tech"]
+        
+        self.yield_rate_per_field = None
+        self.irr_vol_per_field = None
 
     def update_irr_tech(self, i_te):
         """
@@ -192,15 +207,15 @@ class Field():
         i_te : 1darray
             Indicator array for irrigation technology choices for the next year.
             Dimensions: (n_te).
-        prec_aw : float
-            Precipitation in the growing season, in cm.
+        prec_aw : dict
+            Dictionary containing available precipitation for each crop in cm.
 
         Returns
         -------
         y : 3darray
             Crop yield in 1e4 bu for each area split and crop type. Dimensions:
             (n_s, n_c, 1).
-        y_y : float
+        avg_y_y : float
             Ratio of actual yield to maximum possible yield (average across splits).
         irr_vol : float
             Total irrigation volume, in m-ha.
@@ -244,7 +259,7 @@ class Field():
 
         # record
         self.y = y 
-        self.avg_y_y = avg_y_y
-        self.irr_vol = irr_vol    # m-ha
+        self.yield_rate_per_field = avg_y_y
+        self.irr_vol_per_field = irr_vol    # m-ha
 
         return y, avg_y_y, irr_vol

@@ -3,21 +3,22 @@ The code is developed by Chung-Yi Lin at Virginia Tech, in April 2023.
 Email: chungyi@vt.edu
 Last modified on Sep 9, 2023
 """
+import mesa
 
-class Aquifer():
+class Aquifer(mesa.Agent):
     """
     An aquifer simulator based on the KGS-WBM model.
-    
+
     The class simulates changes in the aquifer's groundwater level
     based on water withdrawals. It uses coefficients `aq_a` and `aq_b` 
     to calculate the change in groundwater level.
-    
+
     For more details on the model, refer to:
     Butler, J. J., Whittemore, D. O., Wilson, B. B., & Bohling, G. C. (2018).
     Sustainability of aquifers supporting irrigated agriculture: A case study
     of the High Plains aquifer in Kansas. Water International, 43(6), 815–828.
     https://doi.org/10.1080/02508060.2018.1515566
-    
+
     Attributes
     ----------
     aquifer_id : str or int
@@ -34,17 +35,28 @@ class Aquifer():
         Initial change in groundwater level in meters. Default is 0.
     """
 
-    def __init__(self, aquifer_id, aq_a, aq_b, ini_st=0, ini_dwl=0):
+    def __init__(self, aquifer_id, mesa_model, aq_a, aq_b, ini_st=0, ini_dwl=0):
         """
         Initialize an Aquifer object.
 
-        Parameters are set as attributes. 
-
         Parameters
         ----------
-        ...
-        Same as class attributes.
+        aquifer_id : str or int
+            Unique identifier for the aquifer.
+        mesa_model : object
+            Reference to the overarching MESA model instance.
+        aq_a : float
+            KGS-WBM coefficient for groundwater level change.
+        aq_b : float
+            KGS-WBM coefficient for groundwater level change.
+        ini_st : float, optional
+            Initial saturated thickness of the aquifer in meters. Default is 0.
+        ini_dwl : float, optional
+            Initial change in groundwater level in meters. Default is 0.
         """
+        # MESA required attributes => (unique_id, model)
+        super().__init__(aquifer_id, mesa_model)
+        self.agt_type = "Aquifer"
         # for name_, value_ in vars().items():
         #     if name_ != 'self':
         #         setattr(self, name_, value_)
@@ -61,9 +73,6 @@ class Aquifer():
         """
         Simulate the aquifer for one time step based on the water withdrawal.
 
-        This method updates the aquifer's groundwater level (`self.dwl`), 
-        saturated thickness (`self.st`), and time (`self.t`).
-
         Parameters
         ----------
         withdrawal : float
@@ -73,8 +82,20 @@ class Aquifer():
         -------
         float
             The change in groundwater level for the current time step in meters per year.
-        """
-        
+
+        Attributes Modified
+        -------------------
+        dwl : float
+            Updated change in groundwater level.
+        st : float
+            Updated saturated thickness.
+        t : int
+            Updated time step.
+        dwl_list : list of float
+            Updated list of changes in water level.
+        withdrawal : float
+            Updated withdrawal amount.
+        """        
         dwl = self.aq_b - self.aq_a * withdrawal  # Calculate change in water level
         
         # Update class attributes based on the new information
