@@ -672,7 +672,7 @@ class SD6Plots():
         plt.show()
 
     @staticmethod
-    def plot_SaUn(df_agts, un='Un', sa="Sa", year="year", thres_un=None, thres_sa=None):
+    def plot_SaUn(df_agts, un='Un', sa="Sa", year="year", thres_un=None, thres_sa=None, savefig=None):
     # Create the figure and axis objects
         if "year" not in df_agts:
             df_agts["year"] = df_agts.index
@@ -718,63 +718,11 @@ class SD6Plots():
         ax.text(x_min, y_max, 'Repetition', verticalalignment='top', horizontalalignment='left', fontsize=9)
         ax.text(x_max, y_min, 'Social comparison', verticalalignment='bottom', horizontalalignment='right', fontsize=9)
         ax.text(x_max, y_max, 'Imitation', verticalalignment='top', horizontalalignment='right', fontsize=9)
-
+        
+        if savefig is not None:
+            plt.savefig(savefig)
+            
         plt.show()
-    
-    
-r"""
-def get_df_sys(model):
-    # Not yet generalized
-    crop_options = model.crop_options
-    tech_options = model.tech_options
-
-    dc = model.datacollector
-    dc.model_vars
-
-    # for a farmer with one field and one well only!!
-    df_model = dc.get_model_vars_dataframe()
-    df_model = df_model.set_index("year")
-    df_agts = dc.get_agent_vars_dataframe().reset_index()
-    df_agts["irr_depth"]= df_agts["irr_vol"] / 50 * 100  #!!! cm
-    df_agts["yield"]    = [np.sum(y) for y in df_agts["yield"]]
-    df_agts["crop_1"]   = [c[0] for c in df_agts["crop_1"]]
-    df_agts["rainfed"]  = [1 if irr==0 else 0 for irr in df_agts["irr_vol"]]
-    df_agts["ratio"]    = 1
-    df_agts["year"] = df_agts["Step"] + model.init_year
-
-    #!!!!
-    df_agts = df_agts.drop("perceived_prec_aw", axis=1)
-
-    years = np.arange(model.start_year, model.end_year+1)
-    states = ["Imitation", "Social comparison", "Repetition", "Deliberation"]
-
-    df_state = df_agts.groupby(["state", "year"]).count().reindex(
-        [(s, y) for s in states for y in years], fill_value=0
-        ).reset_index().pivot(index='year', columns='state', values='ratio')
-    #df_model = pd.concat([df_model, df_state], axis=1)
-
-    df_sys = pd.DataFrame(index=years)
-    df_sys["GW_st"] = df_model["GW_st"]
-    df_sys["withdrawal"] = df_model["withdrawal"]
-
-    tech_ratio = df_agts.groupby(["tech_1", "year"]).count()[["ratio"]] / df_agts.groupby(["year"]).sum()[["ratio"]]
-    tech_ratio = tech_ratio.reindex([(t, y) for t in tech_options for y in years], fill_value=0).reset_index()
-    df_sys = pd.concat([df_sys, tech_ratio.pivot(index='year', columns='tech_1', values='ratio')], axis=1)
-
-    crop_ratio = df_agts.groupby(["crop_1", "year"]).count()[["ratio"]] / df_agts.groupby(["year"]).sum()[["ratio"]]
-    crop_ratio = crop_ratio.reindex([(c, y) for c in crop_options for y in years], fill_value=0).reset_index()
-    df_sys = pd.concat([df_sys, crop_ratio.pivot(index='year', columns='crop_1', values='ratio')], axis=1)
-
-    rainfed_ratio = df_agts.groupby(["rainfed", "year"]).count()[["ratio"]] / df_agts.groupby(["year"]).sum()[["ratio"]]
-    rainfed_ratio = rainfed_ratio.reindex([(r, y) for r in [0, 1] for y in years], fill_value=0)
-    df_sys["rainfed"] = rainfed_ratio.xs(1, level="rainfed")
-    df_sys = pd.concat([df_sys, df_state], axis=1)
-
-    #df_sys.index = [y for y in range(model.start_year, model.end_year+1)]
-    df_agts.index = df_agts["year"]
-    return df_sys, df_model, df_agts
-"""
-    
     
     
     
