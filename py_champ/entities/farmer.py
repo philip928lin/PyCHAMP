@@ -147,6 +147,8 @@ class Farmer(mesa.Agent):
 
         # Load config
         self.load_config(config)
+        # Calculate consumat threshold (has to be after load_config) 
+        self.process_consumat_thresholds()
 
         # Assign agt's assets
         self.aquifers = aquifers
@@ -213,8 +215,8 @@ class Farmer(mesa.Agent):
             self.dm_args["alphas"] = config_consumat["alpha"]
         self.dm_args["scale"] = config_consumat["scale"]
 
-        self.sa_thre = config_consumat["satisfaction_threshold"]
-        self.un_thre = config_consumat["uncertainty_threshold"]
+        self.sa_thre_par = config_consumat["satisfaction_threshold"]
+        self.un_thre_par = config_consumat["uncertainty_threshold"]
         self.n_s = config["field"]["area_split"]
 
         self.config_gurobi = config["gurobi"]
@@ -258,6 +260,49 @@ class Farmer(mesa.Agent):
                         4
                     ) for crop in self.crop_options}
         self.percieved_risks = percieved_risks
+    
+    def process_consumat_thresholds(self):
+        """
+        Process and set the consumat thresholds for the agent.
+    
+        This method checks if the threshold parameters (`sa_thre_par` and `un_thre_par`) 
+        are tuples. If they are, it calculates a random value from a truncated normal 
+        distribution using the given parameters. If not, it directly assigns the parameter 
+        value to the threshold.
+    
+        Attributes
+        ----------
+        sa_thre : float
+            The threshold value for `sa` (satisfaction). If `sa_thre_par` is a tuple, 
+            `sa_thre` is derived from a truncated normal distribution. Otherwise, it's 
+            directly set to `sa_thre_par`.
+        un_thre : float
+            The threshold value for `un` (uncertainty). If `un_thre_par` is a tuple, 
+            `un_thre` is derived from a truncated normal distribution. Otherwise, it's 
+            directly set to `un_thre_par`.
+    
+        Returns
+        -------
+        None
+    
+        """
+        sa_thre_par = self.sa_thre_par
+        un_thre_par = self.un_thre_par
+        
+        if isinstance(sa_thre_par, tuple):
+            loc = sa_thre_par[0]; scale = sa_thre_par[1]
+            a, b = (0 - loc) / scale, (1 - loc) / scale
+            self.sa_thre = truncnorm.rvs(a, b, loc=loc, scale=scale, size=1, random_state=self.rngen)[0]
+        else:
+            self.sa_thre = sa_thre_par
+        
+        if isinstance(un_thre_par, tuple):
+            loc = un_thre_par[0]; scale = un_thre_par[1]
+            a, b = (0 - loc) / scale, (1 - loc) / scale
+            self.un_thre = truncnorm.rvs(a, b, loc=loc, scale=scale, size=1, random_state=self.rngen)[0]
+        else:
+            self.un_thre = un_thre_par
+            
     
     def update_perceived_prec_aw(self, par_forecast_trust, year):
         """

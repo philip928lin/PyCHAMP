@@ -647,6 +647,10 @@ class OptModel():
                         name=f"c.{wid}.pumping_capacity")
 
         tr = st * k
+        # Cannot divided by zero
+        if tr < 0.001:
+            tr = 0.001
+        
         fpitr = 4 * np.pi * tr
         e     = m.addMVar((n_h), vtype="C", name=f"{wid}.e(PJ)", lb=0, ub=inf)
         l_t   = m.addMVar((n_h), vtype="C", name=f"{wid}.l_t(m)", lb=0, ub=inf)

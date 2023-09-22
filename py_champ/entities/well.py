@@ -19,7 +19,7 @@ class Well(mesa.Agent):
     k : float
         Hydraulic conductivity of the aquifer in m/d.
     st : float
-        Saturated thickness of the aquifer in meters.
+        Saturated thickness with respect to the well depth in meters.
     sy : float
         Specific yield of the aquifer.
     l_wt : float
@@ -60,7 +60,7 @@ class Well(mesa.Agent):
         k : float
             Hydraulic conductivity of the aquifer in m/d.
         st : float
-            Saturated thickness of the aquifer in meters.
+            Saturated thickness with respect to the well depth in meters.
         sy : float
             Specific yield of the aquifer.
         l_wt : float
@@ -152,7 +152,13 @@ class Well(mesa.Agent):
         # level change
         self.l_wt -= dwl
         self.st += dwl
-        self.tr = self.st * self.k # Update Transmissivity
+        tr_ = self.st * self.k # Update Transmissivity
+        # cannot divided by zero
+        if tr_ < 0.001:
+            self.tr = 0.001
+        else:
+            self.tr = tr_
+        
         self.withdrawal = withdrawal
         l_wt = self.l_wt
 
@@ -163,6 +169,7 @@ class Well(mesa.Agent):
         # Calculate energy consumption
         m_ha_2_m3 = 10000
         fpitr = 4 * np.pi * tr
+        
         l_cd_l_wd = (1+eff_well) * pumping_rate/fpitr \
                     * (-0.5772 - np.log(r**2*sy/fpitr)) * m_ha_2_m3
         l_t = l_wt + l_cd_l_wd + l_pr
@@ -172,3 +179,12 @@ class Well(mesa.Agent):
         self.e = e
 
         return e
+    
+# for i in range(20):
+#     m_ha_2_m3 = 10000
+#     tr = (i+1) * 80
+#     fpitr = 4 * np.pi * tr
+#     l_cd_l_wd = (1+0.5) * 5000/fpitr \
+#                 * (-0.5772 - np.log(0.4064**2*0.05/fpitr)) * m_ha_2_m3    
+#     print(l_cd_l_wd)
+    
