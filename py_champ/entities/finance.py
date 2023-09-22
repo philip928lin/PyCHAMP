@@ -106,8 +106,10 @@ class Finance():
         e = sum([well.e for _, well in wells.items()])      # PJ
 
         cf = self.config_finance
+        # Operational cost only happen when the irrigation amount is not zero.
         cost_tech = sum([cf["irr_tech_operational_cost"][field.te] \
-                         for _, field in fields.items()])
+                         if field.irr_vol_per_field > 0 else 0 \
+                             for _, field in fields.items()])
         
         # Loop over fields to calculate technology and crop change costs
         tech_change_cost = 0
