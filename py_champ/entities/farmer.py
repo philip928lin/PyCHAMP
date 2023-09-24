@@ -193,6 +193,7 @@ class Farmer(mesa.Agent):
         # Run the optimization to solve irr depth with every other variables
         # fixed.
         self.dm_sols = self.make_dm(None, dm_sols=dm_sols, init=True)
+        self.dm_sols_neighbor = None 
         # Run the simulation to calculate satisfication and uncertainty
         self.run_simulation() # aquifers
 
@@ -371,11 +372,13 @@ class Farmer(mesa.Agent):
             self.make_dm_deliberation()
 
         # Retrieve opt info
-        dm_sols = self.dm_sols
-        self.gp_status = dm_sols['gp_status']
-        self.gp_MIPGap = dm_sols['gp_MIPGap']
-        self.gp_report = dm_sols['gp_report']
-
+        # try:
+        #     dm_sols = self.dm_sols
+        #     self.gp_status = dm_sols['gp_status']
+        #     self.gp_MIPGap = dm_sols['gp_MIPGap']
+        #     self.gp_report = dm_sols['gp_report']
+        # except:
+        #     pass
         ### Simulation
         # Note prec_aw_dict have to be updated externally first.
         self.run_simulation()
@@ -438,6 +441,11 @@ class Farmer(mesa.Agent):
                 irr_depth=irr_depth, i_crop=i_crop, i_te=i_te, 
                 prec_aw=field.prec_aw_step[self.current_year] # Retrieve prec data
                 )
+            dm_sols[fi]["i_crop"] = field.i_crop # Since field.step might update this.
+            i_rainfed = dm_sols[fi]['i_rainfed']
+            for si in range(i_rainfed.shape[0]):
+                if sum(sum(i_rainfed[si,:,:])) > 0.5:
+                    i_rainfed[si,:,:] = field.i_crop[si,:,:]                    
 
         # Simulate wells (energy consumption)
         allo_r = dm_sols['allo_r']         # Well allocation ratio from optimization
@@ -508,7 +516,7 @@ class Farmer(mesa.Agent):
         if self.fix_state is not None:
             self.state = self.fix_state
         
-    def make_dm(self, state, dm_sols, init=False):
+    def make_dm(self, state, dm_sols, dm_sols_neighbor=None, init=False):
         """
         Create and solve an optimization model for decision-making.
     
@@ -567,7 +575,7 @@ class Farmer(mesa.Agent):
                 dm.setup_constr_field(
                     field_id=fi,
                     prec_aw=field.prec_aw_step[self.current_year],
-                    pre_i_crop=dm_sols_fi['pre_i_crop'],
+                    pre_i_crop=dm_sols_fi['pre_i_crop'],   # potential bug
                     pre_i_te=dm_sols_fi['pre_i_te'],
                     field_type=field.field_type,
                     i_crop=dm_sols_fi['i_crop'],
@@ -600,7 +608,7 @@ class Farmer(mesa.Agent):
                     i_te=None,
                     block_w_interval_for_corn=block_w_interval_for_corn
                     )
-            else:
+            elif state == "Repetition":
                 # only optimize irrigation depth
                 dm.setup_constr_field(
                     field_id=fi,
@@ -611,6 +619,19 @@ class Farmer(mesa.Agent):
                     i_crop=dm_sols_fi['i_crop'],
                     i_rainfed=dm_sols_fi['i_rainfed'],
                     i_te=dm_sols_fi['i_te'],
+                    block_w_interval_for_corn=block_w_interval_for_corn
+                    )
+            else: # social comparason & imitation
+                #print(state)
+                dm.setup_constr_field(
+                    field_id=fi,
+                    prec_aw=perceived_prec_aw[fi],
+                    pre_i_crop=dm_sols_fi['pre_i_crop'],
+                    pre_i_te=dm_sols_fi['pre_i_te'],
+                    field_type=field.field_type,
+                    i_crop=dm_sols_neighbor[fi]['i_crop'],
+                    i_rainfed=dm_sols_neighbor[fi]['i_rainfed'],
+                    i_te=dm_sols_neighbor[fi]['i_te'],
                     block_w_interval_for_corn=block_w_interval_for_corn
                     )
 
@@ -667,6 +688,15 @@ class Farmer(mesa.Agent):
             )
         dm_sols = dm.sols
         dm.depose_gp_env()  # Release memory
+        
+        # try:
+        #     #dm_sols = self.dm_sols
+        #     self.gp_status = dm_sols['gp_status']
+        #     self.gp_MIPGap = dm_sols['gp_MIPGap']
+        #     self.gp_report = dm_sols['gp_report']
+        # except:
+        #     pass
+        
         return dm_sols
 
     def make_dm_deliberation(self):
@@ -682,7 +712,7 @@ class Farmer(mesa.Agent):
         This method updates the `dm_sols` attribute by calling the `make_dm` method
         with the current state set to "Deliberation".
         """
-        self.dm_sols = self.make_dm(state=self.state, dm_sols=self.dm_sols)
+        self.dm_sols = self.make_dm(state="Deliberation", dm_sols=self.dm_sols)
 
     def make_dm_repetition(self):
         """
@@ -697,7 +727,7 @@ class Farmer(mesa.Agent):
         This method updates the `dm_sols` attribute by calling the `make_dm` method
         with the current state set to "Repetition".
         """
-        self.dm_sols = self.make_dm(state=self.state, dm_sols=self.dm_sols)
+        self.dm_sols = self.make_dm(state="Repetition", dm_sols=self.dm_sols)
 
     def make_dm_social_comparison(self):
         """
@@ -725,10 +755,11 @@ class Farmer(mesa.Agent):
         for farmer_id in farmer_ids_in_network:
             # !!! Here we assume no. fields, n_c and split are the same across agents
             # Keep this for now.
-            
+            self.dm_sols_neighbor=farmers_in_network[farmer_id].dm_sols
             dm_sols = self.make_dm(
-                state=self.state,
-                dm_sols=farmers_in_network[farmer_id].dm_sols
+                state="Social comparison",
+                dm_sols=self.dm_sols,
+                dm_sols_neighbor=self.dm_sols_neighbor
                 )
             dm_sols_list.append(dm_sols)
         objs = [s['obj'] for s in dm_sols_list]
@@ -770,10 +801,12 @@ class Farmer(mesa.Agent):
                 selected_farmer_id_in_network = np.random.choice(self.farmer_ids_in_network)
 
         farmers_in_network = self.farmers_in_network
-
+        self.dm_sols_neighbor=farmers_in_network[selected_farmer_id_in_network].dm_sols
+        
         dm_sols = self.make_dm(
-            state=self.state,
-            dm_sols=farmers_in_network[selected_farmer_id_in_network].dm_sols
+            state="Imitation",
+            dm_sols=self.dm_sols,
+            dm_sols_neighbor=self.dm_sols_neighbor
             )
         self.dm_sols = dm_sols
 

@@ -259,13 +259,30 @@ class SD6Model(mesa.Model):
                     for agtid in agt.farmer_ids_in_network
                 }
 
-        def get_agt_attr(attr):
+        
+        def get_nested_attr(obj, attr_str):
+            attrs = attr_str.split('.', 1)
+            current_attr = getattr(obj, attrs[0], None)
+            if len(attrs) == 1 or current_attr is None:
+                return current_attr
+            return get_nested_attr(current_attr, attrs[1])
+        
+        
+        def get_agt_attr(attr_str):
             # This replaces lambda a: getattr(a, "satisfaction", None)
             # We have to do this to return None if the attribute is not exist 
             # in the given agent type.
-            def func(agent):
-                return getattr(agent, attr, None)
-            return func
+            # def func(agent):
+            #     return getattr(agent, attr, None)
+            def get_nested_attr(obj):
+                def get_nested_attr_(obj, attr_str):
+                    attrs = attr_str.split('.', 1)
+                    current_attr = getattr(obj, attrs[0], None)
+                    if len(attrs) == 1 or current_attr is None:
+                        return current_attr
+                    return get_nested_attr_(current_attr, attrs[1])
+                return get_nested_attr_(obj, attr_str)
+            return get_nested_attr
         
         agent_reporters = {
             "agt_type":         get_agt_attr("agt_type"),
@@ -273,6 +290,7 @@ class SD6Model(mesa.Model):
             "field_type":       get_agt_attr("field_type"),
             "crop":             get_agt_attr("crops"),
             "tech":             get_agt_attr("te"),
+            "w":                get_agt_attr("w"),
             "irr_vol_per_field":    get_agt_attr("irr_vol_per_field"),
             "yield_rate_per_field": get_agt_attr("yield_rate_per_field"),
             # Farmer
@@ -284,6 +302,7 @@ class SD6Model(mesa.Model):
             "profit":           get_agt_attr("profit"),                 # 1e4 $
             "revenue":          get_agt_attr("finance.rev"),            # 1e4 $
             "energy_cost":      get_agt_attr("finance.cost_e"),         # 1e4 $
+            "tech_cost":        get_agt_attr("finance.tech_cost"),      # 1e4 $
             "irr_vol":          get_agt_attr("irr_vol"),                # m-ha
             "gp_status":        get_agt_attr("gp_status"),
             "gp_MIPGap":        get_agt_attr("gp_MIPGap"),
@@ -723,6 +742,61 @@ class SD6Plots():
             plt.savefig(savefig)
             
         plt.show()
+    
+    
+r"""
+def get_df_sys(model):
+    # Not yet generalized
+    crop_options = model.crop_options
+    tech_options = model.tech_options
+
+    dc = model.datacollector
+    dc.model_vars
+
+    # for a farmer with one field and one well only!!
+    df_model = dc.get_model_vars_dataframe()
+    df_model = df_model.set_index("year")
+    df_agts = dc.get_agent_vars_dataframe().reset_index()
+    df_agts["irr_depth"]= df_agts["irr_vol"] / 50 * 100  #!!! cm
+    df_agts["yield"]    = [np.sum(y) for y in df_agts["yield"]]
+    df_agts["crop_1"]   = [c[0] for c in df_agts["crop_1"]]
+    df_agts["rainfed"]  = [1 if irr==0 else 0 for irr in df_agts["irr_vol"]]
+    df_agts["ratio"]    = 1
+    df_agts["year"] = df_agts["Step"] + model.init_year
+
+    #!!!!
+    df_agts = df_agts.drop("perceived_prec_aw", axis=1)
+
+    years = np.arange(model.start_year, model.end_year+1)
+    states = ["Imitation", "Social comparison", "Repetition", "Deliberation"]
+
+    df_state = df_agts.groupby(["state", "year"]).count().reindex(
+        [(s, y) for s in states for y in years], fill_value=0
+        ).reset_index().pivot(index='year', columns='state', values='ratio')
+    #df_model = pd.concat([df_model, df_state], axis=1)
+
+    df_sys = pd.DataFrame(index=years)
+    df_sys["GW_st"] = df_model["GW_st"]
+    df_sys["withdrawal"] = df_model["withdrawal"]
+
+    tech_ratio = df_agts.groupby(["tech_1", "year"]).count()[["ratio"]] / df_agts.groupby(["year"]).sum()[["ratio"]]
+    tech_ratio = tech_ratio.reindex([(t, y) for t in tech_options for y in years], fill_value=0).reset_index()
+    df_sys = pd.concat([df_sys, tech_ratio.pivot(index='year', columns='tech_1', values='ratio')], axis=1)
+
+    crop_ratio = df_agts.groupby(["crop_1", "year"]).count()[["ratio"]] / df_agts.groupby(["year"]).sum()[["ratio"]]
+    crop_ratio = crop_ratio.reindex([(c, y) for c in crop_options for y in years], fill_value=0).reset_index()
+    df_sys = pd.concat([df_sys, crop_ratio.pivot(index='year', columns='crop_1', values='ratio')], axis=1)
+
+    rainfed_ratio = df_agts.groupby(["rainfed", "year"]).count()[["ratio"]] / df_agts.groupby(["year"]).sum()[["ratio"]]
+    rainfed_ratio = rainfed_ratio.reindex([(r, y) for r in [0, 1] for y in years], fill_value=0)
+    df_sys["rainfed"] = rainfed_ratio.xs(1, level="rainfed")
+    df_sys = pd.concat([df_sys, df_state], axis=1)
+
+    #df_sys.index = [y for y in range(model.start_year, model.end_year+1)]
+    df_agts.index = df_agts["year"]
+    return df_sys, df_model, df_agts
+"""
+    
     
     
     

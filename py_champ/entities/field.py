@@ -136,6 +136,11 @@ class Field(mesa.Agent):
         self.a = crop_par[:, 2].reshape((-1, 1))        # (n_c, 1)
         self.b = crop_par[:, 3].reshape((-1, 1))        # (n_c, 1)
         self.c = crop_par[:, 4].reshape((-1, 1))        # (n_c, 1)
+        try:
+            self.min_y_pct = crop_par[:, 5].reshape((-1, 1))        # (n_c, 1)
+        except:
+            self.min_y_pct = np.zeros((self.n_c, 1))
+        
         self.n_s = config_field['area_split']
         self.n_c = len(crop_options)
         self.field_area = config_field["field_area"]
@@ -231,7 +236,6 @@ class Field(mesa.Agent):
         unit_area = self.unit_area
 
         ### Yield calculation
-        self.update_crops(i_crop)   # update pre_i_crop
         irr_depth = irr_depth.copy()[:,:,[0]]
         prec_aw_ = np.ones(irr_depth.shape)
         for ci, crop in enumerate(self.crop_options):
@@ -244,11 +248,35 @@ class Field(mesa.Agent):
         y_ = (a * w_**2 + b * w_ + c)
         y_ = np.maximum(0, y_)
         y_ = y_ * i_crop
+        
+        # Force a margin cutoff
+        min_y_pct = np.tile(self.min_y_pct, (self.n_s, 1, 1))
+        if "fallow" in self.crop_options:
+            i_crop[y_ < min_y_pct] = 0
+            fallow_ind = self.crop_options.index("fallow")
+            
+            if any(np.all(i_crop == 0, axis=1)):
+                pass
+            
+            zero_columns = np.all(i_crop == 0, axis=1)
+            # Set the fourth row of those columns to 1
+            i_crop[zero_columns[0], fallow_ind] = 1
+        y_[y_ < min_y_pct] = 0
+        
+        self.update_crops(i_crop)   # update pre_i_crop
+        
+        
+        
         y = y_ * ymax * unit_area * 1e-4      # 1e4 bu
+        
+        
+        
+        
         cm2m = 0.01
         v_c = irr_depth * unit_area * cm2m    # m-ha
         irr_vol = np.sum(v_c)                 # m-ha
         avg_y_y = np.sum(y_) / n_s
+        avg_w = np.sum(w) / n_s
 
         ### Tech (for the pumping cost calculation in Finance module)
         self.update_irr_tech(i_te)  # update tech
@@ -259,6 +287,7 @@ class Field(mesa.Agent):
 
         # record
         self.y = y 
+        self.w = avg_w
         self.yield_rate_per_field = avg_y_y
         self.irr_vol_per_field = irr_vol    # m-ha
 
