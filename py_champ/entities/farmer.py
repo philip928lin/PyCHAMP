@@ -12,7 +12,7 @@ from ..util import Box
 class Farmer(mesa.Agent):
     """
        A Farmer agent for the MESA model.
-    
+
        Attributes
        ----------
        agt_type : str
@@ -79,10 +79,10 @@ class Farmer(mesa.Agent):
            Perceived avalible precipitation.
        dm_sols : dict
            Decision-making solutions, mimicking opt_model's output.
-    
+
        """
 
-    def __init__(self, farmer_id, mesa_model, config, agt_attrs, 
+    def __init__(self, farmer_id, mesa_model, config, agt_attrs,
                  fields, wells, finance, aquifers,
                  ini_year,
                  crop_options, tech_options, **kwargs):
@@ -121,8 +121,8 @@ class Farmer(mesa.Agent):
         The `kwargs` could contain any additional attributes that you want to
         add to the Farmer agent. Available keywords include:
         - fix_state : str
-            "Imitation", "Social comparison", "Repetition", "Deliberation", 
-            and "FixCrop".  
+            "Imitation", "Social comparison", "Repetition", "Deliberation",
+            and "FixCrop".
         - rngen : object
             Numpy random generator.
         """
@@ -133,7 +133,7 @@ class Farmer(mesa.Agent):
         # Load other kwargs
         for k, v in kwargs.items():
             setattr(self, k, v)
-            
+
         self.fix_state = kwargs.get("fix_state")
         #========
         self.farmer_id = farmer_id
@@ -147,7 +147,7 @@ class Farmer(mesa.Agent):
 
         # Load config
         self.load_config(config)
-        # Calculate consumat threshold (has to be after load_config) 
+        # Calculate consumat threshold (has to be after load_config)
         self.process_consumat_thresholds()
 
         # Assign agt's assets
@@ -167,21 +167,22 @@ class Farmer(mesa.Agent):
         self.uncertainty = None
         self.irr_vol = None         # m-ha
         self.profit = None
+        self.avg_profit_per_field = None
         self.yield_rate = None
-        
+
         self.scaled_profit = None
         self.scaled_yield_rate = None
-        
+
         self.needs = {}
         self.farmers_in_network = {}   # This will be dynamically updated in a simulation
         self.selected_farmer_id_in_network = None # This will be populated after social comparison
-        
+
         # Some other attributes
         self.t = 0
         self.current_year = ini_year
         self.percieved_risks = None
         self.perceived_prec_aw = None
-        
+
         # Initialize dm_sol (mimicing opt_model's output)
         dm_sols = {}
         for fi, field in self.fields.items():
@@ -193,7 +194,7 @@ class Farmer(mesa.Agent):
         # Run the optimization to solve irr depth with every other variables
         # fixed.
         self.dm_sols = self.make_dm(None, dm_sols=dm_sols, init=True)
-        self.dm_sols_neighbor = None 
+        self.dm_sols_neighbor = None
         # Run the simulation to calculate satisfication and uncertainty
         self.run_simulation() # aquifers
 
@@ -226,23 +227,23 @@ class Farmer(mesa.Agent):
     def process_percieved_risks(self, par_perceived_risk):
         """
         Process and compute the perceived risks for each field and crop option.
-    
+
         Parameters
         ----------
         par_perceived_risk : float
             Parental perceived risk value used for computing the agent's perceived risks.
-    
+
         Attributes Modified
         -------------------
         percieved_risks : dict
             Updated dictionary containing the perceived risks for each crop option.
-    
+
         Notes
         -----
         This method updates the `percieved_risks` attribute of the Farmer agent based
         on the `par_perceived_risk` and other field-specific parameters. The perceived
         risks are computed using the truncated normal distribution.
-    
+
         The method assumes that the `fields` attribute and `crop_options` are already
         initialized and populated.
         """
@@ -261,75 +262,75 @@ class Farmer(mesa.Agent):
                         4
                     ) for crop in self.crop_options}
         self.percieved_risks = percieved_risks
-    
+
     def process_consumat_thresholds(self):
         """
         Process and set the consumat thresholds for the agent.
-    
-        This method checks if the threshold parameters (`sa_thre_par` and `un_thre_par`) 
-        are tuples. If they are, it calculates a random value from a truncated normal 
-        distribution using the given parameters. If not, it directly assigns the parameter 
+
+        This method checks if the threshold parameters (`sa_thre_par` and `un_thre_par`)
+        are tuples. If they are, it calculates a random value from a truncated normal
+        distribution using the given parameters. If not, it directly assigns the parameter
         value to the threshold.
-    
+
         Attributes
         ----------
         sa_thre : float
-            The threshold value for `sa` (satisfaction). If `sa_thre_par` is a tuple, 
-            `sa_thre` is derived from a truncated normal distribution. Otherwise, it's 
+            The threshold value for `sa` (satisfaction). If `sa_thre_par` is a tuple,
+            `sa_thre` is derived from a truncated normal distribution. Otherwise, it's
             directly set to `sa_thre_par`.
         un_thre : float
-            The threshold value for `un` (uncertainty). If `un_thre_par` is a tuple, 
-            `un_thre` is derived from a truncated normal distribution. Otherwise, it's 
+            The threshold value for `un` (uncertainty). If `un_thre_par` is a tuple,
+            `un_thre` is derived from a truncated normal distribution. Otherwise, it's
             directly set to `un_thre_par`.
-    
+
         Returns
         -------
         None
-    
+
         """
         sa_thre_par = self.sa_thre_par
         un_thre_par = self.un_thre_par
-        
+
         if isinstance(sa_thre_par, tuple):
             loc = sa_thre_par[0]; scale = sa_thre_par[1]
             a, b = (0 - loc) / scale, (1 - loc) / scale
             self.sa_thre = truncnorm.rvs(a, b, loc=loc, scale=scale, size=1, random_state=self.rngen)[0]
         else:
             self.sa_thre = sa_thre_par
-        
+
         if isinstance(un_thre_par, tuple):
             loc = un_thre_par[0]; scale = un_thre_par[1]
             a, b = (0 - loc) / scale, (1 - loc) / scale
             self.un_thre = truncnorm.rvs(a, b, loc=loc, scale=scale, size=1, random_state=self.rngen)[0]
         else:
             self.un_thre = un_thre_par
-            
-    
+
+
     def update_perceived_prec_aw(self, par_forecast_trust, year):
         """
         Update the agent's perceived precipitation awareness based on forecast trust and year.
-    
+
         Parameters
         ----------
         par_forecast_trust : float
-            Parental forecast trust value used for blending the agent's original 
+            Parental forecast trust value used for blending the agent's original
             perceived precipitation awareness with the perfect forecast.
         year : int
-            The year for which the perceived precipitation awareness is to be updated. 
+            The year for which the perceived precipitation awareness is to be updated.
             Should be one step ahead of the agent's current year.
-    
+
         Attributes Modified
         -------------------
         perceived_prec_aw : dict
             Updated dictionary containing the perceived available precipitation for each field.
-    
+
         Notes
         -----
         This method updates the `perceived_prec_aw` attribute of the Farmer agent based
         on the `par_forecast_trust` and other field-specific parameters. The perceived
-        available precipitation is a blend of the agent's original perception and the 
+        available precipitation is a blend of the agent's original perception and the
         perfect forecast.
-    
+
         The method assumes that the `fields` and `percieved_risks` attributes are already
         initialized and populated.
         """
@@ -354,10 +355,11 @@ class Farmer(mesa.Agent):
         """
         self.t += 1
         self.current_year += 1
-        
+
         ### Optimization
         # Make decisions based on CONSUMAT theory
         state = self.state
+        print(self.farmer_id, ": ", state)
         if state == "Imitation":
             self.make_dm_imitation()
         elif state == "Social comparison":
@@ -366,19 +368,19 @@ class Farmer(mesa.Agent):
             self.make_dm_repetition()
         elif state == "Deliberation":
             self.make_dm_deliberation()
-        
+
         # Internal experiment
         elif state == 'FixCrop':
             self.make_dm_deliberation()
 
         # Retrieve opt info
-        # try:
-        #     dm_sols = self.dm_sols
-        #     self.gp_status = dm_sols['gp_status']
-        #     self.gp_MIPGap = dm_sols['gp_MIPGap']
-        #     self.gp_report = dm_sols['gp_report']
-        # except:
-        #     pass
+        try:
+            dm_sols = self.dm_sols
+            self.gp_status = dm_sols['gp_status']
+            self.gp_MIPGap = dm_sols['gp_MIPGap']
+            self.gp_report = dm_sols['gp_report']
+        except:
+            pass
         ### Simulation
         # Note prec_aw_dict have to be updated externally first.
         self.run_simulation()
@@ -388,7 +390,7 @@ class Farmer(mesa.Agent):
     def run_simulation(self):
         """
         Run the simulation for the Farmer agent for a single time step.
-    
+
         Attributes Modified
         -------------------
         irr_vol : float
@@ -409,7 +411,7 @@ class Farmer(mesa.Agent):
             Current uncertainty level of the agent.
         state : str
             Updated CONSUMAT state of the agent.
-    
+
         Notes
         -----
         This method performs several key steps:
@@ -418,7 +420,7 @@ class Farmer(mesa.Agent):
         3. Updates the financial status of the agent.
         4. Calculates key metrics like profit, yield rate, satisfaction, and uncertainty.
         5. Updates the CONSUMAT state of the agent based on the calculated metrics.
-    
+
         The method assumes that all required attributes like `fields`, `wells`, `finance`,
         `dm_sols`, and `dm_args` are already initialized and populated.
         """
@@ -435,17 +437,17 @@ class Farmer(mesa.Agent):
         # Simulate fields
         for fi, field in fields.items():
             irr_depth = dm_sols[fi]["irr_depth"][:,:,[0]]
-            i_crop = dm_sols[fi]["i_crop"]
+            i_crop = dm_sols[fi]["i_crop"].copy()
             i_te = dm_sols[fi]["i_te"]
             field.step(
-                irr_depth=irr_depth, i_crop=i_crop, i_te=i_te, 
+                irr_depth=irr_depth, i_crop=i_crop, i_te=i_te,
                 prec_aw=field.prec_aw_step[self.current_year] # Retrieve prec data
                 )
-            dm_sols[fi]["i_crop"] = field.i_crop # Since field.step might update this.
-            i_rainfed = dm_sols[fi]['i_rainfed']
-            for si in range(i_rainfed.shape[0]):
-                if sum(sum(i_rainfed[si,:,:])) > 0.5:
-                    i_rainfed[si,:,:] = field.i_crop[si,:,:]                    
+            # dm_sols[fi]["i_crop"] = field.i_crop # Since field.step might update this.
+            # i_rainfed = dm_sols[fi]['i_rainfed']
+            # for si in range(i_rainfed.shape[0]):
+            #     if sum(sum(i_rainfed[si,:,:])) > 0.5:
+            #         i_rainfed[si,:,:] = field.i_crop[si,:,:]
 
         # Simulate wells (energy consumption)
         allo_r = dm_sols['allo_r']         # Well allocation ratio from optimization
@@ -468,13 +470,15 @@ class Farmer(mesa.Agent):
 
         # Collect variables for evaluation metrices
         self.profit = self.finance.profit
+        self.avg_profit_per_field = self.profit/len(fields)
         yield_rate = sum([field.yield_rate_per_field for _, field in fields.items()])/len(fields)
         self.yield_rate = yield_rate
 
         # Calculate satisfaction and uncertainty
         needs = self.needs
         scales = dm_args["scale"]
-        self.scaled_profit = self.profit/scales["profit"]
+        # Use the average values per field
+        self.scaled_profit = self.avg_profit_per_field/scales["profit"]
         self.scaled_yield_rate = self.yield_rate/scales["yield_rate"]
 
         def func(x, alpha=1):
@@ -488,7 +492,7 @@ class Farmer(mesa.Agent):
         eval_metric = dm_args["eval_metric"]
         satisfaction = needs[eval_metric]
         expected_sa = dm_sols["Sa"][eval_metric]
-        
+
         # We define uncertainty to be the difference between expected_sa at the
         # previous time and satisfication this year.
         expected_sa_t_1 = self.expected_sa
@@ -503,7 +507,7 @@ class Farmer(mesa.Agent):
         self.uncertainty = uncertainty
         sa_thre = self.sa_thre
         un_thre = self.un_thre
-        
+
         if satisfaction >= sa_thre and uncertainty >= un_thre:
             self.state = "Imitation"
         elif satisfaction < sa_thre and uncertainty >= un_thre:
@@ -512,14 +516,14 @@ class Farmer(mesa.Agent):
             self.state = "Repetition"
         elif satisfaction < sa_thre and uncertainty < un_thre:
             self.state = "Deliberation"
-        
+
         if self.fix_state is not None:
             self.state = self.fix_state
-        
+
     def make_dm(self, state, dm_sols, dm_sols_neighbor=None, init=False):
         """
         Create and solve an optimization model for decision-making.
-    
+
         Parameters
         ----------
         state : str or None
@@ -528,12 +532,12 @@ class Farmer(mesa.Agent):
             Previous decision-making solutions, used as input for the optimization model.
         init : bool, optional
             Flag to indicate if this is the initial setup. Default is False.
-    
+
         Returns
         -------
         dm_sols : dict
             Updated decision-making solutions after solving the optimization model.
-    
+
         Notes
         -----
         This method performs several key steps:
@@ -543,10 +547,10 @@ class Farmer(mesa.Agent):
         4. Sets up constraints for water rights.
         5. Solves the optimization model.
         6. Returns the updated decision-making solutions.
-    
+
         The method assumes that all required attributes like `fields`, `wells`, `aquifers`,
         `dm_args`, and `water_rights` are already initialized and populated.
-    
+
         The `state` parameter can take values like "FixCrop", "Deliberation", etc., which
         determine the type of optimization to run.
         """
@@ -554,7 +558,7 @@ class Farmer(mesa.Agent):
         dm_args = self.dm_args
         fields = self.fields
         wells = self.wells
-        
+
         dm = OptModel(name=self.farmer_id,
                       LogToConsole=self.config_gurobi.get("LogToConsole"))
         dm.setup_ini_model(
@@ -688,7 +692,7 @@ class Farmer(mesa.Agent):
             )
         dm_sols = dm.sols
         dm.depose_gp_env()  # Release memory
-        
+
         # try:
         #     #dm_sols = self.dm_sols
         #     self.gp_status = dm_sols['gp_status']
@@ -696,17 +700,17 @@ class Farmer(mesa.Agent):
         #     self.gp_report = dm_sols['gp_report']
         # except:
         #     pass
-        
+
         return dm_sols
 
     def make_dm_deliberation(self):
         """
         Make decision under the "Deliberation" CONSUMAT state.
-    
+
         Returns
         -------
         None
-    
+
         Notes
         -----
         This method updates the `dm_sols` attribute by calling the `make_dm` method
@@ -717,11 +721,11 @@ class Farmer(mesa.Agent):
     def make_dm_repetition(self):
         """
         Make decision under the "Repetition" CONSUMAT state.
-    
+
         Returns
         -------
         None
-    
+
         Notes
         -----
         This method updates the `dm_sols` attribute by calling the `make_dm` method
@@ -732,11 +736,11 @@ class Farmer(mesa.Agent):
     def make_dm_social_comparison(self):
         """
         Make decision under the "Social comparison" CONSUMAT state.
-    
+
         Returns
         -------
         None
-    
+
         Notes
         -----
         This method performs several key steps:
@@ -744,7 +748,7 @@ class Farmer(mesa.Agent):
         2. Selects the agent with the best objective value.
         3. Compares the agent's original choice with the selected agent's choice.
         4. Updates the `dm_sols` attribute based on the comparison.
-    
+
         The method assumes that `farmer_ids_in_network` and `farmers_in_network` are already
         initialized and populated.
         """
@@ -778,18 +782,18 @@ class Farmer(mesa.Agent):
     def make_dm_imitation(self):
         """
         Make decision under the "Imitation" CONSUMAT state.
-    
+
         Returns
         -------
         None
-    
+
         Notes
         -----
         This method performs the following key steps:
         1. Selects an agent from the network for imitation.
         2. Updates the `dm_sols` attribute by calling the `make_dm` method
            with the current state set to "Imitation" and using the selected agent's solutions.
-    
+
         The method assumes that `farmer_ids_in_network` and `farmers_in_network` are already
         initialized and populated.
         """
@@ -802,7 +806,7 @@ class Farmer(mesa.Agent):
 
         farmers_in_network = self.farmers_in_network
         self.dm_sols_neighbor=farmers_in_network[selected_farmer_id_in_network].dm_sols
-        
+
         dm_sols = self.make_dm(
             state="Imitation",
             dm_sols=self.dm_sols,

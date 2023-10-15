@@ -102,6 +102,7 @@ class SD6Model(mesa.Model):
 
         # mesa has self.random.seed(seed) but it is not usable for truncnorm
         # We create our own random generator.
+        self.seed = seed
         self.rngen = np.random.default_rng(seed)
 
         # Input timestep data
@@ -300,6 +301,7 @@ class SD6Model(mesa.Model):
             "state":            get_agt_attr("state"),
             "yield_rate":       get_agt_attr("yield_rate"),             # [0, 1]
             "profit":           get_agt_attr("profit"),                 # 1e4 $
+            "profit_per_field": get_agt_attr("avg_profit_per_field"),   # 1e4 $
             "revenue":          get_agt_attr("finance.rev"),            # 1e4 $
             "energy_cost":      get_agt_attr("finance.cost_e"),         # 1e4 $
             "tech_cost":        get_agt_attr("finance.tech_cost"),      # 1e4 $
@@ -551,18 +553,21 @@ class SD6Plots():
         plt.show()
         
     @staticmethod
-    def plot_gwrc(df_sys, data, metrices, df_sys_nolema=None, savefig=None):
+    def plot_gwrc(df_sys, data, metrices, df_sys_nolema=None, stochastic=[], savefig=None):
         ##### st & withdrawal
         fig, axes = plt.subplots(ncols=1, nrows=4, figsize=(5.5, 6), sharex=True, sharey=False)
         axes = axes.flatten()
         x = np.arange(2008, 2023)
     
+        
         for i, v in enumerate(['GW_st', 'withdrawal', "rainfed", "corn"]):
             ax = axes[i]
             ax.plot(x, df_sys[v], c=cmap(i+5))
             if df_sys_nolema is not None:
                 ax.plot(x, df_sys_nolema[v], c=cmap(i+5), ls=":")
             ax.plot(x, data[v], c="k", ls="--")
+            for df in stochastic:
+                ax.plot(x, df[v], c=cmap(i+5), alpha=0.3, lw=0.8)
             metrice = metrices[["r", 'rmse', "KGE"]].T.round(2)[v].to_string()
             ax.legend(title=metrice, title_fontsize=9, edgecolor="white", framealpha=0,
                       loc="lower left")

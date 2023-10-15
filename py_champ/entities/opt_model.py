@@ -209,9 +209,9 @@ class OptModel():
         self.b = crop_par[:, 3].reshape((-1, 1))        # (n_c, 1)
         self.c = crop_par[:, 4].reshape((-1, 1))        # (n_c, 1)
         try:
-            self.min_y_pct = crop_par[:, 5].reshape((-1, 1))        # (n_c, 1)
+            self.min_y_ratio = crop_par[:, 5].reshape((-1, 1))        # (n_c, 1)
         except:
-            self.min_y_pct = np.zeros((self.n_c, 1))
+            self.min_y_ratio = np.zeros((self.n_c, 1))
 
         self.unit_area = config_field['field_area']/self.n_s
         # For consumat
@@ -262,6 +262,7 @@ class OptModel():
         n_h = self.n_h
         # Total irrigation depth per crop per yr
         irr_depth = m.addMVar((n_s, n_c, n_h), vtype="C", name="irr_depth(cm)", lb=0, ub=inf)
+        irr_depth_per_field = m.addMVar((n_s, n_c, n_h), vtype="C", name="irr_depth_per_field(cm)", lb=0, ub=inf)
         # Total irrigation volumn per yr
         v = m.addMVar((n_h), vtype="C", name="v(m-ha)", lb=0, ub=inf)
         # Total yield per crop type per yr
@@ -277,9 +278,11 @@ class OptModel():
         self.vars['irr_depth'] = irr_depth
         self.vars['v'] = v
         self.vars['y'] = y
-        self.vars['y_y'] = y_y
         self.vars['e'] = e
+        ## Average values per field
+        self.vars['y_y'] = y_y
         self.vars['profit'] = profit
+        self.vars['irr_depth_per_field'] = irr_depth_per_field
         self.bigM = 100
         self.penalties = []
 
@@ -463,10 +466,10 @@ class OptModel():
         m.addConstr((yw_temp == (a * w_**2 + b * w_ + c)), name=f"c.{fid}.yw_temp")
         
         # Minimum yield_rate cutoff (aim to capture fallow field)
-        min_y_pct = self.min_y_pct
-        m.addConstr((yw_bi * (yw_temp - min_y_pct) + (1-yw_bi) * (min_y_pct - yw_temp) >= 0),
+        min_y_ratio = self.min_y_ratio
+        m.addConstr((yw_bi * (yw_temp - min_y_ratio) + (1-yw_bi) * (min_y_ratio - yw_temp) >= 0),
                     name=f"c.{fid}.yw_bi")
-        m.addConstr((yw_ == yw_bi * yw_temp + (1-yw_bi) * min_y_pct),
+        m.addConstr((yw_ == yw_bi * yw_temp + (1-yw_bi) * min_y_ratio),
                     name=f"c.{fid}.yw_")
         
         m.addConstr((y_ == yw_ * i_crop), name=f"c.{fid}.y_")
@@ -741,16 +744,19 @@ class OptModel():
 
         # The profit variable is created in the initial to allow users to add
         # contraints without a specific order.
-        profit = vars['profit']
+        
 
         m.addConstr((cost_e == e * energy_price), name="c.cost_e")
         m.addConstr(rev == gp.quicksum(y[i,j,:] * crop_profit[c] \
                     for i in range(n_s) for j, c in enumerate(crop_options)),
                     name="c.rev")
-        m.addConstr((profit == rev - cost_e - annual_cost), name="c.profit")
+
         vars['other_cost'] = annual_cost
         vars['cost_e'] = cost_e
         vars['rev'] = rev
+        
+        # Note the average profit per field is calculated in finish_setup(). 
+        # That way we can ensure the final field numbers added by users.
 
     def setup_constr_wr(self, water_right_id, wr, field_id_list="all",
                         time_window=1, remaining_tw=None, remaining_wr=None,
@@ -773,7 +779,11 @@ class OptModel():
             Depth of the water right [cm].
         field_id_list : "all" or list, optional
             A list of field ids. If given, the water right constraints apply
-            only to the subset of the fields. The default is "all".
+            only to the subset of the fields. Note that water rights are 
+            applied to constrains the average irrigation depth (cm) over 
+            fields. If you want to add the same water rights setting for all 
+            individual fields. setup_constr_wr() for all individual fields. 
+            The default is "all".
         time_window : int, optional
             If given, the water right constrains the total irrigation depth
             over the time window. The default is 1.
@@ -811,7 +821,7 @@ class OptModel():
 
         # Collect irrigation depth over the constrainted fields.
         if fids == "all":
-            irr_sub = vars['irr_depth']         # (n_s, n_c, n_h)
+            irr_sub = vars['irr_depth_per_field']         # (n_s, n_c, n_h)
         else:
             for i, fid in enumerate(fids):
                 if i == 0:
@@ -934,6 +944,7 @@ class OptModel():
             raise ValueError(f"Alpha value of metric '{eval_metric}' is not given.")
 
         # Currently supported metrices
+        # We use average value per field (see finish_setup())
         eval_metric_vars = {
             "profit": vars['profit'],
             "yield_rate": vars['y_y']
@@ -1006,6 +1017,7 @@ class OptModel():
                         for f, fid in enumerate(fids))), name=f"c.{wid}.l_pr(m)")
 
         irr_depth = vars['irr_depth']
+        irr_depth_per_field = vars['irr_depth_per_field']
         y = vars['y']
         y_y = vars['y_y']
         e = vars['e']
@@ -1018,11 +1030,21 @@ class OptModel():
                 else:
                     acc += vars[v][var]
             return acc
+        # Sum over fields
         m.addConstr(irr_depth == get_sum(fids, vars, "irr_depth"), name="c.irr_depth(cm)")
         m.addConstr(v == get_sum(fids, vars, "v"), name="c.v(m-ha)")
         m.addConstr(y == get_sum(fids, vars, "y"), name="c.y(1e4bu)")
-        m.addConstr(y_y == get_sum(fids, vars, "y_y")/n_f, name="c.y_y")
         m.addConstr(e == get_sum(wids, vars, "e"), name="c.e(PJ)")
+        
+        # Calculate average value per field
+        m.addConstr(y_y == get_sum(fids, vars, "y_y")/n_f, name="c.y_y")
+        m.addConstr(irr_depth_per_field == get_sum(fids, vars, "irr_depth")/n_f,
+                    name="c.irr_depth_per_field(cm)")
+        profit = vars['profit']
+        rev = vars['rev']
+        cost_e = vars['cost_e']
+        annual_cost = vars['other_cost']
+        m.addConstr((profit == (rev - cost_e - annual_cost)/n_f), name="c.profit")
 
         m.update()
 
@@ -1105,7 +1127,8 @@ class OptModel():
         m.optimize()
 
         ## Collect the results and do some post calculations.
-        if m.Status == 2:   # Optimal solution found
+        # Optimal solution found or reach time limit 
+        if m.Status == 2 or m.Status == 9:   
             self.optimal_obj_value = m.objVal
             self.sols = extract_sol(self.vars)
             sols = self.sols
@@ -1143,6 +1166,7 @@ class OptModel():
                     N_yr = 1 - np.exp(-alpha * metric_var)
                     Sa = np.mean(N_yr)
                     sols['Sa'][metric] = Sa
+                    
             # Update rainfed info
             for fid in self.field_ids:
                 sols_fid = sols[fid]
@@ -1159,7 +1183,7 @@ class OptModel():
                 if v['remaining_wr'] is not None:
                     fids = v['field_id_list']
                     if fids == "all":
-                        irr_sub = sols['irr_depth']         # (n_s, n_c, n_h)
+                        irr_sub = sols['irr_depth_per_field']         # (n_s, n_c, n_h)
                     else:
                         for i, fid in enumerate(fids):
                             if i == 0:
