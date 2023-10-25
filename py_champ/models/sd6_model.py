@@ -429,7 +429,7 @@ class SD6Model(mesa.Model):
         for aq_id, aq in self.aquifers.items():
             withdrawal = 0
             # Collect all the well withdrawals of a given aquifer
-            withdrawal += sum([well.withdrawal if well.unique_id==aq_id else 0 \
+            withdrawal += sum([well.withdrawal if well.aquifer_id==aq_id else 0 \
                                for _, well in self.wells.items()])
             # Update aquifer
             aq.step(withdrawal)
