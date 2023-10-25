@@ -4,8 +4,9 @@ Email: chungyi@vt.edu
 Last modified on Sep 6, 2023
 """
 import numpy as np
+import mesa
 
-class Finance():
+class Finance(mesa.Agent):
     """
     A class to simulate the financial aspects of an agricultural system.
 
@@ -29,7 +30,7 @@ class Finance():
         Current time step.
     """
 
-    def __init__(self, config):
+    def __init__(self, unique_id, mesa_model, config):
         """
         Initialize a Finance object.
 
@@ -38,6 +39,10 @@ class Finance():
         config : dict
             General configuration information for the model.
         """
+        super().__init__(unique_id, mesa_model)
+        self.agt_type = "Finance"
+        self.unique_id = unique_id
+        
         self.load_config(config)
         
         self.cost_e = None

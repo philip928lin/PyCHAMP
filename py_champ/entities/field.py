@@ -12,7 +12,7 @@ class Field(mesa.Agent):
 
     Attributes
     ----------
-    field_id : str or int
+    unique_id : str or int
         Unique identifier for the field.
     crop_options : list
         List of available crop options.
@@ -40,14 +40,14 @@ class Field(mesa.Agent):
     """
 
     # aquifer_id, lat, dz => They are for dynamic inflow calculation (deprecated)
-    def __init__(self, field_id, mesa_model, config, ini_crop, ini_te, ini_field_type,
+    def __init__(self, unique_id, mesa_model, config, ini_crop, ini_te, ini_field_type,
                  crop_options, tech_options, **kwargs):
         """
         Initialize a Field object.
 
         Parameters
         ----------
-        field_id : str or int
+        unique_id : str or int
             Unique identifier for the field.
         mesa_model : object
             Reference to the overarching MESA model instance.
@@ -75,11 +75,11 @@ class Field(mesa.Agent):
             the corn crop type cannot be chose.  
         """
         # MESA required attributes => (unique_id, model)
-        super().__init__(field_id, mesa_model)
+        super().__init__(unique_id, mesa_model)
         self.agt_type = "Field"
 
         # Initialize attributes
-        self.field_id = field_id
+        self.unique_id = unique_id
         self.crop_options = crop_options
         self.tech_options = tech_options
         self.load_config(config)

@@ -14,7 +14,7 @@ import gurobipy as gp
 
 #################
 
-class OptModel():
+class Decision_making():
     """
     This class represents a farmer making decisions on irrigation depth,
     crop types, rain-fed or irrigated, and irrigation technologies. The
@@ -82,7 +82,7 @@ class OptModel():
     Left blank
 
     """
-    def __init__(self, name="", LogToConsole=1):
+    def __init__(self, unique_id="", LogToConsole=1):
         """
         Instantiate an optimization environment and object for a farmer.
 
@@ -92,7 +92,7 @@ class OptModel():
         only works if you set these parameters before starting the environment.
         """
         # Model name
-        self.name = name
+        self.unique_id = unique_id
         # Create a gurobi environment to ensure thread safety for parallel
         # computing.
         # self.gpenv = gp.Env()
@@ -103,7 +103,7 @@ class OptModel():
             self.gpenv.setParam("LogToConsole", LogToConsole)
         self.gpenv.start()
 
-        self.model = gp.Model(name=name, env=self.gpenv)
+        self.model = gp.Model(name=unique_id, env=self.gpenv)
 
         # Note from gurobi
         # In general, you should aim to create a single Gurobi environment in
@@ -248,7 +248,7 @@ class OptModel():
 
         ## Optimization Model
         # self.model.dispose()    # release the memory of the previous model
-        self.model = gp.Model(name=self.name, env=self.gpenv)
+        self.model = gp.Model(name=self.unique_id, env=self.gpenv)
         self.vars = {}    # A container to store variables.
         self.bounds = {}
         self.bounds['ub_w'] = np.max(self.wmax)
@@ -580,7 +580,7 @@ class OptModel():
         self.n_fields += 1
 
     def setup_constr_well(self, well_id, dwl, st, l_wt, r, k, sy, eff_pump,
-                          eff_well, pumping_capacity=None):
+                          eff_well, pumping_capacity=None, pumping_days=90):
         """
         Add well constraints. You can assign multiple wells by calling
         this function repeatedly with different well_id.
@@ -655,6 +655,8 @@ class OptModel():
             tr = 0.001
         
         fpitr = 4 * np.pi * tr
+        ftrd = 4 * tr * pumping_days
+        
         e     = m.addMVar((n_h), vtype="C", name=f"{wid}.e(PJ)", lb=0, ub=inf)
         l_t   = m.addMVar((n_h), vtype="C", name=f"{wid}.l_t(m)", lb=0, ub=inf)
         q_lnx = m.addMVar((n_h), vtype="C", name=f"{wid}.q_lnx", lb=0, ub=inf)
@@ -665,7 +667,7 @@ class OptModel():
 
         # 10000 is to convert m-ha to m3
         m_ha_2_m3 = 10000
-        m.addConstr((q_lnx == r**2*sy/fpitr), name=f"c.{wid}.q_lnx")
+        m.addConstr((q_lnx == r**2*sy/ftrd), name=f"c.{wid}.q_lnx")
         # y = ln(x)  addGenConstrLog(x, y)
         # m.addConstr((q_lny == np.log(r**2*sy/fpitr)), name=f"c.{wid}.q_lny")
         # Due to TypeError: unsupported operand type(s) for *: 'MLinExpr' and
@@ -1055,7 +1057,7 @@ class OptModel():
         msg = dict_to_string(self.msg, prefix="\t\t", level=2)
         summary = f"""
         ########## Model Summary ##########\n
-        Name:   {self.name}\n
+        Name:   {self.unique_id}\n
         Planning horizon:   {h_msg}
         NO. Crop fields:    {self.n_fields}
         NO. splits          {self.n_s}
@@ -1222,7 +1224,7 @@ class OptModel():
                 h_msg = str(self.n_h)
             gp_report = f"""
         ########## Model Report ##########\n
-        Name:   {self.name}\n
+        Name:   {self.unique_id}\n
         Planning horizon:   {h_msg}
         NO. Crop fields:    {self.n_fields}
         NO. splits          {self.n_s}

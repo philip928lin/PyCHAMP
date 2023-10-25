@@ -12,7 +12,7 @@ class Well(mesa.Agent):
 
     Attributes
     ----------
-    well_id : str or int
+    unique_id : str or int
         Unique identifier for the well.
     r : float
         Radius of the well in meters.
@@ -42,14 +42,15 @@ class Well(mesa.Agent):
         Energy consumption in PJ.
     """
 
-    def __init__(self, well_id, mesa_model, config, r, k, st, sy, l_wt,
+    def __init__(self, unique_id, mesa_model, config, r, k, sy, 
+                 ini_st,  ini_l_wt, ini_pumping_days=90,
                  eff_pump=0.77, eff_well=0.5, aquifer_id=None, **kwargs):
         """
         Initialize a Well object.
 
         Parameters
         ----------
-        well_id : str or int
+        unique_id : str or int
             Unique identifier for the well.
         mesa_model : object
             Reference to the overarching MESA model instance.
@@ -59,12 +60,12 @@ class Well(mesa.Agent):
             Radius of the well in meters.
         k : float
             Hydraulic conductivity of the aquifer in m/d.
-        st : float
-            Saturated thickness with respect to the well depth in meters.
+        ini_st : float
+            Initial saturated thickness with respect to the well depth in meters.
         sy : float
             Specific yield of the aquifer.
-        l_wt : float
-            Water table lift in meters.
+        ini_l_wt : float
+            Initial water table lift in meters.
         eff_pump : float, optional
             Pumping efficiency. Default is 0.77.
         eff_well : float, optional
@@ -75,11 +76,11 @@ class Well(mesa.Agent):
             Additional optional arguments.
         """
         # MESA required attributes => (unique_id, model)
-        super().__init__(well_id, mesa_model)
+        super().__init__(unique_id, mesa_model)
         self.agt_type = "Well"
 
-        self.well_id, self.r, self.k, self.st, self.sy, self.l_wt = \
-            well_id, r, k, st, sy, l_wt
+        self.unique_id, self.r, self.k, self.st, self.sy, self.l_wt = \
+            unique_id, r, k, ini_st, sy, ini_l_wt
         self.eff_pump, self.eff_well = eff_pump, eff_well
         self.aquifer_id = aquifer_id
         self.load_config(config)
@@ -88,11 +89,12 @@ class Well(mesa.Agent):
         for key, value in kwargs.items():
             setattr(self, key, value)
 
-        self.tr = st * k    # Transmissivity
+        self.tr = self.st * k    # Transmissivity
 
         self.t = 0
 
         # Container
+        self.pumping_days = ini_pumping_days
         self.withdrawal = None # m-ha
 
     def load_config(self, config):
@@ -113,7 +115,7 @@ class Well(mesa.Agent):
         self.rho = config_well["rho"]
         self.g = config_well["g"]
 
-    def step(self, withdrawal, dwl, pumping_rate, l_pr):
+    def step(self, withdrawal, dwl, pumping_rate, l_pr, pumping_days=90):
         """
         Simulate the well for one time step based on water withdrawal and other parameters.
 
@@ -147,7 +149,7 @@ class Well(mesa.Agent):
             Updated energy consumption.
         """
         self.t +=1
-
+        self.pumping_days = pumping_days
         # Update saturated thickness and water table lift based on groundwater
         # level change
         self.l_wt -= dwl
@@ -169,9 +171,10 @@ class Well(mesa.Agent):
         # Calculate energy consumption
         m_ha_2_m3 = 10000
         fpitr = 4 * np.pi * tr
+        ftrd = 4 * tr * pumping_days
         
         l_cd_l_wd = (1+eff_well) * pumping_rate/fpitr \
-                    * (-0.5772 - np.log(r**2*sy/fpitr)) * m_ha_2_m3
+                    * (-0.5772 - np.log(r**2*sy/ftrd)) * m_ha_2_m3
         l_t = l_wt + l_cd_l_wd + l_pr
         e = rho * g * m_ha_2_m3 / eff_pump / 1e15 * withdrawal * l_t     # PJ
 

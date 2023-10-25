@@ -5,7 +5,7 @@ import mesa
 # import py_champ
 from ..util import TimeRecorder, Box, Indicator
 from ..entities.aquifer import Aquifer
-from ..entities.farmer import Farmer
+from ..entities.behavior import Behavior
 from ..entities.field import Field
 from ..entities.well import Well
 from ..entities.finance import Finance
@@ -137,7 +137,7 @@ class SD6Model(mesa.Model):
         aquifers = {}
         for aqid, aquifer in aquifers_dict.items():
             agt_aquifer = Aquifer(
-                aquifer_id=aqid,
+                unique_id=aqid,
                 mesa_model=self,
                 aq_a=aquifer["aq_a"],
                 aq_b=aquifer["aq_b"],
@@ -167,7 +167,7 @@ class SD6Model(mesa.Model):
             
             # Initialize fields
             agt_field = Field(
-                field_id=fid,
+                unique_id=fid,
                 mesa_model=self,
                 config=self.config,
                 ini_crop=init_crop,
@@ -198,14 +198,15 @@ class SD6Model(mesa.Model):
         wells = {}
         for wid, well in wells_dict.items():
             agt_well = Well(
-                well_id=wid,
+                unique_id=wid,
                 mesa_model=self,
                 config=self.config,
                 r=well['r'],
                 k=well['k'],
-                st=well['init']['st'],
                 sy=well['sy'],
-                l_wt=well['init']['l_wt'],
+                ini_st=well['init']['st'],
+                ini_l_wt=well['init']['l_wt'],
+                ini_pumping_days=well['init']['pumping_days'],
                 eff_pump=well['eff_pump'],
                 eff_well=well['eff_well'],
                 aquifer_id=well['aquifer_id'],
@@ -221,10 +222,10 @@ class SD6Model(mesa.Model):
         self.max_num_fields_per_agt = 0
         self.max_num_wells_per_agt = 0
         for agtid, agt_dict in tqdm(agts_dict.items(), desc="Initialize agents"):
-            finances[agtid] = Finance(self.config)
+            finances[agtid] = Finance(unique_id=agtid, mesa_model=self, config=self.config)
             # Assign threshold
-            agt_farmer = Farmer(
-                farmer_id=agtid,
+            agt_farmer = Behavior(
+                unique_id=agtid,
                 mesa_model=self,
                 config=self.config,
                 agt_attrs=agt_dict,
@@ -255,9 +256,9 @@ class SD6Model(mesa.Model):
         for _, agt in self.schedule._agents.items():
             if agt.agt_type != "Farmer":
                 continue
-            agt.farmers_in_network = {
+            agt.agts_in_network = {
                 agtid: self.schedule._agents[agtid]
-                    for agtid in agt.farmer_ids_in_network
+                    for agtid in agt.agt_ids_in_network
                 }
 
         
@@ -428,7 +429,7 @@ class SD6Model(mesa.Model):
         for aq_id, aq in self.aquifers.items():
             withdrawal = 0
             # Collect all the well withdrawals of a given aquifer
-            withdrawal += sum([well.withdrawal if well.aquifer_id==aq_id else 0 \
+            withdrawal += sum([well.withdrawal if well.unique_id==aq_id else 0 \
                                for _, well in self.wells.items()])
             # Update aquifer
             aq.step(withdrawal)

@@ -1,5 +1,5 @@
 # Load functions that directly available for user when the package is loaded.
-from .entities.farmer import Farmer
+from .entities.behavior import Behavior
 from .entities.field import Field
 from .entities.well import Well
 from .entities.finance import Finance

@@ -6,10 +6,10 @@ Last modified on Sep 6, 2023
 import numpy as np
 import mesa
 from scipy.stats import truncnorm
-from .opt_model import OptModel
+from .decision_making import Decision_making
 from ..util import Box
 
-class Farmer(mesa.Agent):
+class Behavior(mesa.Agent):
     """
        A Farmer agent for the MESA model.
 
@@ -17,7 +17,7 @@ class Farmer(mesa.Agent):
        ----------
        agt_type : str
            Type of the agent, set to "Farmer".
-       farmer_id : str or int
+       unique_id : str or int
            Unique identifier for the agent.
        crop_options : dict
            Available crop options for the farmer.
@@ -25,7 +25,7 @@ class Farmer(mesa.Agent):
            Available technology options for the farmer.
        dm_args : dict
            Decision-making arguments specific to the agent.
-       farmer_ids_in_network : list
+       agt_ids_in_network : list
            List of agent IDs in the network.
        water_rights : dict
            Information about the agent's water rights.
@@ -65,9 +65,9 @@ class Farmer(mesa.Agent):
            Scaled yield rate value.
        needs : dict
            Dictionary of the agent's needs.
-       farmers_in_network : dict
+       agts_in_network : dict
            Dictionary of agents in the network.
-       selected_farmer_id_in_network : str or None
+       selected_agt_id_in_network : str or None
            ID of the selected agent in the network after social comparison.
        t : int
            Current time step.
@@ -82,7 +82,7 @@ class Farmer(mesa.Agent):
 
        """
 
-    def __init__(self, farmer_id, mesa_model, config, agt_attrs,
+    def __init__(self, unique_id, mesa_model, config, agt_attrs,
                  fields, wells, finance, aquifers,
                  ini_year,
                  crop_options, tech_options, **kwargs):
@@ -91,7 +91,7 @@ class Farmer(mesa.Agent):
 
         Parameters
         ----------
-        farmer_id : str or int
+        unique_id : str or int
             Unique identifier for the agent.
         mesa_model : object
             Reference to the overarching MESA model instance.
@@ -127,7 +127,7 @@ class Farmer(mesa.Agent):
             Numpy random generator.
         """
         # MESA required attributes => (unique_id, model)
-        super().__init__(farmer_id, mesa_model)
+        super().__init__(unique_id, mesa_model)
         self.agt_type = "Farmer"
 
         # Load other kwargs
@@ -136,13 +136,13 @@ class Farmer(mesa.Agent):
 
         self.fix_state = kwargs.get("fix_state")
         #========
-        self.farmer_id = farmer_id
+        self.unique_id = unique_id
         self.crop_options = crop_options
         self.tech_options = tech_options
 
         # Load agt_attrs
         self.dm_args = agt_attrs["decision_making"]
-        self.farmer_ids_in_network = agt_attrs["farmer_ids_in_network"]
+        self.agt_ids_in_network = agt_attrs["agt_ids_in_network"]
         self.water_rights = agt_attrs["water_rights"]
 
         # Load config
@@ -174,8 +174,8 @@ class Farmer(mesa.Agent):
         self.scaled_yield_rate = None
 
         self.needs = {}
-        self.farmers_in_network = {}   # This will be dynamically updated in a simulation
-        self.selected_farmer_id_in_network = None # This will be populated after social comparison
+        self.agts_in_network = {}   # This will be dynamically updated in a simulation
+        self.selected_agt_id_in_network = None # This will be populated after social comparison
 
         # Some other attributes
         self.t = 0
@@ -359,7 +359,7 @@ class Farmer(mesa.Agent):
         ### Optimization
         # Make decisions based on CONSUMAT theory
         state = self.state
-        print(self.farmer_id, ": ", state)
+        #print(self.unique_id, ": ", state)
         if state == "Imitation":
             self.make_dm_imitation()
         elif state == "Social comparison":
@@ -463,7 +463,8 @@ class Farmer(mesa.Agent):
             pumping_rate = sum([fields[fid].pumping_rate * allo_r[f,k,0] for f, fid in enumerate(field_ids)])
             l_pr = sum([fields[fid].l_pr * allo_r[f,k,0] for f, fid in enumerate(field_ids)])
             dwl = aquifers[well.aquifer_id].dwl * dm_args["weight_dwl"]
-            well.step(withdrawal=withdrawal, dwl=dwl, pumping_rate=pumping_rate, l_pr=l_pr)
+            # We fix the pumping day for now
+            well.step(withdrawal=withdrawal, dwl=dwl, pumping_rate=pumping_rate, l_pr=l_pr, pumping_days=90)
 
         # Calulate profit and pumping cost
         self.finance.step(fields=fields, wells=wells)
@@ -559,7 +560,7 @@ class Farmer(mesa.Agent):
         fields = self.fields
         wells = self.wells
 
-        dm = OptModel(name=self.farmer_id,
+        dm = Decision_making(unique_id=self.unique_id,
                       LogToConsole=self.config_gurobi.get("LogToConsole"))
         dm.setup_ini_model(
             config=self.config,
@@ -647,9 +648,9 @@ class Farmer(mesa.Agent):
                 l_wt=well.l_wt, r=well.r, k=well.k,
                 sy=well.sy, eff_pump=well.eff_pump,
                 eff_well=well.eff_well,
-                pumping_capacity=well.pumping_capacity
+                pumping_capacity=well.pumping_capacity,
+                pumping_days=well.pumping_days
                 )
-
 
         if init: # Inputted
             water_rights = self.water_rights
@@ -749,17 +750,17 @@ class Farmer(mesa.Agent):
         3. Compares the agent's original choice with the selected agent's choice.
         4. Updates the `dm_sols` attribute based on the comparison.
 
-        The method assumes that `farmer_ids_in_network` and `farmers_in_network` are already
+        The method assumes that `agt_ids_in_network` and `agts_in_network` are already
         initialized and populated.
         """
-        farmer_ids_in_network = self.farmer_ids_in_network
-        farmers_in_network = self.farmers_in_network
+        agt_ids_in_network = self.agt_ids_in_network
+        agts_in_network = self.agts_in_network
         # Evaluate comparable
         dm_sols_list = []
-        for farmer_id in farmer_ids_in_network:
+        for agt_id in agt_ids_in_network:
             # !!! Here we assume no. fields, n_c and split are the same across agents
             # Keep this for now.
-            self.dm_sols_neighbor=farmers_in_network[farmer_id].dm_sols
+            self.dm_sols_neighbor=agts_in_network[agt_id].dm_sols
             dm_sols = self.make_dm(
                 state="Social comparison",
                 dm_sols=self.dm_sols,
@@ -769,7 +770,7 @@ class Farmer(mesa.Agent):
         objs = [s['obj'] for s in dm_sols_list]
         selected_agt_obj = max(objs)
         select_agt_index = objs.index(selected_agt_obj)
-        self.selected_farmer_id_in_network = farmer_ids_in_network[select_agt_index]
+        self.selected_agt_id_in_network = agt_ids_in_network[select_agt_index]
 
         # Agent's original choice
         self.make_dm_repetition()
@@ -794,18 +795,18 @@ class Farmer(mesa.Agent):
         2. Updates the `dm_sols` attribute by calling the `make_dm` method
            with the current state set to "Imitation" and using the selected agent's solutions.
 
-        The method assumes that `farmer_ids_in_network` and `farmers_in_network` are already
+        The method assumes that `agt_ids_in_network` and `agts_in_network` are already
         initialized and populated.
         """
-        selected_farmer_id_in_network = self.selected_farmer_id_in_network
-        if selected_farmer_id_in_network is None:
+        selected_agt_id_in_network = self.selected_agt_id_in_network
+        if selected_agt_id_in_network is None:
             try:    # if rngen is given in the model
-                selected_farmer_id_in_network = self.rngen.choice(self.farmer_ids_in_network)
+                selected_agt_id_in_network = self.rngen.choice(self.agt_ids_in_network)
             except:
-                selected_farmer_id_in_network = np.random.choice(self.farmer_ids_in_network)
+                selected_agt_id_in_network = np.random.choice(self.agt_ids_in_network)
 
-        farmers_in_network = self.farmers_in_network
-        self.dm_sols_neighbor=farmers_in_network[selected_farmer_id_in_network].dm_sols
+        agts_in_network = self.agts_in_network
+        self.dm_sols_neighbor=agts_in_network[selected_agt_id_in_network].dm_sols
 
         dm_sols = self.make_dm(
             state="Imitation",

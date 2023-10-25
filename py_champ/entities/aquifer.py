@@ -21,7 +21,7 @@ class Aquifer(mesa.Agent):
 
     Attributes
     ----------
-    aquifer_id : str or int
+    unique_id : str or int
         Unique identifier for the aquifer.
     aq_a : float
         KGS-WBM coefficient for groundwater level change 
@@ -35,13 +35,14 @@ class Aquifer(mesa.Agent):
         Initial change in groundwater level in meters. Default is 0.
     """
 
-    def __init__(self, aquifer_id, mesa_model, aq_a, aq_b, ini_st=0, ini_dwl=0):
+    def __init__(self, unique_id, mesa_model, ini_st=0, ini_dwl=0,
+                 aq_a=None, aq_b=None, area=None, sy=None):
         """
         Initialize an Aquifer object.
 
         Parameters
         ----------
-        aquifer_id : str or int
+        unique_id : str or int
             Unique identifier for the aquifer.
         mesa_model : object
             Reference to the overarching MESA model instance.
@@ -55,21 +56,27 @@ class Aquifer(mesa.Agent):
             Initial change in groundwater level in meters. Default is 0.
         """
         # MESA required attributes => (unique_id, model)
-        super().__init__(aquifer_id, mesa_model)
+        super().__init__(unique_id, mesa_model)
         self.agt_type = "Aquifer"
         # for name_, value_ in vars().items():
         #     if name_ != 'self':
         #         setattr(self, name_, value_)
-        self.aquifer_id = aquifer_id
+        self.unique_id = unique_id
+        
+        # Either   (static)
         self.aq_a = aq_a
         self.aq_b = aq_b
+        # Or       (dynamic)
+        self.area = None
+        self.sy = None
+        
         self.t = 0                  # Initialize time step to zero
         self.st = ini_st            # Initialize saturated thickness
         self.dwl_list = [ini_dwl]   # Initialize list to store changes in water level
         self.dwl = ini_dwl          # Initialize change in water level
         self.withdrawal = None      # Initialize withdrawal to None
         
-    def step(self, withdrawal):
+    def step(self, withdrawal, inflow=None):
         """
         Simulate the aquifer for one time step based on the water withdrawal.
 
@@ -95,8 +102,12 @@ class Aquifer(mesa.Agent):
             Updated list of changes in water level.
         withdrawal : float
             Updated withdrawal amount.
-        """        
-        dwl = self.aq_b - self.aq_a * withdrawal  # Calculate change in water level
+        """      
+        if inflow is None: # static
+            dwl = self.aq_b - self.aq_a * withdrawal  # Calculate change in water level
+        else: # dynamic
+            asy = self.area * self.sy
+            dwl = inflow/asy - withdrawal/asy
         
         # Update class attributes based on the new information
         self.withdrawal = withdrawal
