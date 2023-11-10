@@ -441,13 +441,15 @@ class Decision_making():
                 m.addConstr(i_rainfed[si,:,:] == 0,
                             name=f"c.{fid}_{si}.no_i_rainfed")
                 
-            elif field_type == "irrigated":
+            elif field_type == "optimize":
                 # i_rainfed[si, ci, hi] can be 1 only when i_crop[si, ci, hi] is 1.
                 # Otherwise, it has to be zero.
                 m.addConstr(i_crop[si,:,:] - i_rainfed[si,:,:] >= 0,
                             name=f"c.{fid}_{si}.i_rainfed")
                 m.addConstr(irr_depth[si,:,:] * i_rainfed[si,:,:] == 0, name=f"c.{fid}_{si}.irr_rainfed")
-
+            else:
+                raise ValueError(f"{field_type} is not a valid value for field_type.")
+        
         # See the numpy broadcast rules:
         # https://numpy.org/doc/stable/user/basics.broadcasting.html
         m.addConstr((w == irr_depth + prec_aw_), name=f"c.{fid}.w(cm)")
@@ -545,7 +547,6 @@ class Decision_making():
             m.addConstr(i_te == i_te_input, name=f"c.{fid}.i_te_input")
             qa_input, qb_input, l_pr_input = techs[te]
             m.addConstr(l_pr == l_pr_input, name=f"c.{fid}.l_pr(m)_input")
-            m.addConstr(i_te == i_te_input, name=f"c.{fid}.i_te(m)_input")
 
         # Create variable for tech change
         if isinstance(pre_i_te, str):
