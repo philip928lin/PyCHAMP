@@ -1,155 +1,154 @@
-r"""
-The code is developed by Chung-Yi Lin at Virginia Tech, in April 2023.
-Email: chungyi@vt.edu
-Last modified on Sep 6, 2023
-"""
+# -*- coding: utf-8 -*-
+# The code is developed by Chung-Yi Lin at Virginia Tech, in April 2023.
+# Email: chungyi@vt.edu
+# Last modified on Dec 30, 2023
 import numpy as np
 import mesa
 
 class Well(mesa.Agent):
     """
-    A class to simulate a well in an agricultural system.
+    A well simulator.
+
+    Parameters
+    ----------
+    unique_id : int
+        A unique identifier for this agent.
+    model
+        The model instance to which this agent belongs.
+    settings : dict
+        A dictionary containing settings specific to the well, such as 
+        hydraulic properties and initial conditions.
+        
+        - 'r': Radius of influence of the well [m].
+        - 'k': Hydraulic conductivity of the aquifer [m/day].
+        - 'sy': Specific yield of the aquifer [-].
+        - 'rho': Density of water [kg/m³].
+        - 'g': Acceleration due to gravity [m/s²].
+        - 'eff_pump': Pump efficiency as a fraction [-].
+        - 'eff_well': Well efficiency as a fraction [-].
+        - 'pumping_capacity': Maximum pumping capacity of the well [m-ha/year].
+        - 'init': Initial conditions such as water table lift (l_wt [m]), saturated thickness (st [m]) and pumping_days (days).
+        
+        >>> settings = {
+        >>>     "r": None,
+        >>>     "k": None,
+        >>>     "sy": None,
+        >>>     "rho": None,   
+        >>>     "g": None,     
+        >>>     "eff_pump": None,
+        >>>     "eff_well": None,
+        >>>     "aquifer_id": None,
+        >>>     "pumping_capacity": None,
+        >>>     "init":{
+        >>>         "l_wt": None,
+        >>>         "st": None,
+        >>>         "pumping_days": None
+        >>>         },
+        >>>     }
+        
+    **kwargs
+        Additional keyword arguments that can be dynamically set as well agent attributes.
 
     Attributes
     ----------
-    unique_id : str or int
-        Unique identifier for the well.
-    r : float
-        Radius of the well in meters.
-    k : float
-        Hydraulic conductivity of the aquifer in m/d.
+    agt_type : str
+        The type of the agent, set to 'Well'.
     st : float
-        Saturated thickness with respect to the well depth in meters.
-    sy : float
-        Specific yield of the aquifer.
+        The saturated thickness of the aquifer at the well location.
     l_wt : float
-        Water table lift in meters.
-    eff_pump : float, optional
-        Pumping efficiency. Default is 0.77.
-    eff_well : float, optional
-        Well efficiency. Default is 0.5.
-    aquifer_id : str or int, optional
-        Unique identifier for the associated aquifer.
-    kwargs : dict, optional
-        Additional optional arguments.
-    rho : float
-        Density of water in kg/m^3.
-    g : float
-        Acceleration due to gravity in m/s^2.
+        The lift of the water table from its initial position.
+    pumping_days : int
+        Number of days the well pumps water.
+    tr : float
+        The transmissivity of the aquifer at the well location.
     t : int
-        Current time step.
-    e : float
-        Energy consumption in PJ.
+        The current time step, initialized to zero.
+    e : float or None
+        The energy consumption, initialized to None.
+    withdrawal : float or None
+        The volume of water withdrawn, in meter-hectares [m-ha].
+
+    Notes
+    -----
+    - The units for energy consumption 'e' are in petajoules [PJ].
+    - Transmissivity 'tr' is calculated as the product of saturated thickness and hydraulic conductivity.
     """
-
-    def __init__(self, unique_id, mesa_model, config, r, k, sy, 
-                 ini_st,  ini_l_wt, ini_pumping_days=90,
-                 eff_pump=0.77, eff_well=0.5, aquifer_id=None, **kwargs):
+    def __init__(self, unique_id, model, settings: dict, **kwargs):
         """
-        Initialize a Well object.
-
-        Parameters
-        ----------
-        unique_id : str or int
-            Unique identifier for the well.
-        mesa_model : object
-            Reference to the overarching MESA model instance.
-        config : dict
-            General configuration information for the model.
-        r : float
-            Radius of the well in meters.
-        k : float
-            Hydraulic conductivity of the aquifer in m/d.
-        ini_st : float
-            Initial saturated thickness with respect to the well depth in meters.
-        sy : float
-            Specific yield of the aquifer.
-        ini_l_wt : float
-            Initial water table lift in meters.
-        eff_pump : float, optional
-            Pumping efficiency. Default is 0.77.
-        eff_well : float, optional
-            Well efficiency. Default is 0.5.
-        aquifer_id : str or int, optional
-            Unique identifier for the associated aquifer.
-        kwargs : dict, optional
-            Additional optional arguments.
+        Initialize a Well agent in the Mesa model.
         """
         # MESA required attributes => (unique_id, model)
-        super().__init__(unique_id, mesa_model)
+        super().__init__(unique_id, model)
         self.agt_type = "Well"
-
-        self.unique_id, self.r, self.k, self.st, self.sy, self.l_wt = \
-            unique_id, r, k, ini_st, sy, ini_l_wt
-        self.eff_pump, self.eff_well = eff_pump, eff_well
-        self.aquifer_id = aquifer_id
-        self.load_config(config)
-
-        # Load other kwargs
+        # Load kwargs
         for key, value in kwargs.items():
             setattr(self, key, value)
 
-        self.tr = self.st * k    # Transmissivity
+        self.load_settings(settings)
+        self.st = self.init["st"]
+        self.l_wt = self.init["l_wt"]
+        self.pumping_days = self.init["pumping_days"]
+        self.tr = self.st * self.k    # Transmissivity
 
+        # Some other attributes
         self.t = 0
-
-        # Container
-        self.pumping_days = ini_pumping_days
+        self.e = None
         self.withdrawal = None # m-ha
-
-    def load_config(self, config):
+        
+    def load_settings(self, settings: dict):
         """
-        Load well-related configurations from the model's general configuration.
-
+        Load the well settings from a dictionary.
+    
         Parameters
         ----------
-        config : dict
-            General configuration information for the model.
-
-        Returns
-        -------
-        None.
-
+        settings : dict
+            A dictionary containing well settings. Expected keys include 'r', 'k', 'sy', 'rho', 
+            'g', 'eff_pump', 'eff_well', 'aquifer_id', 'pumping_capacity', and 'init'.
         """
-        config_well = config["well"]
-        self.rho = config_well["rho"]
-        self.g = config_well["g"]
-
-    def step(self, withdrawal, dwl, pumping_rate, l_pr, pumping_days=90):
+        self.r = settings["r"]
+        self.k = settings["k"]
+        self.sy = settings["sy"]
+        self.rho = settings["rho"]
+        self.g = settings["g"]
+        self.eff_pump = settings["eff_pump"]
+        self.eff_well = settings["eff_well"]
+        self.aquifer_id = settings["aquifer_id"]
+        self.pumping_capacity = settings["pumping_capacity"]
+        self.init = settings["init"]
+        
+    def step(self, withdrawal: float, dwl: float, pumping_rate: float,
+             l_pr: float, pumping_days: int = None) -> float:
         """
-        Simulate the well for one time step based on water withdrawal and other parameters.
-
+        Perform a single step of well operation, calculating energy consumption.
+    
         Parameters
         ----------
         withdrawal : float
-            The total volume of water to be withdrawn from the well in m-ha.
+            The amount of water withdrawn in this step [m-ha].
         dwl : float
-            Change in groundwater level in meters.
+            The change in the water level due to withdrawal [m].
         pumping_rate : float
-            Pumping rate in m^3/d.
+            The rate at which water is being pumped [m-ha/day].
         l_pr : float
-            Pressure lift in meters.
-
+            Pressure loss in the well [m].
+        pumping_days : int, optional
+            Number of days the well is operational. If not specified, previous
+            value is used.
+    
         Returns
         -------
         float
-            Energy consumption for the current time step in PJ.
-
-        Attributes Modified
-        -------------------
-        t : int
-            Updated time step.
-        l_wt : float
-            Updated water table lift.
-        st : float
-            Updated saturated thickness.
-        tr : float
-            Updated transmissivity.
-        e : float
-            Updated energy consumption.
+            The energy consumption for this step [petajoules, PJ].
+    
+        Notes
+        -----
+        The method calculates energy consumption based on several factors including withdrawal volume, 
+        water table lift, well and pump efficiency, and hydraulic properties of the aquifer.
         """
         self.t +=1
-        self.pumping_days = pumping_days
+        # Only update pumping_days when it is given.
+        if pumping_days is not None:    
+            self.pumping_days = pumping_days
         # Update saturated thickness and water table lift based on groundwater
         # level change
         self.l_wt -= dwl
@@ -167,6 +166,7 @@ class Well(mesa.Agent):
         r, tr, sy = self.r, self.tr, self.sy
         eff_well, eff_pump = self.eff_well, self.eff_pump
         rho, g = self.rho, self.g
+        pumping_days = self.pumping_days
 
         # Calculate energy consumption
         m_ha_2_m3 = 10000
@@ -180,14 +180,7 @@ class Well(mesa.Agent):
 
         # Record energy consumption
         self.e = e
-
         return e
     
-# for i in range(20):
-#     m_ha_2_m3 = 10000
-#     tr = (i+1) * 80
-#     fpitr = 4 * np.pi * tr
-#     l_cd_l_wd = (1+0.5) * 5000/fpitr \
-#                 * (-0.5772 - np.log(0.4064**2*0.05/fpitr)) * m_ha_2_m3    
-#     print(l_cd_l_wd)
+
     

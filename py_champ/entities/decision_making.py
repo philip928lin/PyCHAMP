@@ -1,16 +1,10 @@
 # -*- coding: utf-8 -*-
-"""
-The code is developed by Chung-Yi Lin at Virginia Tech, in April 2023.
-Email: chungyi@vt.edu
-Last modified on Jun 9, 2023
-
-WARNING: This code is not yet published, please do not distributed the code
-without permission.
-"""
+# The code is developed by Chung-Yi Lin at Virginia Tech, in April 2023.
+# Email: chungyi@vt.edu
+# Last modified on Dec 30, 2023
 import json
 import numpy as np
 import gurobipy as gp
-
 
 #################
 
@@ -128,10 +122,20 @@ class Decision_making():
         """
         self.gpenv.dispose()
 
-    def setup_ini_model(self, config, horizon=1, eval_metric="profit",
+    def setup_ini_model(self, target="profit", horizon=1, area_split=1,
                         crop_options=["corn", "sorghum", "soybeans", "fallow"],
                         tech_options=["center pivot", "center pivot LEPA"],
-                        approx_horizon=False):
+                        consumat_dict={
+                            "alpha": {  # [0-1] Sensitivity factor for the "satisfication" calculation.
+                            "profit":     1,
+                            "yield_rate": 1
+                            },
+                        "scale": {  # Normalize "need" for "satisfication" calculation.
+                            "profit": 0.23 * 50, # Use corn 1e4$*bu*ha
+                            "yield_rate": 1
+                            },
+                        },
+                        approx_horizon=False, gurobi_kwargs={}):
         """
         Set up the initial settings for an optimization model. The new
         optimization model will be created within the same Gurobi environment
@@ -143,7 +147,7 @@ class Decision_making():
             General info of the model.
         horizon : str, optional
             The planing horizon [yr]. The default is 1.
-        eval_metric : str, optional
+        target : str, optional
             "profit" or "yield_rate". The default is "profit".
         crop_options : list, optional
             A list of crop type options. They must exist in the config. The
@@ -170,29 +174,24 @@ class Decision_making():
         None.
 
         """
-        self.config = config
+        self.target = target
+        self.horizon = horizon 
         self.crop_options = crop_options
         self.tech_options = tech_options
-        self.eval_metric = eval_metric
         self.approx_horizon = approx_horizon
-        self.horizon = horizon # Original planning horizon
+        
+        ## The gurobi keywords. These will be fed to the solver in solve().
+        self.gurobi_kwargs = gurobi_kwargs
 
-        ## The gurobi parameters. These will be fed to the solver in solve().
-        self.gurobi_pars = config.get("gurobi")
-        if self.gurobi_pars is None:
-            self.gurobi_pars = {}
-
-        config_field = config['field']
         ## Dimension coefficients
-        self.n_s = config_field['area_split']
+        self.n_s = area_split
         self.n_c = len(crop_options)    # No. of crop choice options
         self.n_te = len(tech_options)   # No. of irr_depth tech options
+        self.n_h = horizon
         if approx_horizon and horizon > 2:
-            # calculate obj with start and end points
+            # Approximate obj with the average of the start and end points.
             self.n_h = 2
-        else:
-            self.n_h = horizon
-
+            
         ## Records fields and wells
         self.field_ids = []
         self.well_ids = []
@@ -201,57 +200,16 @@ class Decision_making():
         self.n_wells = 0
         self.n_water_rights = 0
 
-        ## Extract parameters from "config"
-        crop_par = np.array([config_field['crop'][c] for c in crop_options])
-        self.ymax = crop_par[:, 0].reshape((-1, 1))     # (n_c, 1)
-        self.wmax = crop_par[:, 1].reshape((-1, 1))     # (n_c, 1)
-        self.a = crop_par[:, 2].reshape((-1, 1))        # (n_c, 1)
-        self.b = crop_par[:, 3].reshape((-1, 1))        # (n_c, 1)
-        self.c = crop_par[:, 4].reshape((-1, 1))        # (n_c, 1)
-        try:
-            self.min_y_ratio = crop_par[:, 5].reshape((-1, 1))        # (n_c, 1)
-        except:
-            self.min_y_ratio = np.zeros((self.n_c, 1))
-
-        self.unit_area = config_field['field_area']/self.n_s
         # For consumat
-        config_consumat = config['consumat']
-        self.alphas = config_consumat['alpha']
-        self.scales = config_consumat['scale']
+        self.alphas = consumat_dict['alpha']
+        self.scales = consumat_dict['scale']
         self.eval_metrics = [metric for metric, v in self.alphas.items() if v is not None]
-
-        ## Form tech and crop change cost matrix from the config
-        n_te = self.n_te
-        config_finance = config['finance']
-        irr_tech_change_cost = config_finance['irr_tech_change_cost']
-        tech_change_cost_matrix = np.zeros((n_te, n_te))
-        for k, v in irr_tech_change_cost.items():
-            try:
-                i = tech_options.index(k[0])
-                j = tech_options.index(k[1])
-                tech_change_cost_matrix[i, j] = v
-            except:
-                pass
-        self.tech_change_cost_matrix = tech_change_cost_matrix
-
-        n_c = self.n_c
-        crop_change_cost = config_finance['crop_change_cost']
-        crop_change_cost_matrix = np.zeros((n_c, n_c))
-        for k, v in crop_change_cost.items():
-            try:
-                i = crop_options.index(k[0])
-                j = crop_options.index(k[1])
-                crop_change_cost_matrix[i, j] = v
-            except:
-                pass
-        self.crop_change_cost_matrix = crop_change_cost_matrix
 
         ## Optimization Model
         # self.model.dispose()    # release the memory of the previous model
         self.model = gp.Model(name=self.unique_id, env=self.gpenv)
         self.vars = {}    # A container to store variables.
         self.bounds = {}
-        self.bounds['ub_w'] = np.max(self.wmax)
         self.inf = float('inf')
 
         ## Add shared variables
@@ -260,12 +218,13 @@ class Decision_making():
         n_s = self.n_s
         n_c = self.n_c
         n_h = self.n_h
-        # Total irrigation depth per crop per yr
+        # Total irrigation depth per split per crop per yr
         irr_depth = m.addMVar((n_s, n_c, n_h), vtype="C", name="irr_depth(cm)", lb=0, ub=inf)
+        # Average irrigation depth over fields per split per crop per yr
         irr_depth_per_field = m.addMVar((n_s, n_c, n_h), vtype="C", name="irr_depth_per_field(cm)", lb=0, ub=inf)
         # Total irrigation volumn per yr
         v = m.addMVar((n_h), vtype="C", name="v(m-ha)", lb=0, ub=inf)
-        # Total yield per crop type per yr
+        # Total yield per split per crop type per yr
         y = m.addMVar((n_s, n_c, n_h), vtype="C", name="y(1e4bu)", lb=0, ub=inf)
         # Average y_ (i.e., y/ymax) per yr
         y_y = m.addMVar((n_h), vtype="C", name="y_y", lb=0, ub=1)
@@ -279,7 +238,7 @@ class Decision_making():
         self.vars['v'] = v
         self.vars['y'] = y
         self.vars['e'] = e
-        ## Average values per field
+        ## Average values over fields
         self.vars['y_y'] = y_y
         self.vars['profit'] = profit
         self.vars['irr_depth_per_field'] = irr_depth_per_field
@@ -292,9 +251,10 @@ class Decision_making():
         ## Record water rights info.
         self.wrs_info = {}
 
-    def setup_constr_field(self, field_id, prec_aw, pre_i_crop, pre_i_te,
-                           field_type="optimize", i_crop=None, i_rainfed=None,
-                           i_te=None, **kwargs):
+    def setup_constr_field(self, field_id, field_area, prec_aw, 
+                           water_yield_curves, tech_pumping_rate_coefs,
+                           pre_i_crop, pre_i_te, field_type="optimize", 
+                           i_crop=None, i_rainfed=None, i_te=None, **kwargs):
         """
         Add crop field constriants. You can assign multiple fields by calling
         this function repeatedly with different field_id. If
@@ -324,9 +284,9 @@ class Decision_making():
         i_rainfed : 3darray, optional
             The indicator matrix has a dimension of (n_s, n_c, 1). In this
             matrix, a value of 1 indicates that the unit area in a field is
-            rainfed. Given i_rainfed will force field_type to be "rainfed".
-            Also, if it is given, make sure 1 only exists at where i_crop is
-            also 1. The default is None.
+            rainfed. Given i_rainfed will force field_type to be "rainfed"; 
+            otherwise, irrigated. Also, if it is given, make sure 1 only exists
+            at where i_crop is also 1. The default is None.
         i_te : 1darray or str, optional
             The indicator matrix has a dimension of (n_te). In this
             matrix, a value of 1 indicates that the corresponnding irrigation
@@ -344,29 +304,46 @@ class Decision_making():
             An interval of (perceived) avaiable water [w_low, w_high] that 
             the corn crop type cannot be chose.  
         """
-
+        # Append field_id
         self.field_ids.append(field_id)
         fid = field_id
-
+        
+        crop_options = self.crop_options
         n_c = self.n_c
         n_h = self.n_h
         n_s = self.n_s
         n_te = self.n_te
         
-        # Assign field type for each split of the field. 
-        if i_rainfed is not None:
-            rain_feds = np.sum(i_rainfed, axis=1).flatten()
-            field_type_list = ["rainfed" if r > 0.5 else "irrigated" for r in rain_feds]
+        unit_area = field_area/n_s
+        
+        ## Extract parameters from water_yield_curves
+        crop_par = np.array([water_yield_curves[c] for c in crop_options])
+        ymax = crop_par[:, 0].reshape((-1, 1))     # (n_c, 1)
+        wmax = crop_par[:, 1].reshape((-1, 1))     # (n_c, 1)
+        a = crop_par[:, 2].reshape((-1, 1))        # (n_c, 1)
+        b = crop_par[:, 3].reshape((-1, 1))        # (n_c, 1)
+        c = crop_par[:, 4].reshape((-1, 1))        # (n_c, 1)
+        try:
+            min_y_ratio = crop_par[:, 5].reshape((-1, 1))    # (n_c, 1)
+        except:
+            min_y_ratio = np.zeros((n_c, 1))
+
+        # Assign field type for each split of the field.
         if isinstance(field_type, str):  # Apply to all splits
             field_type_list = [field_type] * n_s
         elif isinstance(field_type, list):
             field_type_list = field_type
-
+        
+        # Overwrite field_type_list if i_rainfed is given.
+        if i_rainfed is not None:
+            rain_feds = np.sum(i_rainfed, axis=1).flatten()
+            field_type_list = ["rainfed" if r > 0.5 else "irrigated" for r in rain_feds]
+        
         # Summary message for the setting.
         self.msg[fid] = {
             "Crop types": "optimize",
             "Irr tech": "optimize",
-            "Field type": field_type
+            "Field type": field_type_list
             }
 
         # Record the input
@@ -377,17 +354,15 @@ class Decision_making():
         # Take out some values
         m = self.model
         inf = self.inf
-        ymax = self.ymax
-        wmax = self.wmax
+        self.bounds['ub_w'] = np.max(wmax)
         ub_w = self.bounds['ub_w']
         ub_irr = ub_w #ub_w - prec_aw
         self.bounds[fid] = {}
         self.bounds[fid]['ub_irr'] = ub_irr
-        unit_area = self.unit_area
 
         # Create the available precipitiation for each crop. 
         prec_aw_ = np.ones((n_s, n_c, n_h))
-        for ci, crop in enumerate(self.crop_options):
+        for ci, crop in enumerate(crop_options):
             prec_aw_[:, ci, :] = prec_aw[crop]
             
         # Approximate robust optimization by prorating prec_aw with a ratio 
@@ -462,13 +437,10 @@ class Decision_making():
         # output positive y_ leading to violation for y_y (< 1)
         # Also, we need to seperate yw_ and y_ into two constraints. Otherwise,
         # gurobi will crush. No idea why.
-        a = self.a
-        b = self.b
-        c = self.c
+        
         m.addConstr((yw_temp == (a * w_**2 + b * w_ + c)), name=f"c.{fid}.yw_temp")
         
         # Minimum yield_rate cutoff (aim to capture fallow field)
-        min_y_ratio = self.min_y_ratio
         m.addConstr((yw_bi * (yw_temp - min_y_ratio) + (1-yw_bi) * (min_y_ratio - yw_temp) >= 0),
                     name=f"c.{fid}.yw_bi")
         m.addConstr((yw_ == yw_bi * yw_temp + (1-yw_bi) * min_y_ratio),
@@ -486,31 +458,31 @@ class Decision_making():
                     for i in range(n_s) for j in range(n_c) ) / n_s,
                     name=f"c.{fid}.y_y")
         
-        # Add penalty for a given w interval for corn to block the choice
-        block_w_interval_for_corn = kwargs.get("block_w_interval_for_corn")
-        if block_w_interval_for_corn is not None:
-            penalty = m.addVar(vtype="C", name=f"{fid}.penalty", lb=0, ub=inf)
-            penalties = self.penalties
-            bigM = self.bigM
-            corn_idx = self.crop_options.index("corn")
-            corn_w = w[:, corn_idx, :]
-            w_bi1 = m.addMVar((n_s, 1, n_h), vtype="B", name=f"{fid}.w_bi1")
-            w_bi2 = m.addMVar((n_s, 1, n_h), vtype="B", name=f"{fid}.w_bi2")
+        # [Deprecated] Add penalty for a given w interval for corn to block the choice
+        # block_w_interval_for_corn = kwargs.get("block_w_interval_for_corn")
+        # if block_w_interval_for_corn is not None:
+        #     penalty = m.addVar(vtype="C", name=f"{fid}.penalty", lb=0, ub=inf)
+        #     penalties = self.penalties
+        #     bigM = self.bigM
+        #     corn_idx = crop_options.index("corn")
+        #     corn_w = w[:, corn_idx, :]
+        #     w_bi1 = m.addMVar((n_s, 1, n_h), vtype="B", name=f"{fid}.w_bi1")
+        #     w_bi2 = m.addMVar((n_s, 1, n_h), vtype="B", name=f"{fid}.w_bi2")
         
-            #if x<b then y=1
-            m.addConstr((58-corn_w <= bigM * w_bi1),
-                        name=f"c.{fid}.w_bi1")
-            #if x>b then y=1
-            m.addConstr((corn_w-42 <= bigM * w_bi2),
-                        name=f"c.{fid}.w_bi2")
-            m.addConstr(penalty == gp.quicksum(bigM*w_bi1[si,0,hi]*w_bi2[si,0,hi] \
-                        for si in range(n_s) for hi in range(n_h)),
-                        name=f"c.{fid}.penalty")
-            penalties.append(penalty)    
+        #     #if x<b then y=1
+        #     m.addConstr((58-corn_w <= bigM * w_bi1),
+        #                 name=f"c.{fid}.w_bi1")
+        #     #if x>b then y=1
+        #     m.addConstr((corn_w-42 <= bigM * w_bi2),
+        #                 name=f"c.{fid}.w_bi2")
+        #     m.addConstr(penalty == gp.quicksum(bigM*w_bi1[si,0,hi]*w_bi2[si,0,hi] \
+        #                 for si in range(n_s) for hi in range(n_h)),
+        #                 name=f"c.{fid}.penalty")
+        #     penalties.append(penalty)    
             
         # Create i_crop_change to indicate crop type change
         if isinstance(pre_i_crop, str):
-            i_c = self.crop_options.index(pre_i_crop)
+            i_c = crop_options.index(pre_i_crop)
             pre_i_crop = np.zeros((n_s, n_c, 1))
             pre_i_crop[:, i_c, :] = 1
         i_crop_change_ = m.addMVar((n_s, n_c, 1), vtype="I", name=f"{fid}.i_crop_change_", lb=-1, ub=1)
@@ -521,7 +493,7 @@ class Decision_making():
                     name=f"c.{fid}.i_crop_change")
 
         # Tech decisions
-        techs = self.config['field']['tech']
+        techs = tech_pumping_rate_coefs
         tech_options = self.tech_options
 
         q       = m.addMVar((n_h), vtype="C", name=f"{fid}.q(m-ha/d)", lb=0, ub=inf)
@@ -550,7 +522,7 @@ class Decision_making():
 
         # Create variable for tech change
         if isinstance(pre_i_te, str):
-            i_t = self.tech_options.index(pre_i_te)
+            i_t = tech_options.index(pre_i_te)
             pre_i_te = np.zeros((n_te))
             pre_i_te[i_t] = 1
         i_tech_change_ = m.addMVar((n_te), vtype="I", name=f"{fid}.i_tech_change_", lb=-1, ub=1)
@@ -558,7 +530,7 @@ class Decision_making():
         m.addConstr(i_tech_change_ == i_te - pre_i_te, name=f"c.{fid}.i_tech_change_")
         m.addConstrs((i_tech_change[t] == gp.max_(i_tech_change_[t], constant=0) \
                       for t in range(n_te)),
-                      name=f"c.{fid}.i_crop_change")
+                      name=f"c.{fid}.i_tech_change")
 
         self.vars[fid] = {}
         self.vars[fid]['v'] = v
@@ -581,7 +553,8 @@ class Decision_making():
         self.n_fields += 1
 
     def setup_constr_well(self, well_id, dwl, st, l_wt, r, k, sy, eff_pump,
-                          eff_well, pumping_capacity=None, pumping_days=90):
+                          eff_well, pumping_days, pumping_capacity=None,
+                          rho=1000., g=9.8016):
         """
         Add well constraints. You can assign multiple wells by calling
         this function repeatedly with different well_id.
@@ -624,10 +597,6 @@ class Decision_making():
         m = self.model
         n_h = self.n_h
         inf = self.inf
-
-        cw = self.config['well']
-        rho = cw['rho']
-        g = cw['g']
 
         # Project the future lift head.
         approx_horizon = self.approx_horizon
@@ -690,7 +659,7 @@ class Decision_making():
         self.vars[wid]['l_pr'] = l_pr
         self.n_wells += 1
 
-    def setup_constr_finance(self):
+    def setup_constr_finance(self, finance_dict):
         """
         Add financial constraints. The output is in 1e4$.
 
@@ -700,9 +669,6 @@ class Decision_making():
 
         """
         m = self.model
-        cf = self.config['finance']
-        energy_price = cf['energy_price']    #[1e4$/PJ]
-        crop_profit = {c: cf['crop_price'][c] - cf['crop_cost'][c] for c in self.crop_options}
         crop_options = self.crop_options
         tech_options = self.tech_options
         n_h = self.n_h
@@ -712,14 +678,46 @@ class Decision_making():
         inf = self.inf
         vars = self.vars
         field_ids = self.field_ids
+        
+        ## Form tech change cost matrix from the finance_dict
+        irr_tech_change_cost = finance_dict['irr_tech_change_cost']
+        tech_change_cost_matrix = np.zeros((n_te, n_te))
+        for k, v in irr_tech_change_cost.items():
+            try:
+                i = tech_options.index(k[0])
+                j = tech_options.index(k[1])
+                tech_change_cost_matrix[i, j] = v
+            except:
+                pass
+        tech_change_cost_matrix = tech_change_cost_matrix
+        
+        ## Form crop change cost matrix from the finance_dict
+        crop_change_cost = finance_dict['crop_change_cost']
+        crop_change_cost_matrix = np.zeros((n_c, n_c))
+        for k, v in crop_change_cost.items():
+            try:
+                i = crop_options.index(k[0])
+                j = crop_options.index(k[1])
+                crop_change_cost_matrix[i, j] = v
+            except:
+                pass
+        crop_change_cost_matrix = crop_change_cost_matrix
+        
+        energy_price = finance_dict['energy_price']    #[1e4$/PJ]
+        crop_profit = {
+            c: finance_dict['crop_price'][c] - finance_dict['crop_cost'][c] \
+                for c in crop_options
+            }
+        cost_tech = np.array(
+            [finance_dict['irr_tech_operational_cost'][te] \
+             for te in tech_options]
+            )
 
         e = vars['e']     # (n_h) [PJ]
         y = vars['y']     # (n_s, n_c, n_h) [1e4 bu]
 
         cost_e = m.addMVar((n_h), vtype="C", name="cost_e(1e4$)", lb=0, ub=inf)
         rev = m.addMVar((n_h), vtype="C", name="rev(1e4$)", lb=-inf, ub=inf)
-
-        cost_tech = np.array([cf['irr_tech_operational_cost'][te] for te in tech_options])
 
         annual_tech_cost = 0
         annual_tech_change_cost = 0
@@ -729,15 +727,17 @@ class Decision_making():
             annual_tech_cost += i_te * cost_tech
 
             pre_i_te = vars[fid]['pre_i_te']
-            tech_change_cost_arr = self.tech_change_cost_matrix[np.argmax(pre_i_te), :] # ==1
+            tech_change_cost_arr = tech_change_cost_matrix[np.argmax(pre_i_te), :] # ==1
             i_tech_change = vars[fid]['i_tech_change']
-            annual_tech_change_cost += tech_change_cost_arr * i_tech_change/n_h # uniformly allocate into planning horizon
+            # uniformly allocate into planning horizon, "/n_h"
+            annual_tech_change_cost += tech_change_cost_arr * i_tech_change/n_h 
 
             for s in range(n_s):
                 pre_i_crop = vars[fid]['pre_i_crop'][s, :, 0]
-                crop_change_cost_arr = self.crop_change_cost_matrix[np.argmax(pre_i_crop), :] # ==1
+                crop_change_cost_arr = crop_change_cost_matrix[np.argmax(pre_i_crop), :] # ==1
                 i_crop_change = vars[fid]['i_crop_change'][s, :, 0]
-                annual_crop_change_cost += crop_change_cost_arr * i_crop_change/n_h # uniformly allocate into planning horizon
+                # uniformly allocate into planning horizon, "/n_h"
+                annual_crop_change_cost += crop_change_cost_arr * i_crop_change/n_h 
         annual_cost = m.addMVar((n_h), vtype="C", name="annual_cost(1e4$)", lb=-inf, ub=inf)
         m.addConstr(annual_cost == \
                     gp.quicksum(annual_tech_cost[t] for t in range(n_te))
@@ -745,23 +745,18 @@ class Decision_making():
                     + gp.quicksum(annual_crop_change_cost[c] for c in range(n_c)),
                     name="c.annual_cost(1e4$)")
 
-        # The profit variable is created in the initial to allow users to add
-        # contraints without a specific order.
-        
-
         m.addConstr((cost_e == e * energy_price), name="c.cost_e")
         m.addConstr(rev == gp.quicksum(y[i,j,:] * crop_profit[c] \
                     for i in range(n_s) for j, c in enumerate(crop_options)),
                     name="c.rev")
-
-        vars['other_cost'] = annual_cost
-        vars['cost_e'] = cost_e
         vars['rev'] = rev
-        
+        vars['cost_e'] = cost_e
+        vars['other_cost'] = annual_cost
+
         # Note the average profit per field is calculated in finish_setup(). 
         # That way we can ensure the final field numbers added by users.
 
-    def setup_constr_wr(self, water_right_id, wr, field_id_list="all",
+    def setup_constr_wr(self, water_right_id, wr_depth, applied_field_ids="all",
                         time_window=1, remaining_tw=None, remaining_wr=None,
                         tail_method="proportion"):
         """
@@ -778,9 +773,9 @@ class Decision_making():
         water_right_id : str or int
             The water right id serves as a means to differentiate the equation
             sets for different water rights.
-        wr : float
+        wr_depth : float
             Depth of the water right [cm].
-        field_id_list : "all" or list, optional
+        applied_field_ids : "all" or list, optional
             A list of field ids. If given, the water right constraints apply
             only to the subset of the fields. Note that water rights are 
             applied to constrains the average irrigation depth (cm) over 
@@ -798,8 +793,8 @@ class Decision_making():
             [cm]. The default is None.
         tail_method : "proportion" or "all" or float, optional
             Method to allocate incomplete time window at the end of the
-            planning period. "proportion" means wr*(tail length/time_window) is
-            apply to the tail part of planning period. "all" means wr is apply
+            planning period. "proportion" means wr_depth*(tail length/time_window) is
+            apply to the tail part of planning period. "all" means wr_depth is apply
             to the tail part of planning period. If a float is given, the value
             will be applied directly to the tail part of planning period. The
             default is "proportion".
@@ -816,7 +811,7 @@ class Decision_making():
                              +" Please set approx_horizon to False.")
 
         m = self.model
-        fids = field_id_list
+        fids = applied_field_ids
         n_h = self.n_h
         n_c = self.n_c
         n_s = self.n_s
@@ -858,7 +853,7 @@ class Decision_making():
             m.addConstr(
                 gp.quicksum(irr_sub[i,j,h] \
                 for i in range(n_s) for j in range(n_c) \
-                for h in range(start_index, start_index+time_window))/n_s <= wr,
+                for h in range(start_index, start_index+time_window))/n_s <= wr_depth,
                 name=f"c.{water_right_id}.wr_{c_i}(cm)"
                 )
             c_i += 1
@@ -868,9 +863,9 @@ class Decision_making():
         # Last period (if any)
         if remaining_length > 0:
             if tail_method == "proportion":
-                wr_tail = wr * remaining_length/time_window
+                wr_tail = wr_depth * remaining_length/time_window
             elif tail_method == "all":
-                wr_tail = wr
+                wr_tail = wr_depth
             # Otherwise, we expect a value given by users.
             else:
                 wr_tail = tail_method
@@ -893,7 +888,7 @@ class Decision_making():
             remaining_tw = None
         else:
             if remaining_tw is None: # This is the first year of the tw.
-                remaining_wr = wr  # wait to be updated
+                remaining_wr = wr_depth  # wait to be updated
                 remaining_tw = time_window - 1
             elif (remaining_tw - 1) == 0:
                 # remaining_tw - 1 = 0 means that next year will be a new round.
@@ -904,8 +899,8 @@ class Decision_making():
                 remaining_tw -= 1
             
         self.wrs_info[water_right_id] = {
-            "wr": wr,
-            "field_id_list": field_id_list,
+            "wr_depth": wr_depth,
+            "applied_field_ids": applied_field_ids,
             "time_window": time_window,
             "remaining_tw": remaining_tw, # Assume we optimize on a rolling basis
             "remaining_wr": remaining_wr, # If not None, the number will be updated later
@@ -931,7 +926,7 @@ class Decision_making():
         None.
 
         """
-        eval_metric = self.eval_metric
+        target = self.target
         alphas = self.alphas
         vars = self.vars
 
@@ -940,11 +935,11 @@ class Decision_making():
             alphas.update(alpha_dict)
             self.eval_metrics = [metric for metric, v in self.alphas.items() if v is not None]
 
-        # Check the selected eval_metric exist
+        # Check the selected target exist
         eval_metrics = self.eval_metrics
-        eval_metric = self.eval_metric
-        if eval_metric not in eval_metrics:
-            raise ValueError(f"Alpha value of metric '{eval_metric}' is not given.")
+        target = self.target
+        if target not in eval_metrics:
+            raise ValueError(f"Alpha value of '{target}' is not given.")
 
         # Currently supported metrices
         # We use average value per field (see finish_setup())
@@ -973,7 +968,7 @@ class Decision_making():
         
         for metric in eval_metrics:
             # Add objective
-            if metric == eval_metric:
+            if metric == target:
                 add_metric(metric)
                 m.setObjective(vars['Sa'][metric] - penalty, gp.GRB.MAXIMIZE)
         self.obj_post_calculation = True
@@ -1092,7 +1087,7 @@ class Decision_making():
             Display the summary report if True. The default is True.
 
         **kwargs : **kwargs
-            Pass the gurobi parameters to the gurobi solver.
+            Pass the gurobi keywords to the gurobi solver.
 
         Returns
         -------
@@ -1121,11 +1116,11 @@ class Decision_making():
 
         ## Solving model
         m = self.model
-        gurobi_pars = self.gurobi_pars
-        gurobi_pars.update(kwargs)
-        if "NonConvex" not in gurobi_pars.keys():
+        gurobi_kwargs = self.gurobi_kwargs
+        gurobi_kwargs.update(kwargs)
+        if "NonConvex" not in gurobi_kwargs.keys():
             m.setParam("NonConvex", 2)  # Set to solve non-convex problem
-        for k, v in gurobi_pars.items():
+        for k, v in gurobi_kwargs.items():
             m.setParam(k, v)
         m.optimize()
 
@@ -1173,18 +1168,16 @@ class Decision_making():
             # Update rainfed info
             for fid in self.field_ids:
                 sols_fid = sols[fid]
-                if (sols_fid['field_type'] == "rainfed" 
-                    or sols_fid['field_type'] == "optimize"):
-                    irr_depth = sols_fid['irr_depth'][:,:,0].sum(axis=1)
-                    i_rainfed = sols_fid['i_rainfed']
-                    i_rainfed[np.where(irr_depth <= 0), :, :] = 1 # avoid using irr_depth == 0
-                    sols_fid['i_rainfed'] = i_rainfed * sols_fid['i_crop']
+                irr_depth = sols_fid['irr_depth'][:,:,0].sum(axis=1)
+                i_rainfed = sols_fid['i_rainfed']
+                i_rainfed[np.where(irr_depth <= 0), :, :] = 1 # avoid using irr_depth == 0
+                sols_fid['i_rainfed'] = i_rainfed * sols_fid['i_crop']
 
             # Update remaining water rights
             wrs_info = self.wrs_info
             for k, v in wrs_info.items():
                 if v['remaining_wr'] is not None:
-                    fids = v['field_id_list']
+                    fids = v['applied_field_ids']
                     if fids == "all":
                         irr_sub = sols['irr_depth_per_field']         # (n_s, n_c, n_h)
                     else:

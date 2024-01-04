@@ -1,49 +1,80 @@
-r"""
-The code is developed by Chung-Yi Lin at Virginia Tech, in April 2023.
-Email: chungyi@vt.edu
-Last modified on Sep 6, 2023
-"""
+# -*- coding: utf-8 -*-
+# The code is developed by Chung-Yi Lin at Virginia Tech, in April 2023.
+# Email: chungyi@vt.edu
+# Last modified on Dec 30, 2023
 import numpy as np
 import mesa
 
 class Finance(mesa.Agent):
     """
-    A class to simulate the financial aspects of an agricultural system.
+    A finance simulator.
 
+    Parameters
+    ----------
+    unique_id : int
+        A unique identifier for this agent.
+    model
+        The model instance to which this agent belongs.
+    settings : dict
+        A dictionary containing financial settings such as energy prices, 
+        crop prices, and crop cost, irrigation operational cost, 
+        irr_tech_change_cost, and crop_change_cost.
+
+        - 'energy_price': The price of energy [1e4$/PJ].
+        - 'crop_price' and 'crop_cost': The price and cost of different crops [$/bu].
+        - 'irr_tech_operational_cost': Operational costs for different irrigation technologies [1e4 $].
+        - 'irr_tech_change_cost': Costs associated with changing irrigation technologies [1e4 $].
+        - 'crop_change_cost': Costs associated with changing crop types [1e4$].
+
+        >>> settings = {
+        >>>     "energy_price": 2777.78,
+        >>>     "crop_price": { 
+        >>>         "corn":     5.39,      
+        >>>         "sorghum":  6.59,    
+        >>>         "soybeans": 13.31,     
+        >>>         "wheat":    8.28,
+        >>>         "fallow":   0.
+        >>>         },
+        >>>     "crop_cost": { 
+        >>>         "corn":     0,      
+        >>>         "sorghum":  0,
+        >>>         "soybeans": 0,
+        >>>         "wheat":    0,
+        >>>         "fallow":   0.
+        >>>         },
+        >>>     "irr_tech_operational_cost": { 
+        >>>         "center pivot":         1.87,
+        >>>         "center pivot LEPA":    1.87
+        >>>         },
+        >>>     "irr_tech_change_cost": { # If not specify, 0 is the default.
+        >>>         ("center pivot", "center pivot LEPA"): 0
+        >>>         },
+        >>>     "crop_change_cost": { # If not specify, 0 is the default.
+        >>>         ("corn", "sorghum"):     0
+        >>>         }
+        >>>     }
+        
     Attributes
     ----------
-    config_finance : dict
-        Financial parameters read from the config, such as costs and prices.
-    cost_e : float
-        Energy cost for the current step in units of 1e4$.
-    cost_tech : float
-        Technology operational cost for the current step in units of 1e4$.
-    tech_change_cost : float
-        Cost incurred from changing technology for the current step in units of 1e4$.
-    crop_change_cost : float
-        Cost incurred from changing crop types for the current step in units of 1e4$.
-    profit : float
-        Calculated profit for the current step in units of 1e4$.
-    y : float
-        Total crop yield for the current step in units of 1e4 bu (bushels).
+    agt_type : str
+        The type of the agent, set to 'Finance'.
+    profit : float or None
+        The profit, initialized to None [1e4 $].
+    y : float or None
+        The total yield, initialized to None [1e4 bu].
     t : int
-        Current time step.
+        The current time step, initialized to zero.
+
     """
-
-    def __init__(self, unique_id, mesa_model, config):
+    
+    def __init__(self, unique_id, model, settings: dict):
         """
-        Initialize a Finance object.
-
-        Parameters
-        ----------
-        config : dict
-            General configuration information for the model.
+        Initialize a Finance agent in the Mesa model.
         """
-        super().__init__(unique_id, mesa_model)
+        super().__init__(unique_id, model)
         self.agt_type = "Finance"
-        self.unique_id = unique_id
-        
-        self.load_config(config)
+
+        self.load_settings(settings)
         
         self.cost_e = None
         self.cost_tech = None
@@ -52,67 +83,59 @@ class Finance(mesa.Agent):
         self.profit = None
         self.y = None
         self.t = 0
-
-    def load_config(self, config):
+    
+    def load_settings(self, settings: dict):
         """
-        Load a given configuration.
-
+        Load the financial settings from a dictionary.
+    
         Parameters
         ----------
-        config : dict
-            General configuration information for the model.
+        settings : dict
+            A dictionary containing financial settings. Expected keys include 
+            'energy_price', 'crop_price', 'crop_cost',
+            'irr_tech_operational_cost', 'irr_tech_change_cost', 
+            and 'crop_change_cost'.
+        
         """
-        self.config_finance = config["finance"]
+        self.finance_dict = settings
 
-    def step(self, fields, wells):
+        self.energy_price = settings["energy_price"]
+        self.crop_price = settings["crop_price"]
+        self.crop_cost = settings["crop_cost"]
+        self.irr_tech_operational_cost = settings["irr_tech_operational_cost"]
+        self.irr_tech_change_cost = settings["irr_tech_change_cost"]
+        self.crop_change_cost = settings["crop_change_cost"]
+
+    def step(self, fields: dict, wells: dict) -> float:       
         """
-        Compute the financial metrics for the current time step.
-
+        Perform a single step of financial calculations.
+    
         Parameters
         ----------
         fields : dict
-            A dictionary containing field objects with attributes like crop yield.
+            A dictionary of Field agents with their unique_id as keys.
         wells : dict
-            A dictionary containing well objects with attributes like energy use.
-
+            A dictionary of Well agents with their unique_id as keys.
+    
         Returns
         -------
         float
-            Calculated profit for the current step in units of 1e4$.
-
+            The profit calculated for this step [1e4 $].
+    
         Notes
         -----
-        Assumes that all fields have the same crop choice options and that crop 
-        costs and prices are specified in config for all relevant crops and 
-        technologies.
-
-        Attributes Modified
-        -------------------
-        cost_e : float
-            Updated energy cost.
-        cost_tech : float
-            Updated technology operational cost.
-        tech_change_cost : float
-            Updated technology change cost.
-        crop_change_cost : float
-            Updated crop change cost.
-        profit : float
-            Updated profit.
-        y : float
-            Updated total crop yield.
-        t : int
-            Updated time step.
+        This method calculates the total yield, energy usage, operational costs, 
+        technology change costs, crop change costs, energy costs, and the total profit. 
+        The profit is calculated as revenue minus all associated costs.
         """
-        
         self.t +=1
 
         # Compute total yield and energy use
         y = sum([field.y for _, field in fields.items()])   # 1e4 bu
         e = sum([well.e for _, well in wells.items()])      # PJ
 
-        cf = self.config_finance
         # Operational cost only happen when the irrigation amount is not zero.
-        cost_tech = sum([cf["irr_tech_operational_cost"][field.te] \
+        cost_tech = sum([self.irr_tech_operational_cost[field.te] \
                          if field.irr_vol_per_field > 0 else 0 \
                              for _, field in fields.items()])
         
@@ -123,11 +146,11 @@ class Finance(mesa.Agent):
 
             # Calculate technology change cost
             key = (field.pre_te, field.te)
-            tech_change_cost += cf["irr_tech_change_cost"].get(key, 0)
+            tech_change_cost += self.irr_tech_change_cost.get(key, 0)
 
             # Calculate crop change cost
             # Assume crop_options are the same accross fields.
-            crop_options = field.crop_options
+            crop_options = self.model.crop_options
             i_crop = field.i_crop
             pre_i_crop = field.pre_i_crop
 
@@ -138,12 +161,12 @@ class Finance(mesa.Agent):
                 to = np.argmax(ccc) # ccc == 1
                 if fr.size != 0 & to.size != 0:
                     key = (crop_options[fr], crop_options[to])
-                    crop_change_cost += cf["crop_change_cost"].get(key, 0)
+                    crop_change_cost += self.crop_change_cost.get(key, 0)
         
         # Calculate energy cost and profit
-        cost_e = e * cf["energy_price"]  # 1e4$
+        cost_e = e * self.energy_price  # 1e4$
         
-        cp = {k: v - cf["crop_cost"][k] for k, v in cf["crop_price"].items()}
+        cp = {k: v - self.crop_cost[k] for k, v in self.crop_price.items()}
         # Assume crop_options are the same accross fields.
         rev = sum([y[i,j,:] * cp[c] for i in range(y.shape[0]) \
                    for j, c in enumerate(crop_options)])[0]

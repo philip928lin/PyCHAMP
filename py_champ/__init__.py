@@ -4,7 +4,6 @@ from .entities.field import Field
 from .entities.well import Well
 from .entities.finance import Finance
 from .entities.aquifer import Aquifer
-from .config import get_config
-from .util import TimeRecorder, Box, Indicator
+from .util import TimeRecorder, Indicator
 
 

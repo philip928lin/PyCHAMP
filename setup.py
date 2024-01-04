@@ -20,7 +20,7 @@ setup(name='py_champ',
       author_email='philip928lin@gmail.com',
       license='GNU General Public License v3 (GPLv3)',
       packages=find_packages(),
-      install_requires = ["numpy", "pandas", "gurobipy", "scipy", "joblib", "mesa"],
+      install_requires = ["numpy", "pandas", "gurobipy", "scipy", "joblib", "mesa==2.1.1"],
       classifiers=[
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
         "Framework :: IPython",
