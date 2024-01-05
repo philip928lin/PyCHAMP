@@ -17,8 +17,11 @@ class BaseSchedulerByTypeFiltered(mesa.time.BaseScheduler):
     of agents by .agt_type.
 
     Example:
+        
     >>> scheduler = BaseSchedulerByTypeFiltered(model)
     >>> scheduler.step(agt_type="Behavior")
+    
+    
     """
         
     def step(self, agt_type=None) -> None:
@@ -52,11 +55,14 @@ class SD6Model(mesa.Model):
     ----------
     pars : dict
         Parameters used for model calibration and setup.
+        
         >>> settings = {
         >>>     "perceived_risk": 0.52,
         >>>     "forecast_trust": 0.70,
         >>>     "sa_thre": 0.11,
-        >>>     "un_thre": 0.11,
+        >>>     "un_thre": 0.11
+        >>> }
+        
     crop_options : list
         List of available crop options for the simulation.
     tech_options : list
@@ -75,6 +81,7 @@ class SD6Model(mesa.Model):
         Settings about the behaviors in the model, mapped by their IDs.
     prec_aw_step : dict
         Time-series data for available precipitation.
+        
         >>> {"<prec_aw1>": {
         >>>     "<year>": {
         >>>         "<crop1>": "[cm]",
@@ -82,6 +89,7 @@ class SD6Model(mesa.Model):
         >>>         }
         >>>     }
         >>> }
+        
     init_year : int, optional
         The initial year of the simulation (a year before the start year).
     end_year : int, optional
