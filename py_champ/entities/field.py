@@ -249,15 +249,16 @@ class Field(mesa.Agent):
         y_ = np.maximum(0, y_)
         y_ = y_ * i_crop
         
+        # No force fallow here. The decisions are made. 0 yield only mean failure in that decisions.
         # Force a margin cutoff
-        min_y_ratio = np.tile(self.min_y_ratio, (self.n_s, 1, 1))
-        if "fallow" in crop_options:
-            i_crop[y_ < min_y_ratio] = 0
-            fallow_ind = crop_options.index("fallow")
-            zero_columns = np.all(i_crop == 0, axis=1)
-            # Set the fourth row of those columns to 1
-            i_crop[zero_columns[0], fallow_ind] = 1
-        y_[y_ < min_y_ratio] = 0
+        # min_y_ratio = np.tile(self.min_y_ratio, (self.n_s, 1, 1))
+        # if "fallow" in crop_options:
+        #     i_crop[y_ < min_y_ratio] = 0
+        #     fallow_ind = crop_options.index("fallow")
+        #     zero_columns = np.all(i_crop == 0, axis=1)
+        #     # Set the fourth row of those columns to 1
+        #     i_crop[zero_columns[0], fallow_ind] = 1
+        # y_[y_ < min_y_ratio] = 0
         
         self.update_crops(i_crop)   # update pre_i_crop
         

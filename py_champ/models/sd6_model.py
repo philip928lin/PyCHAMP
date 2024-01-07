@@ -17,11 +17,8 @@ class BaseSchedulerByTypeFiltered(mesa.time.BaseScheduler):
     of agents by .agt_type.
 
     Example:
-        
     >>> scheduler = BaseSchedulerByTypeFiltered(model)
     >>> scheduler.step(agt_type="Behavior")
-    
-    
     """
         
     def step(self, agt_type=None) -> None:
@@ -55,14 +52,11 @@ class SD6Model(mesa.Model):
     ----------
     pars : dict
         Parameters used for model calibration and setup.
-        
         >>> settings = {
         >>>     "perceived_risk": 0.52,
         >>>     "forecast_trust": 0.70,
         >>>     "sa_thre": 0.11,
-        >>>     "un_thre": 0.11
-        >>> }
-        
+        >>>     "un_thre": 0.11,
     crop_options : list
         List of available crop options for the simulation.
     tech_options : list
@@ -81,7 +75,6 @@ class SD6Model(mesa.Model):
         Settings about the behaviors in the model, mapped by their IDs.
     prec_aw_step : dict
         Time-series data for available precipitation.
-        
         >>> {"<prec_aw1>": {
         >>>     "<year>": {
         >>>         "<crop1>": "[cm]",
@@ -89,7 +82,6 @@ class SD6Model(mesa.Model):
         >>>         }
         >>>     }
         >>> }
-        
     init_year : int, optional
         The initial year of the simulation (a year before the start year).
     end_year : int, optional
@@ -264,26 +256,27 @@ class SD6Model(mesa.Model):
             wells[wid] = agt_well
             self.schedule.add(agt_well)
         self.wells = wells
-
-        # Initialize finance
-        finances = {}
-        for finance_id, finance_dict in finances_dict.items():
-            agt_finance = Finance(
-                unique_id=finance_id, 
-                model=self, 
-                settings=finance_dict
-                )
-            finances[finance_id] = agt_finance
-            self.schedule.add(agt_finance)
-        self.finances = finances
         
-        # Initialize agents (farmers) and append to the schedule
+        # Initialize behavior and finance agents and append them to the schedule
         ## Don't use parallelization. It is slower!
         self.max_num_fields_per_agt = 0
         self.max_num_wells_per_agt = 0
         
-        behaviors = {}                                       
+        behaviors = {}   
+        finances = {}                                    
         for behavior_id, behavior_dict in tqdm(behaviors_dict.items(), desc="Initialize agents"):
+            # Initialize finance
+            finance_id = behavior_dict['finance_id']
+            finance_dict = finances_dict[finance_id]
+            agt_finance = Finance(
+                unique_id=f"{finance_id}_{behavior_id}", 
+                model=self, 
+                settings=finance_dict
+                )
+            agt_finance.finance_id = finance_id
+            finances[behavior_id] = agt_finance # Assume one behavior agent has one finance object
+            self.schedule.add(agt_finance)
+            
             agt_behavior = Behavior(
                 unique_id=behavior_id, 
                 model=self, 
@@ -291,7 +284,7 @@ class SD6Model(mesa.Model):
                 pars=self.pars,
                 fields={fid: self.fields[fid] for i, fid in enumerate(behavior_dict['field_ids'])}, 
                 wells={wid: self.wells[wid] for i, wid in enumerate(behavior_dict['well_ids'])}, 
-                finance=self.finances[behavior_dict['finance_id']], 
+                finance=agt_finance, 
                 aquifers=self.aquifers,
                 # kwargs
                 rngen=self.rngen,   
@@ -304,10 +297,13 @@ class SD6Model(mesa.Model):
             self.max_num_wells_per_agt = max(
                 self.max_num_wells_per_agt, len(behavior_dict['well_ids']))
         self.behaviors = behaviors
+        self.finances = finances
         
         if self.crop_price_step is not None:
-            for finance_id, crop_prices in self.crop_price_step.items():
-                self.finances[finance_id].crop_price = crop_prices[self.current_year]
+            for unique_id, finance in self.finances.items():
+                crop_prices = self.crop_price_step.get(finance.finance_id)
+                if crop_prices is not None:
+                    finance.crop_price = crop_prices[self.current_year]
 
         def get_nested_attr(obj, attr_str):
             """A patch to collect a nested attribute using MESA's datacollector"""
@@ -417,8 +413,10 @@ class SD6Model(mesa.Model):
 
         # Update crop price 
         if self.crop_price_step is not None:
-            for finance_id, crop_prices in self.crop_price_step.items():
-                self.finances[finance_id].crop_price = crop_prices[current_year]
+            for unique_id, finance in self.finances.items():
+                crop_prices = self.crop_price_step.get(finance.finance_id)
+                if crop_prices is not None:
+                    finance.crop_price = crop_prices[self.current_year]
         
         # Assign field type based on each behavioral agent.
         # irr_depth_step = self.irr_depth_step

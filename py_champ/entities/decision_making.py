@@ -443,7 +443,7 @@ class Decision_making():
         # Minimum yield_rate cutoff (aim to capture fallow field)
         m.addConstr((yw_bi * (yw_temp - min_y_ratio) + (1-yw_bi) * (min_y_ratio - yw_temp) >= 0),
                     name=f"c.{fid}.yw_bi")
-        m.addConstr((yw_ == yw_bi * yw_temp + (1-yw_bi) * min_y_ratio),
+        m.addConstr((yw_ == yw_bi * yw_temp),
                     name=f"c.{fid}.yw_")
         
         m.addConstr((y_ == yw_ * i_crop), name=f"c.{fid}.y_")
