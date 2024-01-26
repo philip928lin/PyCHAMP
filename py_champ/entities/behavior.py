@@ -611,7 +611,7 @@ class Behavior(mesa.Agent):
         if init: # Inputted
             wr_dict = self.wr_dict
         else: # Use agent's own water rights (for social comparison and imitation)
-            wr_dict = self.dm_sols["water_rights"]
+            wr_dict = dm_sols["water_rights"]
 
         for wr_id, v in self.wr_dict.items():
             if v["status"]: # Check whether the wr is activated
@@ -645,7 +645,8 @@ class Behavior(mesa.Agent):
         dm.solve(
             keep_gp_model=dm_dict['keep_gp_model'],
             keep_gp_output=dm_dict['keep_gp_output'],
-            display_report=dm_dict['display_report']
+            display_report=dm_dict['display_report'],
+            **self.gb_dict
             )
         dm_sols = dm.sols
         if dm_sols is None:

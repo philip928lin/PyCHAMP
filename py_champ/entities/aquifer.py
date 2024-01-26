@@ -2,6 +2,7 @@
 # The code is developed by Chung-Yi Lin at Virginia Tech, in April 2023.
 # Email: chungyi@vt.edu
 # Last modified on Dec 30, 2023
+import warnings
 import mesa
 
 class Aquifer(mesa.Agent):
@@ -140,5 +141,9 @@ class Aquifer(mesa.Agent):
         self.st += dwl
         self.dwl = dwl
         self.withdrawal = withdrawal
+
+        # Check st is not negative
+        if self.st < 0:
+            warnings.warn(f"The saturated thickness is negative in aquifer {self.unique_id}.")
         return dwl
 

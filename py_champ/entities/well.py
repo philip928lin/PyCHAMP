@@ -174,10 +174,9 @@ class Well(mesa.Agent):
         fpitr = 4 * np.pi * tr
         ftrd = 4 * tr * pumping_days
         
-        l_wd = pumping_rate/fpitr * (-0.5772 - np.log(r**2*sy/ftrd)) * m_ha_2_m3
-        l_cd = l_wd * eff_well
+        l_wd_l_cd = pumping_rate/fpitr * (-0.5772 - np.log(r**2*sy/ftrd)) * m_ha_2_m3/eff_well
         
-        l_t = l_wt + l_cd + l_wd + l_pr
+        l_t = l_wt + l_wd_l_cd + l_pr
         
         e = rho * g * m_ha_2_m3 / eff_pump / 1e15 * withdrawal * l_t     # PJ
 

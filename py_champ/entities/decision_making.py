@@ -669,7 +669,7 @@ class Decision_making():
         # 'gurobipy.LinExpr'
         for h in range(n_h):
             m.addGenConstrLog(q_lnx[h], q_lny[h])
-        m.addConstr(l_cd_l_wd == (1+eff_well) * q/fpitr * (-0.5772 - q_lny) * m_ha_2_m3,
+        m.addConstr(l_cd_l_wd == q/fpitr * (-0.5772 - q_lny) * m_ha_2_m3 / eff_well,
                     name=f"c.{wid}.l_cd_l_wd(m)")
         m.addConstr((l_t == l_wt + l_cd_l_wd + l_pr), name=f"c.{wid}.l_t(m)")
         # e could be large. Make sure no numerical issue here.
