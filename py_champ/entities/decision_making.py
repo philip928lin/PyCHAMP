@@ -11,26 +11,26 @@ import gurobipy as gp
 class Decision_making():
     """
     This class represents a farmer making decisions on irrigation depth,
-    crop types, rain-fed or irrigated, and irrigation technologies. The
-    farmer's objective is to solve a nonlinear mixed interger optimization
+    crop types, the type of field: rainfed or irrigated, and irrigation technologies. The
+    farmer's objective is to solve a nonlinear mixed integer optimization
     model that maximizes their satisfaction, which can be measured by metrics
     like profit or yield percentage. The optimization problem is formulated on
-    an annual scale. Optional decision variables include crop types, rain-fed
-    option, and irrigation technologies, which can be provided as input to the
+    an annual scale. Optional decision variables include crop types, rainfed
+    option for the field, and irrigation technologies, which can be provided as inputs to the
     class.
 
     Specifically, this class is designed to accommodate a farmer with multiple
     crop fields and groundwater wells. Each field can have multiple area
-    splits, where each split has its own set of decision variables. Water
+    splits, where each split can have its own set of decision variables. Water
     rights can be incorporated as constraints for all fields or a selected
-    subset of fields with an optional time_window argument allowing farmer to
+    subset of fields with an optional time_window argument, allowing the farmer to
     allocate their water rights across multiple years. To enforce water rights
-    at the point of diversion, pumping capacity can be assigned to individual
-    wells.
+    at the point of diversion, pumping capacity can be assigned to an individual
+    well.
 
     If the 'horizon' parameter is set to a value greater than 1, only the
     irrigation depth is varied each year. Other decision variables such as the
-    crop types, rain-fed option, and irrigation technologies remain fixed over
+    crop types, rainfed option, and irrigation technologies remain fixed over
     the planning horizon. If necessary, the user has the flexibility to rerun
     the optimization model in the subsequent years to update the decision based
     on any changes or new information.
@@ -39,15 +39,19 @@ class Decision_making():
     the "approx_horizon" parameter to True. This approximation assumes a linear
     decrement in water levels and helps speed up the solving process. However,
     it's important to note that if there is a water right constraint with a
-    time_window argument larger than 1, the approximation option is restricted
+    time_window argument greater than 1, the approximation option is restricted
     and cannot be used. This ensures accurate handling of water right
     constraints over multiple time periods.
+
 
     Notations
     ---------
     n_s: Number of the splits in a field.
+    
     n_c: Number of the crop choices.
+    
     n_h: Planning horizon or approximated horizon.
+    
     n_te: Number of the irrigation technology choices.
 
     Notes
@@ -56,7 +60,7 @@ class Decision_making():
     Gurobi is a commercial solver, but it also offers a full-featured solver
     for academic use at no cost. Users interested in running the code will need
     to register for an academic license and download the solver. Additionally,
-    they will need to install the gurobipy Python package to interface with
+    they need to install the gurobipy Python package to interface with
     Gurobi and execute the code successfully.
 
     More information can be found here:
@@ -65,20 +69,12 @@ class Decision_making():
     Attributes
     ----------
     name : str, optional
-        Model name. The default is "".
-
-    Methods
-    -------
-    Left blank
-
-    Examples
-    --------
-    Left blank
+        The name of the Model.
 
     """
     def __init__(self, unique_id="", LogToConsole=1):
         """
-        Instantiate an optimization environment and object for a farmer.
+        Instantiate an optimization environment and object for a farmer agent.
 
         To suppress all Gurobi logging including the license connection
         parameters, you can set the parameter OutputFlag or LogToConsole to 0
@@ -126,11 +122,11 @@ class Decision_making():
                         crop_options=["corn", "sorghum", "soybeans", "fallow"],
                         tech_options=["center pivot", "center pivot LEPA"],
                         consumat_dict={
-                            "alpha": {  # [0-1] Sensitivity factor for the "satisfication" calculation.
+                            "alpha": {  # [0-1] Sensitivity factor for the "satisfaction" calculation.
                             "profit":     1,
                             "yield_rate": 1
                             },
-                        "scale": {  # Normalize "need" for "satisfication" calculation.
+                        "scale": {  # Normalize "need" for "satisfaction" calculation.
                             "profit": 0.23 * 50, # Use corn 1e4$*bu*ha
                             "yield_rate": 1
                             },
@@ -143,31 +139,48 @@ class Decision_making():
 
         Parameters
         ----------
-        config : dict or DotMap
-            General info of the model.
-        horizon : str, optional
-            The planing horizon [yr]. The default is 1.
         target : str, optional
-            "profit" or "yield_rate". The default is "profit".
+            The target variable ("profit" or "yield_rate") for optimization, 
+            which can be provided as an input in the decision making dictionary 
+            under behavior dictionary. The default is "profit".
+        horizon : str, optional
+            The planing horizon [yr]. The default is 1 year.
+        area_split: str, optional
+            The number of splits for each field that a farmer agent owns. 
+            The default is 1.
         crop_options : list, optional
-            A list of crop type options. They must exist in the config. The
+            A list of crop type options available, which can be fed as an input to the model. The
             default is ["corn", "sorghum", "soybeans", "fallow"].
         tech_options : list, optional
-            A list of irrigation technologies. They must exist in the config.
+            A list of irrigation technologies available. Users have the choice of inputting the list to the model.
             The default is ["center pivot", "center pivot LEPA"].
-        approx_horizon : bool, optional
+        consumat_dict: dict, optional
+            A dictionary containing parameters related to the CONSUMAT model, including sensitivities and scales.
+            The default is 
+                {
+                    "alpha": {
+                        "profit":     1,
+                        "yield_rate": 1
+                        },
+                    "scale": {
+                        "profit": 0.23 * 50, 
+                        "yield_rate": 1
+                },
+        approx_horizon: bool, optional
             When set to True, the model will calculate two points (start and
             end) over the given horizon to determine the objective, which is
             the average over the horizon. This approach can significantly
             enhance the solving speed, particularly for long horizons. In most
             cases, this approximation is equivalent to solving the original
             problem. It relies on the assumption that the groundwater level
-            will linearly decrease in the projected future. However, it's
+            will linearly decrease in the projected future. However, it is
             important to note that if there is a water right constraint with a
             time_window argument larger than 1, the approximation option is
             restricted and cannot be used. This ensures accurate handling of
             water right constraints over multiple time periods. The default is
             False.
+        gurobi_kwargs:
+            The gurobi keywords. These will be fed to the solver in solve().
 
         Returns
         -------
@@ -228,7 +241,7 @@ class Decision_making():
         y = m.addMVar((n_s, n_c, n_h), vtype="C", name="y(1e4bu)", lb=0, ub=inf)
         # Average y_ (i.e., y/ymax) per yr
         y_y = m.addMVar((n_h), vtype="C", name="y_y", lb=0, ub=1)
-        # Total used electricity (pumping) per yr
+        # Total energy (PJ) used for pumping per yr
         e = m.addMVar((n_h), vtype="C", name="e(PJ)", lb=0, ub=inf)
         # Total profit
         profit = m.addMVar((n_h), vtype="C", name="profit(1e4$)", lb=-inf, ub=inf)
@@ -256,53 +269,55 @@ class Decision_making():
                            pre_i_crop, pre_i_te, field_type="optimize", 
                            i_crop=None, i_rainfed=None, i_te=None, **kwargs):
         """
-        Add crop field constriants. You can assign multiple fields by calling
+        This method adds constraints for a field. You can assign multiple fields by calling
         this function repeatedly with different field_id. If
-        i_crop/i_rainfed/i_te is provided, the model will not optimize over
-        different crop type options/rain-fed or irrigated/irrigation
-        technologies.
+        i_crop, i_rainfed, and i_te is provided, the model will not optimize
+        different crop type options, field type: rainfed or irrigated, and irrigation
+        technologies, respectively.
 
         Parameters
         ----------
         field_id : str or int
             The field id serves as a means to differentiate the equation sets
             for different fields.
+        field_area: str or int
+            The field area associated with the corresponding field_id.
         prec_aw : dict
-            Percieved precipitation in each crop type's growing season [cm].
+            Perceived precipitation for each crop's growing season [cm].
+        water yield curves: dict
+            A dictionary containing water-yield response curves for different crop types.
+            This has to be given as an input under settings dictionary for a field.
+        tech_pumping_rate_coefs: dict
+            A dictionary containing coefficients for calculating pumping rates based on selected irrigation technology. 
+            Pumping rate [m-ha/day] = a * annual withdrawal [m-ha] + b
         pre_i_crop: str or 3darray
             Crop name or the i_crop from the previous time step.
         pre_i_te: str or 3darray
             Irrigation technology or i_te from the previous time step.
         field_type : str or list, optional
-            The value can be "rainfed", "irrigated", or "optimize". A list can 
-            be given to define field type for each area split. The default is
+            Field type can be "rainfed", "irrigated", or "optimize". A list can 
+            be given to define field type for each area split. The default value is
             "optimize".
         i_crop : 3darray, optional
-            The indicator matrix has a dimension of (n_s, n_c, 1). In this
+            The crop type for the current time step. The indicator matrix has a dimension of (n_s, n_c, 1). In this
             matrix, a value of 1 indicates that the corresponding crop type
-            is selected or chosen. The default is None.
+            is selected or chosen for the corresponding split. The default is None.
         i_rainfed : 3darray, optional
-            The indicator matrix has a dimension of (n_s, n_c, 1). In this
-            matrix, a value of 1 indicates that the unit area in a field is
+            The field type (irrigated or rainfed) for the current time step. The indicator matrix has a dimension of (n_s, n_c, 1). In this
+            matrix, a value of 1 indicates that the unit area in the field is
             rainfed. Given i_rainfed will force field_type to be "rainfed"; 
-            otherwise, irrigated. Also, if it is given, make sure 1 only exists
-            at where i_crop is also 1. The default is None.
+            otherwise, the field will be considered to be irrigated. Also, if the i_rainfed is given, make sure 1 exists only
+            where i_crop is also 1. The default is None.
         i_te : 1darray or str, optional
-            The indicator matrix has a dimension of (n_te). In this
-            matrix, a value of 1 indicates that the corresponnding irrigation
-            technology is selected. The default is None.
+            The irrigation technology chosen for the current time step. The indicator matrix has a dimension of n_te. 
+            A value of 1 indicates that the corresponding irrigation technology is selected. The default is None.
+        **kwargs: 
+            Additional keyword arguments that can be dynamically set as a field parameter.
         
         Returns
         -------
         None.
         
-        Notes
-        -----
-        The `kwargs` could contain any additional attributes that you want to
-        add to the Farmer agent. Available keywords include
-        block_w_interval_for_corn : list
-            An interval of (perceived) avaiable water [w_low, w_high] that 
-            the corn crop type cannot be chose.  
         """
         # Append field_id
         self.field_ids.append(field_id)
@@ -330,7 +345,7 @@ class Decision_making():
 
         # Assign field type for each split of the field.
         if isinstance(field_type, str):  # Apply to all splits
-            field_type_list = [field_type] * n_s
+            field_type_list = [field_type] * n_s  # [rainfed, rainfed, rainfed] if n_s=3
         elif isinstance(field_type, list):
             field_type_list = field_type
         
@@ -356,7 +371,7 @@ class Decision_making():
         inf = self.inf
         self.bounds['ub_w'] = np.max(wmax)
         ub_w = self.bounds['ub_w']
-        ub_irr = ub_w #ub_w - prec_aw
+        ub_irr = ub_w #ub_w - prec_aw (maximum water required - available precipitation)
         self.bounds[fid] = {}
         self.bounds[fid]['ub_irr'] = ub_irr
 
@@ -393,7 +408,7 @@ class Decision_making():
             m.addConstr(i_crop == i_crop_input, name=f"c.{fid}.i_crop_input")
             self.msg[fid]["Crop types"] = "user input"
             
-        # One unit area can only be planted one type of crops.
+        # One unit area can be occupied by only one type of crop.
         m.addConstr(gp.quicksum(i_crop[:,ci,:] for ci in range(n_c)) == 1,
                     name=f"c.{fid}.i_crop")
 
@@ -431,18 +446,18 @@ class Decision_making():
         m.addConstr((w_temp == w/wmax), name=f"c.{fid}.w_temp")
         m.addConstrs((w_[si,ci,hi] == gp.min_(w_temp[si,ci,hi], constant=1) \
                     for si in range(n_s) for ci in range(n_c) for hi in range(n_h)),
-                    name=f"c.{fid}.w_")
+                    name=f"c.{fid}.w_") # w_ = minimum of 1 or w/w_max
 
         # We force irr_depth to be zero but prec_aw_ will add to w & w_, which will
         # output positive y_ leading to violation for y_y (< 1)
         # Also, we need to seperate yw_ and y_ into two constraints. Otherwise,
-        # gurobi will crush. No idea why.
+        # gurobi will crash. No idea why.
         
         m.addConstr((yw_temp == (a * w_**2 + b * w_ + c)), name=f"c.{fid}.yw_temp")
         
         # Minimum yield_rate cutoff (aim to capture fallow field)
         m.addConstr((yw_bi * (yw_temp - min_y_ratio) + (1-yw_bi) * (min_y_ratio - yw_temp) >= 0),
-                    name=f"c.{fid}.yw_bi")
+                    name=f"c.{fid}.yw_bi") #yw_bi is 1 or 0 based on yw_temp is greater or less than min_y_ratio
         m.addConstr((yw_ == yw_bi * yw_temp),
                     name=f"c.{fid}.yw_")
         
@@ -556,35 +571,45 @@ class Decision_making():
                           eff_well, pumping_days, pumping_capacity=None,
                           rho=1000., g=9.8016):
         """
-        Add well constraints. You can assign multiple wells by calling
+        Set up well constraints for the optimization model. You can assign multiple wells by calling
         this function repeatedly with different well_id.
 
         Parameters
         ----------
-        well_id : str or int
+        well_id: str or int
             The well id serves as a means to differentiate the equation sets
             for different wells.
-        dwl : float
+        dwl: float
             Percieved annual water level change rate [m/yr].
-        l_wt : float
-            The head required to lift water from the water table to the ground
-            surface at the start of the pumping season at the initial time step
-            [m].
         st: float
             Aquifer saturated thickness at the initial time step [m].
-        r : float
-            Well radius [m].
-        k : float
-            Hydraulic conductivity [m/d]. This will be used to calculate
-            transmissivity [m2/d] by multiply the saturated thickness [m].
-        sy : float
-            Specific yield.
-        eff_pump : float
-            Pump efficiency.
-        eff_well : float
-            Well efficiency.
-        pumping_capacity : float
-            Pumping capacity [m-ha/yr]
+            Given as an input in the init dicitonary of well settings.
+        l_wt: float
+            The head required to lift water from the water table to the ground
+            surface at the start of the pumping season at the initial time step
+            [m]. Given as an input in the init dicitonary of well settings.
+        r: float
+            Well radius [m]. Given as an input in the well settings.
+        k: float
+            Hydraulic conductivity [m/day]. This will be used to calculate
+            transmissivity [m²/day] by multipling k with the saturated thickness [m]. Given as an input in the well settings.
+        sy: float
+            Specific yield of the aquifer [-]. Given as an input in the well settings.
+        eff_pump: float
+            Pump efficiency as a fraction [-]. Given as an input in the well settings.
+        eff_well: float
+            Well efficiency as a fraction [-]. Given as an input in the well settings.
+        pumping_days: int
+            Number of days the well is operational [day]. Given as an input in the init dictionary 
+            of the well settings.
+        pumping_capacity: float
+            Maximum pumping capacity of the well [m-ha/yr]. The default is None.
+            Given as an input in the well settings.
+        rho: float
+            density of water [kg/m3].
+        g: float
+            acceleration due to gravity [m/s²].
+        
 
         Returns
         -------
@@ -628,7 +653,7 @@ class Decision_making():
         ftrd = 4 * tr * pumping_days
         
         e     = m.addMVar((n_h), vtype="C", name=f"{wid}.e(PJ)", lb=0, ub=inf)
-        l_t   = m.addMVar((n_h), vtype="C", name=f"{wid}.l_t(m)", lb=0, ub=inf)
+        l_t   = m.addMVar((n_h), vtype="C", name=f"{wid}.l_t(m)", lb=0, ub=inf) #total effective lift needed
         q_lnx = m.addMVar((n_h), vtype="C", name=f"{wid}.q_lnx", lb=0, ub=inf)
         # The upper bound of q_lny is set to -0.5772 to avoid l_cd_l_wd to be
         # negative.
@@ -661,8 +686,15 @@ class Decision_making():
 
     def setup_constr_finance(self, finance_dict):
         """
-        Add financial constraints. The output is in 1e4$.
-
+        Set up financial constraints for the optimization model. The output is in 1e4 $.
+        
+        Parameters
+        ----------
+        finance_dict: dict
+            A dictionary containing financial settings, which include energy price, 
+            crop price, and crop cost, irrigation operational cost, 
+            irr_tech_change_cost, and crop_change_cost. For more detail, refer to the finance module.
+        
         Returns
         -------
         None.
@@ -760,13 +792,13 @@ class Decision_making():
                         time_window=1, remaining_tw=None, remaining_wr=None,
                         tail_method="proportion"):
         """
-        Add water rights constraints. You can assign multiple water rights
+        Set up water right constraints for the optimization model. You can assign multiple water rights
         constraints by calling this function repeatedly with different
-        water_right_id. Water rights can constrain for all fields or a selected
-        subset of fields with an optional time_window argument allowing farmer
+        water_right_id. Water rights can constrain all fields or a selected
+        subset of fields with an optional time_window argument, allowing the farmer
         to allocate their water rights across multiple years. To enforce water
         rights at the point of diversion, pumping capacity can be assigned to
-        individual wells in setup_constr_well().
+        individual wells in setup_constr_well() method.
 
         Parameters
         ----------
@@ -778,26 +810,32 @@ class Decision_making():
         applied_field_ids : "all" or list, optional
             A list of field ids. If given, the water right constraints apply
             only to the subset of the fields. Note that water rights are 
-            applied to constrains the average irrigation depth (cm) over 
+            applied to constrain the average irrigation depth (cm) over 
             fields. If you want to add the same water rights setting for all 
-            individual fields. setup_constr_wr() for all individual fields. 
+            individual fields, you can call setup_constr_wr() for all the fields that the farmer owns. 
             The default is "all".
         time_window : int, optional
             If given, the water right constrains the total irrigation depth
-            over the time window. The default is 1.
+            over the time window [yr]. The default is 1.
         remaining_tw : int, optional
-            Remaining year of time window that remaining_wr will apply to. The 
+            Remaining years of time window that the remaining_wr will be applied to [yr]. The 
             default is None.
         remaining_wr : float, optional
-            The remaining water rights left in the previous unused time window
+            The remaining water rights left unused from the previous time window
             [cm]. The default is None.
         tail_method : "proportion" or "all" or float, optional
-            Method to allocate incomplete time window at the end of the
-            planning period. "proportion" means wr_depth*(tail length/time_window) is
-            apply to the tail part of planning period. "all" means wr_depth is apply
-            to the tail part of planning period. If a float is given, the value
-            will be applied directly to the tail part of planning period. The
-            default is "proportion".
+            Method to allocate water rights to the incomplete part of the time window at the end of the
+            planning period. 
+            
+            "proportion" means water equivalent to wr_depth*(tail length/time_window) is
+            applied to the tail part of the planning period. 
+            
+            "all" means water equivalent to wr_depth is applied to the tail part of planning period. 
+            
+            If a float is given, the given value
+            will be applied directly to the tail part of planning period. 
+            
+            The default is "proportion".
 
         Returns
         -------
@@ -806,9 +844,9 @@ class Decision_making():
         """
         # As the msg said.
         if time_window != 1 and self.approx_horizon:
-            raise ValueError("Approximation is not allow with the water rights "
+            raise ValueError("Approximation is not allowed with the water rights "
                              +"constraints that have time_window larger than 1."
-                             +" Please set approx_horizon to False.")
+                             +" Please set approx_horizon parameter to False.")
 
         m = self.model
         fids = applied_field_ids
@@ -817,9 +855,9 @@ class Decision_making():
         n_s = self.n_s
         vars = self.vars
 
-        # Collect irrigation depth over the constrainted fields.
+        # Collect irrigation depth over the constrained fields.
         if fids == "all":
-            irr_sub = vars['irr_depth_per_field']         # (n_s, n_c, n_h)
+            irr_sub = vars['irr_depth_per_field']         # (n_s, n_c, n_h) averaged irrigation for all the fields a farmer owns
         else:
             for i, fid in enumerate(fids):
                 if i == 0:
@@ -882,7 +920,7 @@ class Decision_making():
 
         # Record for the next run. Assume the simulation runs annually and will
         # apply the irr_depth solved by the opt model.
-        # This record will be updated in solve() and add to the sols.
+        # This record will be updated in solve() and added to the sols.
         if time_window == 1: 
             remaining_wr = None
             remaining_tw = None
@@ -892,7 +930,7 @@ class Decision_making():
                 remaining_tw = time_window - 1
             elif (remaining_tw - 1) == 0:
                 # remaining_tw - 1 = 0 means that next year will be a new round.
-                remaining_wr = None # will not updated
+                remaining_wr = None # will not update
                 remaining_tw = time_window
             else:
                 # remaining_wr = remaining_wr
@@ -909,8 +947,8 @@ class Decision_making():
 
     def setup_obj(self, alpha_dict=None):
         """
-        Add the objective to maximize the agent's expected satisfication. Note
-        that the satisfication is calculated after the optimization which
+        This method sets the objective of the optimization model, i.e., to maximize the agent's expected satisfaction. Note
+        that the satisfaction value is calculated after the optimization process, which
         significantly speeds up the optimization process. The resulting
         solution is equivalent to directly using satisfaction as the objective
         function.
@@ -918,8 +956,8 @@ class Decision_making():
         Parameters
         ----------
         alpha_dict : dict, optional
-            Overwrite alpha values retrieved from the config. The default is
-            None.
+            A dictionary containing sensitivity factor for satisfaction calculation, 
+            given as an input under the CONSUMAT dictionary. The default value is None.
 
         Returns
         -------
@@ -959,7 +997,7 @@ class Decision_making():
             metric_var = eval_metric_vars.get(metric)
             m.addConstr((fakeSa == gp.quicksum(metric_var[h] for h in range(n_h))/n_h),
                         name=f"c.Sa.{metric}")
-            vars['Sa'][metric] = fakeSa
+            vars['Sa'][metric] = fakeSa    #fake Sa for each metric (profit and y_Y)
 
         penalties = self.penalties
         penalty = 0
@@ -975,7 +1013,7 @@ class Decision_making():
 
     def finish_setup(self, display_summary=True):
         """
-        Complete the model setup.
+        This method completes the setup for the optimization model.
 
         Parameters
         ----------
@@ -994,6 +1032,7 @@ class Decision_making():
         n_h = self.n_h
         n_f = self.n_fields
         n_w = self.n_wells
+
 
         ### Add some final constraints
         # Allocation ratios for the amount of water withdraw from each well to
@@ -1055,10 +1094,10 @@ class Decision_making():
         ########## Model Summary ##########\n
         Name:   {self.unique_id}\n
         Planning horizon:   {h_msg}
-        NO. Crop fields:    {self.n_fields}
-        NO. splits          {self.n_s}
-        NO. Wells:          {self.n_wells}
-        NO. Water rights:   {self.n_water_rights}\n
+        No. of Crop fields:    {self.n_fields}
+        No. of splits          {self.n_s}
+        No. of Wells:          {self.n_wells}
+        NO. of Water rights:   {self.n_water_rights}\n
         Decision settings:\n{msg}\n
         ###################################
         """
@@ -1069,22 +1108,24 @@ class Decision_making():
     def solve(self, keep_gp_model=False, keep_gp_output=False,
               display_report=True, **kwargs):
         """
-        Solve the optimization problem.
-        Note that defaultly we set the gurobi parameter NonConvex = 2 for a
-        nonconvex model.
+        This method solves the optimization problem.
+        Note that, by default, we set the gurobi parameter, NonConvex = 2 for a
+        non-convex model.
 
         Parameters
         ----------
         keep_gp_model : bool
-            Keep the gurobi model instance for further used. Use with caution.
+            Keep the gurobi model instance for further use. This should be used 
+            with caution.
             The default is False.
 
         keep_gp_output : bool
-            If True, the gurobi model output will be stored at "gp_output" in a
-            dictionary format.
+            If True, the gurobi model output will be stored in "gp_output" in a
+            dictionary format. The default is False.
 
         display_report : bool
-            Display the summary report if True. The default is True.
+            This parameter displays the summary report if set to True. 
+            The default is True.
 
         **kwargs : **kwargs
             Pass the gurobi keywords to the gurobi solver.
@@ -1095,7 +1136,7 @@ class Decision_making():
 
         Notes
         -----
-        More info:
+        More info on Gurobi MIP Models can be accessed at:
             https://www.gurobi.com/documentation/9.5/refman/mip_models.html
 
         """
@@ -1108,7 +1149,7 @@ class Decision_making():
                         get_inner_dict(v, new_dict[k])
                     else:
                         try:
-                            new_dict[k] = v.X   # for variables of gurobi
+                            new_dict[k] = v.X   # for variables associated with the gurobi solver
                         except:
                             new_dict[k] = v     # for all others
             get_inner_dict(vars, sols)
@@ -1119,7 +1160,7 @@ class Decision_making():
         gurobi_kwargs = self.gurobi_kwargs
         gurobi_kwargs.update(kwargs)
         if "NonConvex" not in gurobi_kwargs.keys():
-            m.setParam("NonConvex", 2)  # Set to solve non-convex problem
+            m.setParam("NonConvex", 2)  # Set to solve a non-convex problem
         for k, v in gurobi_kwargs.items():
             m.setParam(k, v)
         m.optimize()
@@ -1136,7 +1177,7 @@ class Decision_making():
             sols['gp_status'] = m.Status
             sols['gp_MIPGap'] = m.MIPGap
 
-            # Calculate satisfication
+            # Calculate satisfaction
             if self.obj_post_calculation:
                 eval_metrics = self.eval_metrics
                 alphas = self.alphas
@@ -1159,7 +1200,7 @@ class Decision_making():
                 for metric in eval_metrics:
                     alpha = alphas[metric]
                     metric_var = eval_metric_vars.get(metric)
-                    # force the minimum value to be zero since exp
+                    # force the minimum value to be zero since there is an exponential function
                     metric_var[metric_var<0] = 0
                     N_yr = 1 - np.exp(-alpha * metric_var)
                     Sa = np.mean(N_yr)
@@ -1201,7 +1242,7 @@ class Decision_making():
             for fid in fids:
                 sols_fid = sols[fid]
                 i_crop = sols_fid['i_crop'][:, :, 0]
-                # Avoid using == 0 or 1 => some time have numerical issue
+                # Avoid using == 0 or 1 => it can have numerical issues
                 crop_type = [crop_options[np.argmax(i_crop[s,:])] for s in range(n_s)]
                 tech = tech_options[np.argmax(sols_fid['i_te'][:])]
                 Irrigated = list((sols_fid['i_rainfed'][:, :, 0].sum(axis=1).round(0) <= 0))
@@ -1213,20 +1254,20 @@ class Decision_making():
             msg = dict_to_string(self.msg, prefix="\t\t", level=2)
             sas = dict_to_string(sols['Sa'], prefix="\t\t", level=2, roun=4)
             if self.approx_horizon:
-                h_msg = str(self.horizon) + " (approximate with 2)"
+                h_msg = str(self.horizon) + " (approximated with 2)"
             else:
                 h_msg = str(self.n_h)
             gp_report = f"""
         ########## Model Report ##########\n
         Name:   {self.unique_id}\n
         Planning horizon:   {h_msg}
-        NO. Crop fields:    {self.n_fields}
-        NO. splits          {self.n_s}
-        NO. Wells:          {self.n_wells}
-        NO. Water rights:   {self.n_water_rights}\n
+        No. of Crop fields:    {self.n_fields}
+        No. of splits          {self.n_s}
+        No. of Wells:          {self.n_wells}
+        No. of Water rights:   {self.n_water_rights}\n
         Decision settings:\n{msg}\n
         Solutions (gap {round(m.MIPGap * 100, 4)}%):\n{decisions}\n
-        Satisfication:\n{sas}\n
+        Satisfaction:\n{sas}\n
         ###################################
             """
             self.gp_report = gp_report
@@ -1251,7 +1292,7 @@ class Decision_making():
     def do_IIS_gp(self, filename=None):
         """
         Compute an Irreducible Inconsistent Subsystem (IIS). This function can
-        only be exercuted if the model is infeasible.
+        only be executed if the model is infeasible.
 
         An IIS is a subset of the constraints and variable bounds with the
         following properties:
@@ -1260,8 +1301,8 @@ class Decision_making():
         - If a single constraint or bound is removed, the subsystem becomes feasible.
 
         Note that an infeasible model may have multiple IISs. The one returned
-        by Gurobi is not necessarily the smallest one; there may exist others
-        with fewer constraints or bounds.
+        by Gurobi is not necessarily the smallest one; others may exist
+        with a fewer constraints or bounds.
 
         More info: https://www.gurobi.com/documentation/10.0/refman/py_model_computeiis.html
 
@@ -1294,8 +1335,8 @@ class Decision_making():
 
     def write_ilp(self, filename):
         """
-        Output the information about the results of the IIS computation to
-        .ilp. This function can only be exercuted after do_IIS_gp().
+        This function outputs the information about the results of the IIS computation to
+        .ilp and can only be executed after do_IIS_gp().
 
         Parameters
         ----------
@@ -1314,7 +1355,7 @@ class Decision_making():
 
     def write_sol(self, filename):
         """
-        Output the solution of the model to .sol.
+        This function outputs the solution of the model to a .sol file.
 
         Parameters
         ----------
@@ -1333,7 +1374,7 @@ class Decision_making():
 
     def write_lp(self, filename):
         """
-        Output the model to .lp.
+        This function outputs the model to a .lp file.
 
         Parameters
         ----------
@@ -1352,7 +1393,7 @@ class Decision_making():
 
     def write_mps(self, filename):
         """
-        Output the model to .mps.
+        This funtion outputs the model to an .mps file.
 
         Parameters
         ----------

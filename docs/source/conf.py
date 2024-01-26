@@ -19,9 +19,12 @@ version = '1.0.0'
 
 # -- General configuration
 
+autodoc_member_order = 'bysource'
+
 extensions = [
     'sphinx.ext.duration',
     'sphinx.ext.doctest',
+    'sphinx-prompt',
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
     'sphinx.ext.intersphinx',

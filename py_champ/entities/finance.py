@@ -7,7 +7,7 @@ import mesa
 
 class Finance(mesa.Agent):
     """
-    A finance simulator.
+    This module is a finance simulator.
 
     Parameters
     ----------
@@ -16,16 +16,17 @@ class Finance(mesa.Agent):
     model
         The model instance to which this agent belongs.
     settings : dict
-        A dictionary containing financial settings such as energy prices, 
-        crop prices, and crop cost, irrigation operational cost, 
+        A dictionary containing financial settings, which include energy prices, 
+        crop price, and crop cost, irrigation operational cost, 
         irr_tech_change_cost, and crop_change_cost.
 
-        - 'energy_price': The price of energy [1e4$/PJ].
+        - 'energy_price': The price of energy [1e4 $/PJ].
         - 'crop_price' and 'crop_cost': The price and cost of different crops [$/bu].
         - 'irr_tech_operational_cost': Operational costs for different irrigation technologies [1e4 $].
         - 'irr_tech_change_cost': Costs associated with changing irrigation technologies [1e4 $].
-        - 'crop_change_cost': Costs associated with changing crop types [1e4$].
-
+        - 'crop_change_cost': Costs associated with changing crop types [1e4 $].
+        
+        >>> # A sample settings dictionary
         >>> settings = {
         >>>     "energy_price": 2777.78,
         >>>     "crop_price": { 
@@ -46,10 +47,10 @@ class Finance(mesa.Agent):
         >>>         "center pivot":         1.87,
         >>>         "center pivot LEPA":    1.87
         >>>         },
-        >>>     "irr_tech_change_cost": { # If not specify, 0 is the default.
+        >>>     "irr_tech_change_cost": { # If not specified, 0 is the default.
         >>>         ("center pivot", "center pivot LEPA"): 0
         >>>         },
-        >>>     "crop_change_cost": { # If not specify, 0 is the default.
+        >>>     "crop_change_cost": { # If not specified, 0 is the default.
         >>>         ("corn", "sorghum"):     0
         >>>         }
         >>>     }

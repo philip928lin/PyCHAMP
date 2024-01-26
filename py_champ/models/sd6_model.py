@@ -361,6 +361,7 @@ class SD6Model(mesa.Model):
             "fields_area":      get_agt_attr("fields_area"),
             # Well
             "water_depth":      get_agt_attr("l_wt"),
+            "pumping rate":     get_agt_attr("pumping_rate"),
             # Aquifer
             "withdrawal":       get_agt_attr("withdrawal"),             # m-ha
             "GW_st":            get_agt_attr("st"),                     # m

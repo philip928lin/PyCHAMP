@@ -6,9 +6,9 @@ import mesa
 
 class Aquifer(mesa.Agent):
     """
-    An aquifer simulator based on the KGS-WBM model.
+    This module is an aquifer simulator based on the KGS-WBM model.
 
-    This class simulates changes in the aquifer's groundwater level based on 
+    This class simulates changes in the aquifer's groundwater level, based on 
     water withdrawals.
      
     
@@ -24,10 +24,10 @@ class Aquifer(mesa.Agent):
         
         - 'aq_a' and 'aq_b' are coefficients used in the static inflow calculation (inflow = None in step()).
         - 'area' is the area of the aquifer [ha]
-        - 'sy' is a specific yield used in the dynamic inflow calculation (inflow = float in step()) [-].
-        - 'init' is a dictionary containing initial conditions such as saturated thickness (st [m]) and initial water level change (dwl [m]).
+        - 'sy' is the specific yield of the underlying aquifer and is used in the dynamic inflow calculation (inflow = float in step()) [-].
+        - 'init' is a dictionary containing initial conditions such as the saturated thickness (st [m]) and initial water level change (dwl [m]).
            
-        >>> # A sample dictionary:
+        >>> # A sample settings dictionary
         >>> settings = {
         >>>     "aq_a": None,
         >>>     "aq_b": None,
@@ -41,7 +41,7 @@ class Aquifer(mesa.Agent):
             
  
     Attributes
-    ----------
+    -----------
     agt_type : str
         The type of the agent, set to 'Aquifer'.
     st : float
@@ -53,13 +53,14 @@ class Aquifer(mesa.Agent):
     t : int
         The current time step, initialized to zero.
     withdrawal : float or None
-        The current water withdrawal, initialized to None.
+        The current water withdrawal [m-ha], initialized to None.
  
     Notes
-    -----
-    The unit of water level is meters [m]. The area is expected in hactare [ha].
+    ------
+    The unit of water level is meters [m]. The area is expected in hectares [ha].
     
     For more details on the KGS-WBM model, refer to:
+        
     Butler, J. J., Whittemore, D. O., Wilson, B. B., & Bohling, G. C. (2018).
     Sustainability of aquifers supporting irrigated agriculture: A case study
     of the High Plains aquifer in Kansas. Water International, 43(6), 815–828.
@@ -91,7 +92,7 @@ class Aquifer(mesa.Agent):
         Parameters
         ----------
         settings : dict
-            A dictionary containing the settings for the aquifer. 
+            The dictionary containing the settings for the aquifer as defined above. 
             
         """
         # static inflow
@@ -111,19 +112,19 @@ class Aquifer(mesa.Agent):
         withdrawal : float
             The amount of water withdrawn from the aquifer in this step [m-ha].
         inflow : float, optional
-            The amount of inflow water into the aquifer [m-ha]. If None, static 
+            The amount of inflow water into the aquifer [m-ha]. If None, a static 
             inflow is assumed (implied by using 'aq_a' and 'aq_b').
     
         Returns
         -------
         float
-            The change in water level in the aquifer as a result of this step 
-            [m-ha].
+            The change in water level in the aquifer in this step 
+            [m].
     
         Notes
         -----
         The method calculates the change in water level either based on static 
-        inflow (using 'aq_a' and 'aq_b' coefficients) or dynamic inflow, 
+        inflow, using 'aq_a' and 'aq_b' coefficients or dynamic inflow, 
         applying 'sy' and 'area' of the aquifer.
         """
         self.t += 1

@@ -10,8 +10,10 @@ Contents
 
 .. toctree::
    :maxdepth: 2
+   :caption: User Guide
 
    usage
+   tutorial
 
 Main modules
 ------------

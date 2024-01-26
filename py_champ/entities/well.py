@@ -7,7 +7,7 @@ import mesa
 
 class Well(mesa.Agent):
     """
-    A well simulator.
+    This module is a well simulator.
 
     Parameters
     ----------
@@ -16,10 +16,10 @@ class Well(mesa.Agent):
     model
         The model instance to which this agent belongs.
     settings : dict
-        A dictionary containing settings specific to the well, such as 
+        A dictionary containing settings specific to a well, such as 
         hydraulic properties and initial conditions.
         
-        - 'r': Radius of influence of the well [m].
+        - 'r': Radius of the well [m].
         - 'k': Hydraulic conductivity of the aquifer [m/day].
         - 'sy': Specific yield of the aquifer [-].
         - 'rho': Density of water [kg/m³].
@@ -27,8 +27,9 @@ class Well(mesa.Agent):
         - 'eff_pump': Pump efficiency as a fraction [-].
         - 'eff_well': Well efficiency as a fraction [-].
         - 'pumping_capacity': Maximum pumping capacity of the well [m-ha/year].
-        - 'init': Initial conditions such as water table lift (l_wt [m]), saturated thickness (st [m]) and pumping_days (days).
+        - 'init': Initial conditions, which include water table lift (l_wt [m]), saturated thickness (st [m]) and pumping_days (days).
         
+        >>> # A sample settings dictionary
         >>> settings = {
         >>>     "r": None,
         >>>     "k": None,
@@ -54,23 +55,22 @@ class Well(mesa.Agent):
     agt_type : str
         The type of the agent, set to 'Well'.
     st : float
-        The saturated thickness of the aquifer at the well location.
+        The saturated thickness of the aquifer at the well location [m].
     l_wt : float
-        The lift of the water table from its initial position.
+        The lift of the water table from its initial position [m].
     pumping_days : int
-        Number of days the well pumps water.
+        Number of days the well pumps water [day].
     tr : float
-        The transmissivity of the aquifer at the well location.
+        The transmissivity of the aquifer at the well location [m²/day].
     t : int
         The current time step, initialized to zero.
     e : float or None
-        The energy consumption, initialized to None.
+        The energy consumption [PJ], initialized to None.
     withdrawal : float or None
-        The volume of water withdrawn, in meter-hectares [m-ha].
+        The volume of water withdrawn in meter-hectares [m-ha].
 
     Notes
     -----
-    - The units for energy consumption 'e' are in petajoules [PJ].
     - Transmissivity 'tr' is calculated as the product of saturated thickness and hydraulic conductivity.
     """
     def __init__(self, unique_id, model, settings: dict, **kwargs):
@@ -97,7 +97,7 @@ class Well(mesa.Agent):
         
     def load_settings(self, settings: dict):
         """
-        Load the well settings from a dictionary.
+        Load the well settings from the dictionary.
     
         Parameters
         ----------
@@ -119,7 +119,7 @@ class Well(mesa.Agent):
     def step(self, withdrawal: float, dwl: float, pumping_rate: float,
              l_pr: float, pumping_days: int = None) -> float:
         """
-        Perform a single step of well operation, calculating energy consumption.
+        Perform a single step of well simulation, calculating the energy consumption.
     
         Parameters
         ----------
@@ -130,7 +130,8 @@ class Well(mesa.Agent):
         pumping_rate : float
             The rate at which water is being pumped [m-ha/day].
         l_pr : float
-            Pressure loss in the well [m].
+            effective loss due to pressurization of water and losses in the piping,
+            dependent on the type of the irrigation system [m].
         pumping_days : int, optional
             Number of days the well is operational. If not specified, previous
             value is used.
@@ -138,7 +139,7 @@ class Well(mesa.Agent):
         Returns
         -------
         float
-            The energy consumption for this step [petajoules, PJ].
+            The energy consumption for this step [Petajoules, PJ].
     
         Notes
         -----
@@ -181,6 +182,7 @@ class Well(mesa.Agent):
         e = rho * g * m_ha_2_m3 / eff_pump / 1e15 * withdrawal * l_t     # PJ
 
         # Record energy consumption
+        self.pumping_rate = pumping_rate
         self.e = e
         return e
     

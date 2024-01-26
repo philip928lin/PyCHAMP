@@ -11,7 +11,7 @@ from .decision_making import Decision_making
 
 class Behavior(mesa.Agent):
     """
-    Initialize a Behavior agent in the Mesa model.
+    This module is a farmer's behavior simulator.
 
     Parameters
     ----------
@@ -20,7 +20,7 @@ class Behavior(mesa.Agent):
     model
         The model instance to which this agent belongs.
     settings : dict
-        A dictionary containing behavior-related settings such as assets,
+        A dictionary containing behavior-related settings, which includes assets,
         decision-making parameters, and gurobi settings.
         
         - 'behavior_ids_in_network': IDs of other behavior agents in the agent's social network.
@@ -28,59 +28,65 @@ class Behavior(mesa.Agent):
         - 'well_ids': IDs of wells managed by the agent.
         - 'finance_id': ID of the finance agent associated with this behavior agent.
         - 'decision_making': Settings and parameters for the decision-making process.
-        - 'consumat': Parameters related to the CONSUMAT model, like sensitivities and scales.
-        - 'water_rights': Information about water rights, including depth [cm] and application fields.
+        - 'consumat': Parameters related to the CONSUMAT model, including sensitivities and scales.
+        - 'water_rights': Information about water rights, including depth [cm] and fields to which the constraint is applied.
         - 'gurobi': Settings for the Gurobi optimizer, such as logging and output controls.
         
-    >>> settings = {
-    >>>     "field_ids": ["f1", "f2"],
-    >>>     "well_ids": ["w1"],
-    >>>     "finance_id": "finance",
-    >>>     "behavior_ids_in_network": ["behavior2", "behavior3"],
-    >>>     "decision_making": {
-    >>>         "target": "profit",
-    >>>         "horizon": 5, # [yr]
-    >>>         "n_dwl": 5,
-    >>>         "keep_gp_model": False,
-    >>>         "keep_gp_output": False,
-    >>>         "display_summary": False,
-    >>>         "display_report": False
-    >>>         },
-    >>>     "water_rights": {
-    >>>         "<name>": {
-    >>>             "wr_depth": None,
-    >>>             "applied_field_ids": ["f1_"], # Will automatically updated to "f1_"
-    >>>             "time_window": 1,
-    >>>             "remaining_tw": None,
-    >>>             "remaining_wr": None,
-    >>>             "tail_method": "proportion",  # "proportion" or "all" or float
-    >>>             "status": True
-    >>>             }
-    >>>         },
-    >>>     "consumat": {
-    >>>         "alpha": {  # [0-1] Sensitivity factor for the "satisfication" calculation.
-    >>>             "profit":     1,
-    >>>             "yield_rate": 1
-    >>>             },
-    >>>         "scale": {  # Normalize "need" for "satisfication" calculation.
-    >>>             "profit": 1000, 
-    >>>             "yield_rate": 1
-    >>>             },
-    >>>         },
-    >>>     "gurobi": {
-    >>>         "LogToConsole": 1,  # 0: no console output; 1: with console output.
-    >>>         "Presolve": -1      # Options are Auto (-1; default), Aggressive (2), Conservative (1), Automatic (-1), or None (0).
-    >>>         }
-    >>>     }
+        >>> # A sample settings dictionary
+        >>> settings = {
+        >>>     "field_ids": ["f1", "f2"],
+        >>>     "well_ids": ["w1"],
+        >>>     "finance_id": "finance",
+        >>>     "behavior_ids_in_network": ["behavior2", "behavior3"],
+        >>>     "decision_making": {
+        >>>         "target": "profit",
+        >>>         "horizon": 5, # [yr]
+        >>>         "n_dwl": 5,
+        >>>         "keep_gp_model": False,
+        >>>         "keep_gp_output": False,
+        >>>         "display_summary": False,
+        >>>         "display_report": False
+        >>>         },
+        >>>     "water_rights": {
+        >>>         "<name>": {
+        >>>             "wr_depth": None,
+        >>>             "applied_field_ids": ["f1_"], # Will automatically update to "f1_"
+        >>>             "time_window": 1,
+        >>>             "remaining_tw": None,
+        >>>             "remaining_wr": None,
+        >>>             "tail_method": "proportion",  # tail_method can be "proportion" or "all" or float
+        >>>             "status": True
+        >>>             }
+        >>>         },
+        >>>     "consumat": {
+        >>>         "alpha": {  # [0-1] Sensitivity factor for the "satisfaction" calculation.
+        >>>             "profit":     1,
+        >>>             "yield_rate": 1
+        >>>             },
+        >>>         "scale": {  # Normalize "need" for "satisfaction" calculation.
+        >>>             "profit": 1000, 
+        >>>             "yield_rate": 1
+        >>>             },
+        >>>         },
+        >>>     "gurobi": {
+        >>>         "LogToConsole": 1,  # 0: no console output; 1: with console output.
+        >>>         "Presolve": -1      # Options are Auto (-1; default), Aggressive (2), Conservative (1), Automatic (-1), or None (0).
+        >>>         }
+        >>>     }
         
     pars : dict
-        Parameters defining satisfication and uncertainty thresholds for 
-        consumat and the agent's perception of risk and trust in forecasts.
-        All four parameters are in a range 0 to 1.
-        >>> {'perceived_risk': 0.5, 
-        >>>  'forecast_trust': 0.5,
-        >>>  'sa_thre': 0.5, 
-        >>>  'un_thre': 0.5}
+        Parameters defining satisfaction and uncertainty thresholds for 
+        CONSUMAT and the agent's perception of risk and trust in forecasts.
+        All four parameters are in the range 0 to 1.
+        
+        >>> # A sample pars dictionary
+        >>> settings = {
+        >>>     'perceived_risk': 0.5, 
+        >>>     'forecast_trust': 0.5,
+        >>>     'sa_thre': 0.5, 
+        >>>     'un_thre': 0.5
+        >>>     }
+    
     fields : dict
         A dictionary of Field agents with their unique IDs as keys.
     wells : dict
@@ -111,11 +117,14 @@ class Behavior(mesa.Agent):
     -----
     This method also initializes various attributes related to the agent's
     perception of risks, precipitation, profit, yield rate, and decision-making
-    solutions. It calculates initial perceived risks and precipitation availability.
+    solutions. It calculates initial perceived risks and precipitation availability as well.
     """
     def __init__(self, unique_id, model, settings: dict, pars: dict,
                  fields: dict, wells: dict, finance, aquifers: dict,
                  **kwargs):
+        """
+        Initialize a Behavior agent in the Mesa model.
+        """
         # MESA required attributes => (unique_id, model)
         super().__init__(unique_id, model)
         self.agt_type = "Behavior"
@@ -170,7 +179,7 @@ class Behavior(mesa.Agent):
         # we pre-calculate perceived_prec_aw for all years here (not step-wise). 
         self.update_perceived_prec_aw(par_forecast_trust=self.pars['forecast_trust'])
         
-        # Initialize dm_sol (mimicing opt_model's output)
+        # Initialize dm_sols (mimicking opt_model's output)
         dm_sols = {}
         for fi, field in self.fields.items():
             dm_sols[fi] = {}
@@ -184,7 +193,7 @@ class Behavior(mesa.Agent):
         self.pre_dm_sols = None
         self.dm_sols = self.make_dm(None, dm_sols=dm_sols, init=True)
 
-        # Run the simulation to calculate satisfication and uncertainty
+        # Run the simulation to calculate satisfaction and uncertainty
         self.run_simulation() # aquifers
 
     def load_settings(self, settings: dict):
@@ -215,7 +224,7 @@ class Behavior(mesa.Agent):
         Parameters
         ----------
         par_perceived_risk : float
-            The quantile used in an inversed cumulated distribution function.
+            The quantile used in an inverse cumulative distribution function.
     
         Notes
         -----
@@ -297,9 +306,13 @@ class Behavior(mesa.Agent):
         Notes
         -----
         This method involves several key processes:
+            
         1. Updating agents in the agent's social network.
-        2. Making decisions based on the current CONSUMAT state (Imitation, Social comparison, Repetition, Deliberation).
+        
+        2. Making decisions based on the current CONSUMAT state (Imitation, Social Comparison, Repetition, Deliberation).
+        
         3. Running simulations based on these decisions.
+        
         4. Updating various attributes like profit, yield rate, satisfaction, and uncertainty.
         """
         self.t += 1
@@ -341,10 +354,15 @@ class Behavior(mesa.Agent):
         Run the simulation for the Behavior agent for one time step.
     
         This method performs several key operations:
+            
         1. Simulates the fields based on decision-making solutions.
+        
         2. Simulates the wells for energy consumption.
+        
         3. Updates the financial status based on the field and well simulations.
+        
         4. Calculates satisfaction and uncertainty based on CONSUMAT theory.
+        
         5. Updates the CONSUMAT state of the agent.
     
         Notes
@@ -420,7 +438,7 @@ class Behavior(mesa.Agent):
         expected_sa = dm_sols["Sa"][target]
 
         # We define uncertainty to be the difference between expected_sa at the
-        # previous time and satisfication this year.
+        # previous time and satisfaction this year.
         expected_sa_t_1 = self.expected_sa
         if expected_sa_t_1 is None:     # Initial step
             uncertainty = abs(expected_sa - satisfaction)
@@ -461,9 +479,9 @@ class Behavior(mesa.Agent):
         dm_sols : dict
             The previous decision-making solutions, used as inputs for the optimization model.
         neighbor : dict, optional
-            A neighboring agent object, used in states like 'Imitation' and "Social comparison".
+            A neighboring agent object, used in states, 'Imitation' and "Social comparison".
         init : bool, optional
-            A flag indicating if this is the initial setup of the optimization model.
+            A flag indicating if it is the initial setup of the optimization model.
     
         Returns
         -------
@@ -472,7 +490,7 @@ class Behavior(mesa.Agent):
     
         Notes
         -----
-        This method sets up and solves an optimization model based on various inputs including
+        This method sets up and solves an optimization model based on various inputs, including
         field data, well data, water rights, and financial considerations. The type of
         optimization and constraints applied depend on the agent's current state, as defined
         by the CONSUMAT theory. The method returns updated decision-making solutions that
@@ -504,7 +522,7 @@ class Behavior(mesa.Agent):
         for i, (fi, field) in enumerate(fields.items()):
             # Note: Since field type is given as an input, we do not constrain 
             # i_rainfed under any condition. Behavior agent will only adopt 
-            # i_crop and i_te with certain states.
+            # i_crop and i_te in certain states.
             dm_sols_fi = dm_sols[fi]
             
             if init:
@@ -558,8 +576,8 @@ class Behavior(mesa.Agent):
 
             else: # social comparason & imitation
                 # We assume this behavioral agent has the same number of fields
-                # as it neighbor.
-                # A small patch may need in the future to generalize this. 
+                # as its neighbor.
+                # A small patch may be needed in the future to generalize this. 
                 fi_neighbor = neighbor.field_ids[i]
                 dm_sols_neighbor_fi = neighbor.pre_dm_sols[fi_neighbor]
                 
@@ -598,11 +616,11 @@ class Behavior(mesa.Agent):
         for wr_id, v in self.wr_dict.items():
             if v["status"]: # Check whether the wr is activated
                 # Extract the water right setting from the previous opt run,
-                # which we record the remaining water right fromt the previous
-                # year. If the wr is newly activate in a simulation, then we
+                # which we record as the remaining water right from the previous
+                # year. If the wr is newly activated in a simulation, then we
                 # use the input to setup the wr.
                 wr_args = wr_dict.get(wr_id)
-                if wr_args is None: # when first time introduce the water rights
+                if wr_args is None: # when we introduce the water rights for the first time (LEMA)
                     dm.setup_constr_wr(
                         water_right_id=wr_id, wr_depth=v["wr_depth"],
                         applied_field_ids=v['applied_field_ids'],
@@ -677,9 +695,13 @@ class Behavior(mesa.Agent):
         Notes
         -----
         This method performs several key steps:
+            
         1. Evaluates comparable decision-making solutions from agents in the network.
+        
         2. Selects the agent with the best objective value.
+        
         3. Compares the agent's original choice with the selected agent's choice.
+        
         4. Updates the `dm_sols` attribute based on the comparison.
         """
         behavior_ids_in_network = self.behavior_ids_in_network
@@ -717,7 +739,9 @@ class Behavior(mesa.Agent):
         Notes
         -----
         This method performs the following key steps:
-        1. Selects an agent from the network for imitation.
+            
+        1. Selects an agent based on memory from previous social comparison from the network for imitation.
+        
         2. Updates the `dm_sols` attribute by calling the `make_dm` method
            with the current state set to "Imitation" and using the selected agent's solutions.
         """
