@@ -52,11 +52,13 @@ class SD6Model(mesa.Model):
     ----------
     pars : dict
         Parameters used for model calibration and setup.
+        
         >>> settings = {
         >>>     "perceived_risk": 0.52,
         >>>     "forecast_trust": 0.70,
         >>>     "sa_thre": 0.11,
         >>>     "un_thre": 0.11,
+    
     crop_options : list
         List of available crop options for the simulation.
     tech_options : list
@@ -75,13 +77,16 @@ class SD6Model(mesa.Model):
         Settings about the behaviors in the model, mapped by their IDs.
     prec_aw_step : dict
         Time-series data for available precipitation.
-        >>> {"<prec_aw1>": {
+        
+        >>> prec_aw_step = {
+        >>> "<prec_aw1>": {
         >>>     "<year>": {
         >>>         "<crop1>": "[cm]",
         >>>         "<crop2>": "[cm]",
         >>>         }
         >>>     }
         >>> }
+        
     init_year : int, optional
         The initial year of the simulation (a year before the start year).
     end_year : int, optional
@@ -472,10 +477,12 @@ class SD6Model(mesa.Model):
 
         ##### Nature Environment (aquifers)
         for aq_id, aquifer in self.aquifers.items():
-            withdrawal = 0
+            withdrawal = 0.0
             # Collect all the well withdrawals of a given aquifer
-            withdrawal += sum([well.withdrawal if well.aquifer_id==aq_id else 0 \
-                               for _, well in self.wells.items()])
+            withdrawal += sum([well.withdrawal if well.aquifer_id == aq_id \
+                               else 0.0 for _, well in self.wells.items()])
+            #withdrawal += sum([well.withdrawal if well.aquifer_id==aq_id else 0 \
+               #                for _, well in self.wells.items()])
             # Update aquifer
             aquifer.step(withdrawal)
 

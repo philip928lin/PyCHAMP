@@ -1,4 +1,6 @@
-﻿py\_champ.entities.finance
+﻿.. _py_champ_entities_finance:
+
+py\_champ.entities.finance
 ==========================
 
 .. automodule:: py_champ.entities.finance

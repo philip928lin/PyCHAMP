@@ -157,15 +157,18 @@ class Decision_making():
         consumat_dict: dict, optional
             A dictionary containing parameters related to the CONSUMAT model, including sensitivities and scales.
             The default is 
-                {
-                    "alpha": {
-                        "profit":     1,
-                        "yield_rate": 1
-                        },
-                    "scale": {
-                        "profit": 0.23 * 50, 
-                        "yield_rate": 1
-                },
+            
+            >>> consumat_dict = {
+            >>>     "alpha": {
+            >>>         "profit":     1,
+            >>>         "yield_rate": 1
+            >>>         },
+            >>>     "scale": {
+            >>>         "profit": 0.23 * 50, 
+            >>>         "yield_rate": 1
+            >>>         },
+            >>>    }
+            
         approx_horizon: bool, optional
             When set to True, the model will calculate two points (start and
             end) over the given horizon to determine the objective, which is

@@ -1,4 +1,6 @@
-﻿py\_champ.entities.decision\_making
+﻿.. _py_champ_entities_optimization:
+
+py\_champ.entities.decision\_making
 ===================================
 
 .. automodule:: py_champ.entities.decision_making

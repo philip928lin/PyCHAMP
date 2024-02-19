@@ -1,0 +1,11 @@
+S.N.,Data,Source
+1,Crop types and available irrgation technologies,User input as per the region
+2,"Coefficients a and b, determined from regression analysis on historical groundwater level fluctuations and extraction data","Butler et al., 2018"
+3,"Specific yield, hydraulic conductivity, and water level depth values obtained through spatial interpolation",WIMAS well data 
+4,"Well radius, pumping efficiency, operational efficiency of the well, and the number of pumping days",User input as per the region
+5,Precipitation data for the simulation period,gridMET
+6,Annual crop prices,Kansas Farm Management Association (KFMA)
+7,Crop yields to derive water-yield production function,USDA Risk management agency
+8,Quantile for perceived risk uncertainty,Calibrated Parameter
+9, Trust in weather forecast,Calibrated Parameter
+10,Thresholds for satisfaction and uncertainty,Calibrated Parameter

@@ -1,9 +1,5 @@
-PyCHAMP User Manual!
-====================
-
-.. note::
-
-   This project is under active development.
+PyCHAMP User Manual
+===================
 
 Contents
 --------
@@ -13,21 +9,11 @@ Contents
    :caption: User Guide
 
    usage
-   tutorial
+   general_intro
+   example_SD6
 
-Main modules
-------------
-.. autosummary::
-   :toctree: modules
 
-   py_champ.entities.aquifer
-   py_champ.entities.field
-   py_champ.entities.well
-   py_champ.entities.finance
-   py_champ.entities.behavior
-   py_champ.entities.decision_making
-
-PyCHAMP package
+PyCHAMP Package
 ---------------
 .. toctree::
    :maxdepth: 2

@@ -1,0 +1,15 @@
+Attributes,Behavior Agent 1,Behavior Agent 2,Behavior Agent 3
+field ID,field1,field2,field2
+field area [ha],50,20,80
+initial technology type,central pivot LEPA,central pivot LEPA,central pivot LEPA
+initial crop type,corn,soybeans,corn
+initial field type,optimize,irrigated,rainfed
+irrigation frequency,0.5,1,0.1
+well ID,well1,well2,well3
+radius of the well [m],0.4,0.4,0.4
+hydraulic condutivity [m/day],50,110,80
+specific yield,0.06,0.04,0.07
+initial water table lift [m],45,40,50
+initial saturated thickness [m],30,20,40
+pumping days [day],90,90,90
+agents in network,"behavior2, behavior3","behavior1, behavior3","behavior2, behavior1"

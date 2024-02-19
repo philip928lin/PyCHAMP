@@ -1,4 +1,6 @@
-﻿py\_champ.entities.field
+﻿.. _py_champ_entities_field:
+
+py\_champ.entities.field
 ========================
 
 .. automodule:: py_champ.entities.field

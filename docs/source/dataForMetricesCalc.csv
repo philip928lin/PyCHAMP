@@ -1,0 +1,4 @@
+S.N.,Data,Source
+1,Observed crop types,USDA Cropland data
+2,Groundwater withdrawal,MODFLOW-simulated
+3,Saturated thickness of the aquifer,MODFLOW-simulated
