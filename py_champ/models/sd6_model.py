@@ -695,7 +695,7 @@ class SD6Model_input_templates():
                     "<crop1>": "[$/bu]",    
                     "<crop2>": "[$/bu]",    
                     },
-                "crop_cost": { # $/bu
+                "crop_cost": { 
                     "<crop1>": "[$/bu]",    
                     "<crop2>": "[$/bu]",   
                     },
