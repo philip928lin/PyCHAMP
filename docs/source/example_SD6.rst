@@ -30,9 +30,9 @@ SD-6 LEMA model, which is based on MESA 2.1.1 framework, is set up utilizing aqu
    :widths: auto
    :header-rows: 1
 
-In this example, we validate the model's ability to capture agro-hydrological dynamics by using observed data, which includes groundwater withdrawal, saturated thickness, and the types or proportions of crops grown in the fields.
+In this example, we validate the model's ability to capture agro-hydrological dynamics in a stakeholder-driver groundwater scheme by using observed data, which includes groundwater withdrawal, saturated thickness, and the types or proportions of crops grown in the fields.
 
-.. csv-table:: Required observed data to validate model's ability to capture agro-hydrological dynamics
+.. csv-table:: Required observed data to validate model's ability to capture human-agricultural-hydrological dynamics
    :file: dataForMetricesCalc.csv
    :widths: auto
    :header-rows: 1
@@ -70,7 +70,13 @@ Execution Steps
 	    (aquifers_dict, fields_dict, wells_dict, finances_dict, behaviors_dict,
 	     prec_aw_step, crop_price_step, shared_config) = dill.load(f)
 
-3. Load other necessary inputs.
+3. Load the required observed data to validate model's ability to simulate real world human water interaction. The csv file can be accessed at **give link??**
+
+.. code-block:: python
+	
+	data = pd.read_csv(join(wd, "Data_SD6.csv"), index_col=["year"])
+
+4. Load other necessary inputs.
 
 .. code-block:: python
 
@@ -92,7 +98,7 @@ Execution Steps
 	 'sa_thre': 0.1421,
 	 'un_thre': 0.0773}
 
-4. Initialize a new instance of the model and run the simulation for the required number of steps, which is from 2008 to 2022 in this case.
+5. Initialize a new instance of the model and run the simulation for the required number of steps, which is from 2008 to 2022 in this case.
 
 *Note that the dicitonaries for each of the classes are loaded into the pickle file*.
 
@@ -123,7 +129,7 @@ Execution Steps
 	for i in range(15):
 	m.step()
 
-5. Load the model-level and agent-level data after the simulation.
+6. Load the model-level and agent-level data after the simulation.
 
 .. code-block:: python
 
@@ -133,7 +139,7 @@ Execution Steps
 	# read system level outputs. For e.g., ratios of crop types, irrigation technology, rainfed or irrigated field for the duration of the simulation
 	df_sys = SD6Model.get_df_sys(m, df_farmers, df_fields, df_wells, df_aquifers)
 
-6. Read the metrices (Root Mean Square Error, Kling-Gupta Efficiency, and Regression Coefficient) based on observed and simulated data for given targets: groundwater saturated thickness, withdrawal, ratio of rainfed or irrigated fields, and ratio of crop types grown.
+7. Read the metrices (Root Mean Square Error, Kling-Gupta Efficiency, and Regression Coefficient) based on observed and simulated data for given targets: groundwater saturated thickness, withdrawal, ratio of rainfed or irrigated fields, and ratio of crop types grown.
 
 .. code-block:: python
 	
@@ -526,7 +532,7 @@ The following section outlines a detailed process for generating input dictionar
 	                "yield_rate": 1
 	                },
 	            "scale": {  # Needed for normalizing the need for satisfaction calculation.
-	                "profit": 0.23 * 50, # Use corn [1e4$*bu*ha]
+	                "profit": 0.23 * 80, # Use corn and the largest field area among all behavior agents [1e4$*bu*ha].
 	                "yield_rate": 1
 	                },
 	            },
@@ -1032,7 +1038,11 @@ Simulating an SD-6 LEMA model consists of the following steps:
 
 9. Prepare a shared configuration dictionary.
 
-*Note that the settings under gurobi dictionary has keys that directs the optimization problem to stop at a certain time limit or percentage difference between the upper and lower bounds of the solution for which the current solution can be considered an optimal one. Users can use the key as per their need*.
+*Note*:
+
+*1. Users have the option to input costs associated with irrigation technology and crop changes. The costs are set as 0 for the purpose of this example*.
+
+*2. The settings under gurobi dictionary has keys that directs the optimization problem to stop at a certain time limit or percentage difference between the upper and lower bounds of the solution for which the current solution can be considered an optimal one. Users can use the key as per their need*.
 
 .. code-block:: python 
 
@@ -1095,7 +1105,7 @@ Simulating an SD-6 LEMA model consists of the following steps:
 	                "yield_rate": 1
 	                },
 	            "scale": {  # Needed to normalize the need for satisfaction calculation.
-	                "profit": 0.23 * 50, # Use corn [1e4$*bu*ha]
+	                "profit": 0.23 * 100, # Use corn and largest field area among all agents [1e4$*bu*ha].
 	                "yield_rate": 1
 	                },
 	            },

@@ -8,7 +8,7 @@ import gurobipy as gp
 
 #################
 
-class Decision_making():
+class Optimization():
     """
     This class represents a farmer making decisions on irrigation depth,
     crop types, the type of field: rainfed or irrigated, and irrigation technologies. The

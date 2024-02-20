@@ -187,27 +187,67 @@ The general structure of a Model created with PyCHAMP modules is illustrated bel
 
     class MyModel(mesa.Model):
         def __init__(self, settings):
-            self.schedule = mesa.time.Scheduler(self) # Initialize scheduler as new Mesa.Scheduler()
-            for each_agent_type in [aquifer, field, well, finance, behavior]:
-                agent = agent_type(settings) # Initialize agent of agent_type with settings
-                self.schedule.add(agent) # Add agent to scheduler with self.schedule.add(agent)
+            # Initialize scheduler.
+            self.schedule = mesa.time.Scheduler(self)
             
-            self.datacollector = mesa.DataCollector(model_reporters, agent_reporters) # Initialize DataCollector for storing model-level and agent-level data
+            # For agent initialization and scheduling use for loop if you have more than one agent under each agent type.
+
+            # Initialize all aquifer agents with settings. 
+            agent_aquifer = Aquifer(settings)
+            # Add all aquifer agents to the scheduler.
+            self.schedule.add(agent_aquifer)
+
+            # Initialize all field agents with settings.
+            agent_field = Field(settings) 
+            # Add all field agents to the scheduler.
+            self.schedule.add(agent_field)
+
+            # Initialize all well agents with settings.
+            agent_wells = Wells(settings)
+            # Add all well agents to the scheduler.
+            self.schedule.add(agent_wells)
+
+            # Initialize a finance agent for each behavior agent with settings.
+            agent_finance = Finance(settings)
+            # Add all finance agents to the scheduler.
+            self.schedule.add(agent_finance)
+
+            # Initialize all behavior agents with settings.
+            agent_behavior = Behavior(settings)
+            # Add all behavior agents to the scheduler.
+            self.schedule.add(agent_behavior)
+  
+            # Initialize DataCollector for storing model-level and agent-level data.
+            self.datacollector = mesa.DataCollector(model_reporters, agent_reporters) 
 
         def step(self):
-            for each_agent in self.schedule.agents:
-                update agent attributes
+            # Update crop crop prices.
+            if crop_price_step is not None: 
+                crop_price = crop_price_step[self.current_year] # The crop price for each time step is retrived from crop_price_step, given as an input to the finance dictionary. Loop through each finance id if you have more than one.
+
+            # Update the raifed or irrigated field type.
+            for each_behavior_agent in agent_behavior:
+                randomly select rainfed or optimize option for each field
+
+            # Turn on water right status from the appropriate time step, if applicable. 
+            if self.water_right and current_year >= self.water_right_year:
+            water_right_dictionary['status'] = True
             
-            self.schedule.step(agent_type = "Behavior") # Call the scheduler to update Behavior agents
+            # Call the scheduler to update Behavior agents.
+            self.schedule.step(agent_type = "Behavior") 
             
-            for each_aquifer_agent in aquifer_agents:
+            # Calculate total annual withdrawal for all aquifers and update withdrawal.
+            for each_aquifer_agent in agent_aquifer:
                 calculate total annual withdrawal
-                aquifer_agent.step(withdrawal) # Call the step method of aquifer_agent to update the withdrawal information
+                aquifer_agent.step(withdrawal) # Call the step method of aquifer_agent to update the withdrawal information.
             
-            self.datacollector.collect(self) # Collect model and agent data
+            # Collect model and agent data.
+            self.datacollector.collect(self) 
 
 
-    model_instance = MyModel(settings) # Initialize a new instance of MyModel with settings
+    # Initialize a new instance of MyModel with settings.
+    model_instance = MyModel(settings)
 
-    for _ in range(simulation_steps): # Run the simulation for the requird number of steps
+    # Run the simulation for the requird number of steps.
+    for _ in range(simulation_steps):
         model_instance.step()

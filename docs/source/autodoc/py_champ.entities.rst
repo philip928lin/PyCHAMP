@@ -20,14 +20,6 @@ py\_champ.entities.behavior module
    :undoc-members:
    :show-inheritance:
 
-py\_champ.entities.decision\_making module
-------------------------------------------
-
-.. automodule:: py_champ.entities.decision_making
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 py\_champ.entities.field module
 -------------------------------
 
@@ -40,6 +32,14 @@ py\_champ.entities.finance module
 ---------------------------------
 
 .. automodule:: py_champ.entities.finance
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+py\_champ.entities.optimization module
+--------------------------------------
+
+.. automodule:: py_champ.entities.optimization
    :members:
    :undoc-members:
    :show-inheritance:

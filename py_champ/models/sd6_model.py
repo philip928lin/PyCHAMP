@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 import mesa
-from ..util import TimeRecorder, Indicator
+from ..utility.util import TimeRecorder, Indicator
 from ..entities.aquifer import Aquifer
 from ..entities.behavior import Behavior
 from ..entities.field import Field

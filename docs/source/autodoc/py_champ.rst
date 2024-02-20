@@ -9,17 +9,7 @@ Subpackages
 
    py_champ.entities
    py_champ.models
-
-Submodules
-----------
-
-py\_champ.util module
----------------------
-
-.. automodule:: py_champ.util
-   :members:
-   :undoc-members:
-   :show-inheritance:
+   py_champ.utility
 
 Module contents
 ---------------

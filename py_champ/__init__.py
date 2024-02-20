@@ -4,6 +4,6 @@ from .entities.field import Field
 from .entities.well import Well
 from .entities.finance import Finance
 from .entities.aquifer import Aquifer
-from .util import TimeRecorder, Indicator
+from .utility.util import TimeRecorder, Indicator
 
 

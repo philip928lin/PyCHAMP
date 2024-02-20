@@ -11,10 +11,8 @@ Installation Steps
 
    (.venv) $ pip install py_champ
 
-OR
+2. (OR) To install the latest version of PyCHAMP from Github, use the following line of code.
 
-To install the latest version of PyCHAMP from Github, use the following line of code.
+   .. code-block:: console
 
-.. code-block:: console
-
-   (.venv) $ pip install git+https://github.com/philip928lin/PyCHAMP.git
+      (.venv) $ pip install git+https://github.com/philip928lin/PyCHAMP.git

@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import mesa
 from scipy.stats import truncnorm
-from .decision_making import Decision_making
+from .optimization import Optimization
 
 class Behavior(mesa.Agent):
     """
@@ -502,7 +502,7 @@ class Behavior(mesa.Agent):
         dm_dict = self.dm_dict      # decision-making settings
         consumat_dict = self.consumat_dict
 
-        dm = Decision_making(
+        dm = Optimization(
             unique_id=self.unique_id,
             LogToConsole=self.gb_dict.get("LogToConsole")
             )
