@@ -5,14 +5,8 @@ Installation Steps
 
 1. To utilize the PyCHAMP package, begin by installing the Gurobi solver (version 10.0.2 or higher). Gurobi is commercial software; however, it offers free licenses for academic purposes and recent graduates. For detailed instructions on how to download and install Gurobi with a free license, please refer to the Gurobi website (https://www.gurobi.com/academia/academic-program-and-licenses).
 
-2. Proceed with the installation of the PyCHAMP package. This process will automatically ensure the inclusion of all necessary dependencies for the package, such as gurobipy, mesa (version 2.1.1), joblib, scipy, numpy, and pandas.
+2. Proceed with the installation of the PyCHAMP package. This process will automatically ensure the inclusion of all necessary dependencies for the package, such as gurobipy, mesa (version 2.1.1), joblib, scipy, numpy, and pandas. To install the latest version of PyCHAMP from Github, use the following line of code.
 
 .. code-block:: console
 
-   (.venv) $ pip install py_champ
-
-2. (OR) To install the latest version of PyCHAMP from Github, use the following line of code.
-
-   .. code-block:: console
-
-      (.venv) $ pip install git+https://github.com/philip928lin/PyCHAMP.git
+   (.venv) $ pip install git+https://github.com/philip928lin/PyCHAMP.git

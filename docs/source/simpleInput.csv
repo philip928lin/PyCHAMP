@@ -1,4 +1,4 @@
-Attributes,Behavior Agent 1,Behavior Agent 2,Behavior Agent 3
+Attributes,Farmer 1 (behavior1),Farmer 2 (behavior2),Farmer 3 (behavior3)
 field ID,field1,field2,field2
 field area [ha],50,20,80
 initial technology type,central pivot LEPA,central pivot LEPA,central pivot LEPA

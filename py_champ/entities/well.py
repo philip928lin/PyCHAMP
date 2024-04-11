@@ -184,6 +184,3 @@ class Well(mesa.Agent):
         self.pumping_rate = pumping_rate
         self.e = e
         return e
-    
-
-    

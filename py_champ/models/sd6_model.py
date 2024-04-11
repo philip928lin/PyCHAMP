@@ -110,7 +110,7 @@ class SD6Model(mesa.Model):
         finances_dict, and behaviors_dict at the first nested level. E.g., We
         cannot just overwrite the sub-water_rights settings in a behaviors_dict.
         The entire "water_rights" nested dictionary in a behaviors_dict will be
-        overwrote if "water_rights" exists in a shared_config.
+        overwritten if "water_rights" exists in a shared_config.
     **kwargs : dict
         Additional keyword arguments including time-step data like crop price, type, irrigation depth, etc.
         - 'crop_price_step': crop_price_step
@@ -122,17 +122,6 @@ class SD6Model(mesa.Model):
     datacollector : mesa.DataCollector
         Collects and stores data from agents and the model during the simulation.
     (other attributes are initialized within the __init__ method)
-
-    Methods
-    -------
-    step()
-        Advances the model by one step.
-    get_dfs(model)
-        Static method to extract dataframes for behaviors, fields, wells, and aquifers.
-    get_df_sys(model, df_behaviors, df_fields, df_wells, df_aquifers)
-        Static method to compile system-level dataframe from individual agent data.
-    get_metrices(df_sys, data, targets, indicators_list)
-        Static method to calculate metrics based on system-level data and targets.
 
     Notes
     -----

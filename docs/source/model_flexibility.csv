@@ -1,4 +1,4 @@
-Attributes,Behavior Agent 1,Behavior Agent 2,Behavior Agent 3,Behavior Agent 4
+Attributes,Farmer 1 (behavior1),Farmer 2 (behavior2),Farmer 3 (behavior3),Farmer 4 (behavior4)
 aquifer ID,aquifer1,aquifer1,aquifer2,aquifer2
 field ID,field1,field2,"(field3, field4)","(field5, field6)"
 field area [ha],100,50,"(20, 15)","(70, 70)"

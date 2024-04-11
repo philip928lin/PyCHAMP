@@ -4,28 +4,25 @@
 Model Examples
 ##############
 
-Sheriden 6 Local Enhanced Management Area (SD-6 LEMA) Model
+Sheriden 6 Local Enhanced Management Area Model (SD-6 Model)
 ===========================================================
 
-Background of the SD-6 LEMA
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Background of the Sheriden 6 Local Enhanced Management Area (SD-6 LEMA)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The SD-6 LEMA represents a grassroots initiative for groundwater management that commenced in 2012, part of the LEMA program within the High Plains Aquifer region of western Kansas. With the objective of curtailing groundwater consumption by capping the water rights at 55 inches per unit area over a five-year period, SD-6 LEMA has completed two full cylces, first from 2013 to 2017 and subsequently from 2018 to 2022. Water use diminished by 33.6% in the first period and by 36.8% in the second. The upcoming section provides an overview of how PyCHAMP can model the complex interactions between human activities and water systems, employing SD-6 LEMA as an illustrative example, as detailed in the referenced article.
+The SD-6 LEMA, launched in 2012, is a grassroots groundwater management initiative under the LEMA program within western Kansas's High Plains Aquifer region. With the objective of curtailing groundwater consumption by capping the water rights at 55 inches per unit area over a five-year period, SD-6 LEMA has completed two full cylces, first from 2013 to 2017 and subsequently from 2018 to 2022. Water use diminished by 33.6% in the first period and by 36.8% in the second. The upcoming section provides an overview of how PyCHAMP can model the complex interactions between human activities and water systems, employing SD-6 LEMA as an illustrative example. The article referenced has a detailed description of the background and the study area.
 
 *put article citation here*
 
-*Note: Please refer to the article for more information on the study region and background*.
-
-
-Setting up a complete simulation of the SD-6 LEMA model
+Setting up a complete simulation of the SD-6 model
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Input Data and Model Structure
 """""""""""""""""""""""""""""""
 
-SD-6 LEMA model, which is based on MESA 2.1.1 framework, is set up utilizing aquifer, field, well, finance, and behavior classes described within this documentation. To initiate and run an SD-6 LEMA simulation with each farmer managing a single well and field, the required input data are given in the table below.
+SD-6 model, which is based on Mesa 2.1.1 framework, is set up utilizing aquifer, field, well, finance, and behavior classes described within this documentation. The required input data to initiate and run an SD-6 LEMA simulation with each farmer managing a single well and field are given in the table below.
 
-.. csv-table:: Required inputs to run an SD-6 LEMA simulation
+.. csv-table:: Required inputs to run an SD-6 model simulation
    :file: dataForSimulation.csv
    :widths: auto
    :header-rows: 1
@@ -37,27 +34,27 @@ In this example, we validate the model's ability to capture agro-hydrological dy
    :widths: auto
    :header-rows: 1
 
-A process flow diagram is provided to illustrate the organized sequence of operations and the decision-making mechanisms of the farmer agents in the model.
+A process flow diagram is provided to illustrate the organized sequence of operations and the decision-making mechanisms of the farmers in the model.
 
 .. figure:: SD6SimulationDiagram.png
    :align: center
    :width: 80%
    :alt: alternative text
 
-   Simulation schema of the SD-6 Model, developed with PyCHAMP modules within the Mesa agent-based modeling framework, delineating the systematic process flow and decision-making procedure of farmer agents.
+   Simulation schema of the SD-6 Model, developed with PyCHAMP modules within the Mesa agent-based modeling framework, delineating the systematic process flow and decision-making procedure of farmers.
 
-   *Note: The grey area illustrates the sequence of steps that take place for each farmer agent*.
+   *Note: The rectangle with rounded corners illustrates the sequence of steps that take place for each farmer*.
 
 Execution Steps
 """""""""""""""
 
-1. Import the SD-6 LEMA model from PyCHAMP.
+1. Import the SD-6 model from PyCHAMP.
 
 .. code-block:: python
 
 	from py_champ.models.sd6_model import SD6Model
 
-2. Import necessary library and load a pickle file containing all the input dictionaries for different classes, along with pre-calculated available precipitation for each crop, based on its growing season. The pickle file can be downloaded from *https:where??s*. For a detailed understanding of creating your own input file, refer to :ref:example_l and :ref:example_2.
+2. Import necessary libraries and load a pickle file containing all the input dictionaries for different classes, along with pre-calculated available precipitation for each crop, based on its growing season. The pickle file can be downloaded from *insert link                                          here*. For a detailed understanding of creating your own input file, refer to :ref:`example_l` and :ref:`example_2`.
 
 .. code-block:: python
 
@@ -148,33 +145,33 @@ Execution Steps
 
 .. _example_l:
 
-Creating simple input dictionaries to set up and run an SD-6 LEMA simulation
+Creating simple input dictionaries to set up and run an SD-6 model simulation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-PyCHAMP provides the functionality for users to tailor their input dictionaries, ensuring the simulation is customized for their specific need. This section guides users through the process of constructing basic input dictionaries for the PyCHAMP package's different classes to simulate the SD-6 LEMA scenario. In the forthcoming example, we simulate three individual farmer agents, each managing a single field with no splits and a single well, located in an area served by one aquifer. Each farmer considers the other two farmers in their decision-making network, meaning the choices of one can influence others. The crop choices available are corn, sorghum, and soybeans, while the selected irrigation technology is center pivot LEPA. Graphical representation of the setup, essential parameters, and their associated values for the behavior agents are illustrated and outlined in the subsequent figure and table.
+PyCHAMP provides the functionality for users to tailor their input dictionaries, ensuring the simulation is customized for their specific need. This section guides users through the process of constructing basic input dictionaries for the PyCHAMP package's different classes to simulate the SD-6 LEMA scenario. In the forthcoming example, we simulate three individual farmer, each managing a single field with no splits and a single well, located in an area served by one aquifer. Each farmer considers the other two farmers in their decision-making network, meaning the choices of one can influence others. The crop choices available are corn, sorghum, and soybeans, while the selected irrigation technology is center pivot LEPA. Graphical representation of the setup, essential parameters, and their associated values for the farmers are illustrated and outlined in the subsequent figure and table.
 
 .. figure:: example1.png
    :align: center
    :width: 80%
    :alt: alternative text
 
-   Illustration of a simple setup for an SD-6 LEMA model.
+   Illustration of a simple setup for an SD-6 model.
 
-   *Note: Each behavior agent is in a network with others*.
+   *Note: Each farmer is in a network with others*.
 
-.. csv-table:: Important attributes and their values associated with different behavior agents
+.. csv-table:: Important attributes and their values associated with different farmers
    :file: simpleInput.csv
    :widths: auto
    :header-rows: 1
 
-The following section outlines a detailed process for generating input dictionaries and executing an SD-6 LEMA model simulation.
+The following section outlines a detailed process for generating input dictionaries and executing an SD-6 model simulation.
 
-1. Begin by importing the SD-6 LEMA model into your working environment from the package.
+1. Begin by importing the SD-6 model into your working environment from the package.
 
 .. code-block:: python
 
 	from py_champ.models.sd6_model import SD6Model
 
-2. Specify the available crop types and irrigation technologies, along with the number of splits for each farmer agent's field.
+2. Specify the available crop types and irrigation technologies, along with the number of splits for each farmer's field.
 
 .. code-block:: python
 
@@ -350,7 +347,7 @@ The following section outlines a detailed process for generating input dictionar
 	        }
 	    }
 
-8. Formulate a financial settings dictionary for the farmer agents: A finance input dictionaries has the following keys, as defined in :ref:`py_champ_entities_finance`.
+8. Formulate a finance settings dictionary for the farmers: A finance input dictionaries has the following keys, as defined in :ref:`py_champ_entities_finance`.
 
     - 'energy_price': The price of energy [1e4 $/PJ].
     - 'crop_price' and 'crop_cost': The price and cost of different crops [$/bu].
@@ -372,12 +369,12 @@ The following section outlines a detailed process for generating input dictionar
 	        }
 	    }
 
-9. Construct an input dictionary for behavior agents: As outlined in :ref:`py_champ_entities_behavior`, the input dicitonaries for a well consists of the following keys.
+9. Construct an input dictionary for farmers: As outlined in :ref:`py_champ_entities_behavior`, the input dicitonaries for a well consists of the following keys.
 
-	- 'behavior_ids_in_network': IDs of other behavior agents in the agent's social network.
+	- 'behavior_ids_in_network': IDs of other farmers in the agent's social network.
 	- 'field_ids': IDs of fields managed by the agent.
 	- 'well_ids': IDs of wells managed by the agent.
-	- 'finance_id': ID of the finance agent associated with this behavior agent.
+	- 'finance_id': ID of the finance agent associated with this farmer.
 	- 'decision_making': Settings and parameters for the decision-making process.
 	- 'consumat': Parameters related to the CONSUMAT model, including sensitivities and scales.
 	- 'water_rights': Information about water rights, including depth [cm] and fields to which the constraint is applied.
@@ -556,7 +553,7 @@ The following section outlines a detailed process for generating input dictionar
 			 'sa_thre': 0.1421,
 			 'un_thre': 0.0773}
 
-12. Initialize a new instance of the SD-6 LEMA model with the compiled settings, initial, start, and end years.
+12. Initialize a new instance of the SD-6 model with the compiled settings, initial, start, and end years.
 
 .. code-block:: python 
 
@@ -580,7 +577,7 @@ The following section outlines a detailed process for generating input dictionar
 	    shared_config=shared_config
 	    )
 
-13. Initiate the simulation, iterating through the SD-6Model class's step method for the desired number of iterations.
+13. Initiate the simulation, iterating through the SD-6 Model class's step method for the desired number of iterations.
 
 .. code-block:: python 
 
@@ -597,27 +594,27 @@ The following section outlines a detailed process for generating input dictionar
 
 .. _example_2:
 
-Creating advanced input dictionaries to set up run an SD-6 LEMA Model
+Creating advanced input dictionaries to set up and run an SD-6 Model
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-A feature aspect of PyCHAMP is its adaptability, allowing users to customize various components, such as the assets and networks of agents. To illustrate this, a scenario with two aquifers and four behavioral agents, each possessing different assets, is established. Farmers are presented with a selection of crops — corn, sorghum, wheat, and soybeans — with the added option of leaving fields fallow. The irrigation technology choices have also been expanded to include both center pivot LEPA and standard center pivot systems. The figure and table provided below illustrate and outline the setup of the model, assets of each behavioral agent, and the characteristics of the assets under their management.
+A feature aspect of PyCHAMP is its adaptability, allowing users to customize various components, such as the assets and networks of agents. To illustrate this, a scenario with two aquifers and four farmers, each possessing different assets, is established. Farmers are presented with a selection of crops — corn, sorghum, wheat, and soybeans — with the added option of leaving fields fallow. The irrigation technology choices have also been expanded to include both center pivot LEPA and standard center pivot systems. The figure and table provided below illustrate and outline the setup of the model, assets of each farmer, and the characteristics of the assets under their management.
 
 .. figure:: example2.png
    :align: center
    :width: 80%
    :alt: alternative text
 
-   Illustration of an advanced setup for an SD-6 LEMA model.
+   Illustration of an advanced setup for an SD-6 model.
 
-   *Note: Each behavior agent is in a network with others in the same aquifer region*.
+   *Note: Each farmer is in a network with others in the same aquifer region*.
 
-.. csv-table:: Important attributes and their values associated with different behavior agents
+.. csv-table:: Important attributes and their values associated with different farmers
    :file: model_flexibility.csv
    :widths: auto
    :header-rows: 1
 
-*Note: Multiple fields for behavior agents are given as (field1, field2), and their corresponding attribute values are given as (value1, value2), respectively, and multiple wells for behavior agents are given as [well1, well2], and their corresponding attribute values are given as [value1, value2], respectively*.
+*Note: Multiple fields for farmers are given as (field1, field2), and their corresponding attribute values are given as (value1, value2), respectively, and multiple wells for farmers are given as [well1, well2], and their corresponding attribute values are given as [value1, value2], respectively*.
 
-Simulating an SD-6 LEMA model consists of the following steps:
+Simulating an SD-6 model consists of the following steps:
 
 1. Import the model, define crop and irrigation types, and area split.
 
@@ -898,7 +895,7 @@ Simulating an SD-6 LEMA model consists of the following steps:
 	    },
 	}
 
-7. Create a financial settings dictionary for the farmer agents.
+7. Create a finance settings dictionary for the farmers.
 
 .. code-block:: python 
 
@@ -914,7 +911,7 @@ Simulating an SD-6 LEMA model consists of the following steps:
 	        }
 	    }
 
-8. Construct an input dictionary for behavior agents.
+8. Construct an input dictionary for farmers.
 
 .. code-block:: python 
 
@@ -1042,7 +1039,7 @@ Simulating an SD-6 LEMA model consists of the following steps:
 
 *1. Users have the option to input costs associated with irrigation technology and crop changes. The costs are set as 0 for the purpose of this example*.
 
-*2. The settings under gurobi dictionary has keys that directs the optimization problem to stop at a certain time limit or percentage difference between the upper and lower bounds of the solution for which the current solution can be considered an optimal one. Users can use the key as per their need*.
+*2. The settings under gurobi dictionary have keys that directs the optimization problem to stop at a certain time limit or percentage difference between the upper and lower bounds of the solution for which the current solution can be considered an optimal one. Users can use the keys as per their need*.
 
 .. code-block:: python 
 
@@ -1131,7 +1128,7 @@ Simulating an SD-6 LEMA model consists of the following steps:
 			 'sa_thre': 0.1421,
 			 'un_thre': 0.0773}
 
-11. Initialize a new instance of the SD-6 LEMA model with the compiled settings, initial, start, and end years.
+11. Initialize a new instance of the SD-6 model with the compiled settings, initial, start, and end years.
 
 .. code-block:: python 
 
@@ -1155,7 +1152,7 @@ Simulating an SD-6 LEMA model consists of the following steps:
 	    shared_config=shared_config,
 	    )
 
-12. Initiate the simulation, iterating through the SD-6Model class's step method for the desired number of iterations.
+12. Initiate the simulation, looping through the step method of SD-6 Model class for the desired number of iterations.
 
 .. code-block:: python 
 
