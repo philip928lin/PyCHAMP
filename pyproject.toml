@@ -4,7 +4,8 @@ requires = [
     "numpy",
     "pandas",
     "mesa==2.1.1",
-    "scipy"
+    "scipy",
+    "gurobipy"
 ]
 build-backend = "flit_core.buildapi"
 
