@@ -1,8 +1,9 @@
 .. _example_SD6:
 
-#################################
+##################################
 Introduction to the PyCHAMP Model
-################################# 
+##################################
+
 .. _general_intro:  
 
 
@@ -37,7 +38,7 @@ For a more detailed breakdown of the aquifer module, refer to :ref:`py_champ_ent
 .. note:: 
    Ensure you have installed PyCHAMP Package as per the instructions in the :doc:`usage`.
 Getting Started
-===============
+=================
 
 Start by importing the necessary modules:
 
@@ -54,7 +55,7 @@ Start by importing the necessary modules:
     import py_champ
 
 Inputs
-------
+--------
 
 Simulation through an SD6 model will require the following inputs:
 
@@ -105,7 +106,7 @@ Aquifer class calculates and returns the annual change in water level (m), denot
 For an in-depth explanation of the aquifer module, please refer to :ref:`py_champ_entities_aquifer`.
 
 2. Field Module 
----------------
+----------------
 Field Class:
 ^^^^^^^^^^^^
 
@@ -137,7 +138,7 @@ Ultimately, the well class returns the annual energy consumption for each well, 
 For an expansive analysis of the well module, refer to :ref:`py_champ_entities_well`.
 
 4. Finance Module 
----------------
+------------------
 Finance Class:
 ^^^^^^^^^^^^^^
 
@@ -152,7 +153,7 @@ The Finance class returns the profit in units of ten thousand dollars (1e4 $), a
 For additional information on the finance module, refer to :ref:`py_champ_entities_finance`.
 
 5. Behavior Module 
----------------
+-------------------
 Behavior Class:
 ^^^^^^^^^^^^^^^
 

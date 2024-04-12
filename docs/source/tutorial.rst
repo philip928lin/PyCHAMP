@@ -5,14 +5,14 @@ Tutorial
 ###########
 
 Introduction
-============
+==============
 
 This tutorial will guide you through the basics of using the PyCHAMP model. The tutorial is based on running the simulation as per environmental and agricultural settings for the Sheridan 6 Local Enhanced Management Area (SD6 LEMA); users have the leeway to develop their own model to meet their specific requirements. This model simulates actions, interactions, and decisions of the agents, i.e., fields, wells, aquifers, finance, and behavior over a specified peiod of time in the SD6 region.
 
 .. note:: 
    Ensure you have installed PyCHAMP Package as per the instructions in the :doc:`usage`.
 Getting Started
-===============
+=================
 
 Start by importing the necessary modules:
 
@@ -29,7 +29,7 @@ Start by importing the necessary modules:
     import py_champ
 
 Inputs
-------
+--------
 
 Simulation through an SD6 model will require the following inputs:
 
@@ -72,7 +72,7 @@ Simulation through an SD6 model will require the following inputs:
 
 
 Basic Usage
-===========
+=============
 
 Explain the basic usage of your package:
 
@@ -83,11 +83,11 @@ Explain the basic usage of your package:
     print(result)
 
 Advanced Topics
-===============
+=================
 
 Discuss more advanced topics or tips and tricks here.
 
 Conclusion
-==========
+============
 
 Wrap up the tutorial and perhaps provide some links to further resources or next steps.

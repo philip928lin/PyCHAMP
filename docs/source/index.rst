@@ -1,8 +1,8 @@
 PyCHAMP User Manual
-===================
+=====================
 
 Contents
---------
+----------
 
 .. toctree::
    :maxdepth: 2
@@ -14,7 +14,7 @@ Contents
 
 
 PyCHAMP Package
----------------
+-----------------
 .. toctree::
    :maxdepth: 2
    

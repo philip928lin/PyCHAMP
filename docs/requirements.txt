@@ -8,3 +8,4 @@ pandas
 mesa==2.1.1
 scipy
 gurobipy
+dill

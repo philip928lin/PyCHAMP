@@ -1,7 +1,7 @@
 .. _installation:
 
 Installation Steps
-------------
+--------------------
 
 1. To utilize the PyCHAMP package, begin by installing the Gurobi solver (version 10.0.2 or higher). Gurobi is commercial software; however, it offers free licenses for academic purposes and recent graduates. For detailed instructions on how to download and install Gurobi with a free license, please refer to the Gurobi website (https://www.gurobi.com/academia/academic-program-and-licenses).
 

@@ -1,26 +1,26 @@
 .. _general_intro:  
 
-#################################
+####################################
 Introduction to the PyCHAMP Package
-#################################
+####################################
 The Crop-Hydrological-Agent Modeling Platform, or PyCHAMP, is a free and open-source Python package. This initiative aims to facilitate the modeling of agro-hydrological systems for sustainable groundwater management.
 
 PyCHAMP Features
-================
+===================
 
 * PyCHAMP is built on the Mesa Agent-Based Modeling (ABM) framework.
 * The package utilizes a modular approach, enhancing its adaptability to meet the diverse requirements of users.
 * It currently includes five specific modules: aquifer, field, well, finance, and behavior, along with six main classes: aquifer, field, well, finance, behavior, and decision-making.
 
 PyCHAMP Applications
-====================
+======================
 
 * PyCHAMP facilitates mapping of the dynamic interactions between human activities and water systems.
 * The platform provides a framework for evaluating self-managed groundwater governance systems.
 * PyCHAMP's design for expandability facilitates uncertainty analysis within the model's framework. This feature opens up possibilities for future integration with process-based models such as MODFLOW and AquaCrop-OS.
 
 PyCHAMP Modules and Classes
-===========================
+=============================
 
 .. figure:: PyCHAMPmodules1.png
    :align: center
@@ -32,10 +32,10 @@ PyCHAMP Modules and Classes
 The upcoming section offers an overview of the PyCHAMP modules and their respective classes.
 
 1. Aquifer Module
------------------
+-------------------
 
 Aquifer Class:
-^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^
 
 Contained within the aquifer module, the aquifer class:
 
@@ -52,10 +52,10 @@ Contained within the aquifer module, the aquifer class:
 For a detailed description of the aquifer module, please see to :ref:`py_champ_entities_aquifer`.
 
 2. Field Module 
----------------
+-----------------
 
 Field Class:
-^^^^^^^^^^^^
+^^^^^^^^^^^^^^
 
 The field class inside the field module:
 
@@ -95,10 +95,10 @@ The well module has a well class, which:
 For detailed insights into the well module, refer to :ref:`py_champ_entities_well`.
 
 4. Finance Module 
----------------
+------------------
 
 Finance Class:
-^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^
 
 Within the finance module, the finance class: 
 
@@ -116,10 +116,10 @@ Within the finance module, the finance class:
 For additional information on the finance module, refer to :ref:`py_champ_entities_finance`.
 
 5. Behavior Module 
----------------
+-------------------
 
 Behavior Class:
-^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^
 
 The Behavior class in the behavior module:
 
@@ -171,7 +171,7 @@ The Optimization class:
 For further insights into the optimization class, refer to :ref:`py_champ.entities.optimization`.
 
 General Structure of an agent-based model based on PyCHAMP
-==========================================================
+============================================================
 
 PyCHAMP utilizes the Mesa 2.1.1 Agent-Based Modeling (ABM) framework. For a detailed understanding of how to build, analyze, and visualize agent-based models using the Mesa framework, refer to https://mesa.readthedocs.io/en/latest/overview.html.
 
