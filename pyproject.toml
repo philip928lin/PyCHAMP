@@ -1,7 +1,12 @@
 [build-system]
 requires = [
     "flit_core >=2,<4",
-    "numpy"  # Ensure numpy is listed here
+    "numpy",
+    "pandas", 
+    "gurobipy", 
+    "scipy", 
+    "joblib", 
+    "mesa==2.1.1"
 ]
 build-backend = "flit_core.buildapi"
 
