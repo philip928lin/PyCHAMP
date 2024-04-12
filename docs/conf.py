@@ -6,7 +6,7 @@
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 import os
 import sys
-sys.path.insert(0, os.path.abspath('..')) # To include sub-modules
+sys.path.insert(0, os.path.abspath('../py_champ')) # To include sub-modules
 
 # -- Project information
 
