@@ -1,4 +1,6 @@
-# PyCHAMP
+[![Documentation Status](https://readthedocs.org/projects/diese-pychamp/badge/?version=latest)](https://diese-pychamp.readthedocs.io/en/latest/?badge=latest)
+
+# PyCHAMP: A Crop-Hydrological-Agent Modeling Platform for Groundwater Management
 
 To install PyCHAMP, proceed with the following steps:
 
@@ -6,4 +8,4 @@ To install PyCHAMP, proceed with the following steps:
 
 2. Install the PyCHAMP package. Running the subsequent line of code will ensure the inclusion of all necessary dependencies for the package, such as gurobipy, mesa (version 2.1.1), joblib, scipy, numpy, and pandas.
 	
-python code: pip install git+https://github.com/philip928lin/PyCHAMP.git
+ `pip install git+https://github.com/philip928lin/PyCHAMP.git`
