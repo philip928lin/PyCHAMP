@@ -30,8 +30,10 @@ extensions = [
     'sphinx.ext.intersphinx',
     'sphinx.ext.napoleon', # enables Sphinx to parse both NumPy and Google style docstrings
     "myst_parser",   # to use markdown
-    "sphinx-autoapi"
+    "autoapi.extension"
 ]
+
+autoapi_type = 'python'
 
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3/', None),

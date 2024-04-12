@@ -5,7 +5,8 @@ requires = [
     "pandas",
     "mesa==2.1.1",
     "scipy",
-    "gurobipy"
+    "gurobipy",
+    "sphinx-autoapi"
 ]
 build-backend = "flit_core.buildapi"
 
