@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.abspath('..')) # To include sub-modules
 # -- Project information
 
 project = 'PyCHAMP'
-copyright = '2024, Chung-Yi Lin'
+copyright = '2024, Chung-Yi Lin and Sameer Dhakal'
 author = 'Chung-Yi Lin'
 
 release = '1.0.0'
