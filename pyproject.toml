@@ -3,10 +3,6 @@ requires = [
     "flit_core >=2,<4",
     "numpy",
     "pandas", 
-    "gurobipy", 
-    "scipy", 
-    "joblib", 
-    "mesa==2.1.1"
 ]
 build-backend = "flit_core.buildapi"
 
