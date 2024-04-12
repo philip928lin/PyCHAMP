@@ -11,6 +11,9 @@ python:
     # Install our python package before building the docs
     - method: pip
       path: .
+      extra_requirements:
+        - docs  # If your flit package specifies extra dependencies for docs
+  system_packages: true  # Enable system packages if needed for binary dependencies
 
 sphinx:
   configuration: docs/source/conf.py
