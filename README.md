@@ -1,13 +1,9 @@
 # PyCHAMP
 
-To install a package that includes a setup.py file, open a command or terminal window and:
+To install PyCHAMP, proceed with the following steps:
 
-1. cd into the root directory where setup.py is located.
+1. Install Gurobi package. For detailed instructions on how to download and install Gurobi with a free license, please refer https://www.gurobi.com/academia/academic-program-and-licenses.
 
-2. Enter: `python setup.py install` or  `pip install py_champ`.
-
-Other required packages:
-
-- Mesa: `pip install mesa`
-
-- Gurobi: `pip install gurobipy`  Note that the gurobi solver is required. Free academic license is available.
+2. Install the PyCHAMP package. Running the subsequent line of code will ensure the inclusion of all necessary dependencies for the package, such as gurobipy, mesa (version 2.1.1), joblib, scipy, numpy, and pandas.
+	
+python code: pip install git+https://github.com/philip928lin/PyCHAMP.git

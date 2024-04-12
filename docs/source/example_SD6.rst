@@ -1,18 +1,17 @@
 .. _example_SD6:  
 
-##############
 Model Examples
-##############
+###############
 
 Sheriden 6 Local Enhanced Management Area Model (SD-6 Model)
-===========================================================
+==============================================================
 
 Background of the Sheriden 6 Local Enhanced Management Area (SD-6 LEMA)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The SD-6 LEMA, launched in 2012, is a grassroots groundwater management initiative under the LEMA program within western Kansas's High Plains Aquifer region. With the objective of curtailing groundwater consumption by capping the water rights at 55 inches per unit area over a five-year period, SD-6 LEMA has completed two full cylces, first from 2013 to 2017 and subsequently from 2018 to 2022. Water use diminished by 33.6% in the first period and by 36.8% in the second. The upcoming section provides an overview of how PyCHAMP can model the complex interactions between human activities and water systems, employing SD-6 LEMA as an illustrative example. The article referenced has a detailed description of the background and the study area.
 
-*put article citation here*
+Lin, C. Y., Orduna Alegria, M., Dhakal, S., Zipper, S.,& Marston, L. (2024, in review). PyCHAMP: A crop‑hydrological‑agent modeling platform for groundwater management. Environmental Modelling & Software.
 
 Setting up a complete simulation of the SD-6 model
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -46,7 +45,7 @@ A process flow diagram is provided to illustrate the organized sequence of opera
    *Note: The rectangle with rounded corners illustrates the sequence of steps that take place for each farmer*.
 
 Execution Steps
-"""""""""""""""
+""""""""""""""""""
 
 1. Import the SD-6 model from PyCHAMP.
 
@@ -54,11 +53,13 @@ Execution Steps
 
 	from py_champ.models.sd6_model import SD6Model
 
-2. Import necessary libraries and load a pickle file containing all the input dictionaries for different classes, along with pre-calculated available precipitation for each crop, based on its growing season. The pickle file can be downloaded from *insert link                                          here*. For a detailed understanding of creating your own input file, refer to :ref:`example_l` and :ref:`example_2`.
+2. Import necessary libraries and load a pickle file containing all the input dictionaries for different classes, along with pre-calculated available precipitation for each crop, based on its growing season. The pickle file can be downloaded from https://github.com/philip928lin/PyCHAMP/tree/main/examples/SD6%20Model. For a detailed understanding of creating your own input file, refer to :ref:`example_l` and :ref:`example_2`.
 
 .. code-block:: python
 
 	import dill
+	import os
+	import pandas as pd
 
 	# set up a working directory (wd) and load the inputs
 	file_path =  wd + "/Inputs_SD6.pkl"
@@ -67,11 +68,11 @@ Execution Steps
 	    (aquifers_dict, fields_dict, wells_dict, finances_dict, behaviors_dict,
 	     prec_aw_step, crop_price_step, shared_config) = dill.load(f)
 
-3. Load the required observed data to validate model's ability to simulate real world human water interaction. The csv file can be accessed at **give link??**
+3. Load the required observed data to validate model's ability to simulate real world human water interaction. The csv file can be accessed at https://github.com/philip928lin/PyCHAMP/tree/main/examples/SD6%20Model.
 
 .. code-block:: python
 	
-	data = pd.read_csv(join(wd, "Data_SD6.csv"), index_col=["year"])
+	data = pd.read_csv(os.path.join(wd, "Data_SD6.csv"), index_col=["year"])
 
 4. Load other necessary inputs.
 
@@ -124,7 +125,7 @@ Execution Steps
 	    )
 
 	for i in range(15):
-	m.step()
+		m.step()
 
 6. Load the model-level and agent-level data after the simulation.
 
@@ -146,7 +147,7 @@ Execution Steps
 .. _example_l:
 
 Creating simple input dictionaries to set up and run an SD-6 model simulation
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 PyCHAMP provides the functionality for users to tailor their input dictionaries, ensuring the simulation is customized for their specific need. This section guides users through the process of constructing basic input dictionaries for the PyCHAMP package's different classes to simulate the SD-6 LEMA scenario. In the forthcoming example, we simulate three individual farmer, each managing a single field with no splits and a single well, located in an area served by one aquifer. Each farmer considers the other two farmers in their decision-making network, meaning the choices of one can influence others. The crop choices available are corn, sorghum, and soybeans, while the selected irrigation technology is center pivot LEPA. Graphical representation of the setup, essential parameters, and their associated values for the farmers are illustrated and outlined in the subsequent figure and table.
 
 .. figure:: example1.png
