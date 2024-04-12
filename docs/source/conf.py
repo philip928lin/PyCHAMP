@@ -29,7 +29,8 @@ extensions = [
     'sphinx.ext.autosummary',
     'sphinx.ext.intersphinx',
     'sphinx.ext.napoleon', # enables Sphinx to parse both NumPy and Google style docstrings
-    "myst_parser"   # to use markdown
+    "myst_parser",   # to use markdown
+    "sphinx-autoapi"
 ]
 
 intersphinx_mapping = {
