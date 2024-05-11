@@ -4,6 +4,8 @@
 
 The Crop-Hydrological-Agent Modeling Platform (PyCHAMP) is a Python-based open-source package designed for modeling agro-hydrological systems. The modular design, incorporating aquifer, crop field, groundwater well, finance, and behavior modules, enables users to simulate and analyze the interactions between human and natural systems, considering both environmental and socio-economic factors. PyCHAMP serves as a useful tool for human-water research and sustainable groundwater management, offering prospects for future integration with detailed sub-models and systematic evaluation of model structural uncertainty.
 
+### Preprint
+[http://dx.doi.org/10.2139/ssrn.4814225](http://dx.doi.org/10.2139/ssrn.4814225)
 
 ## To install PyCHAMP, proceed with the following steps:
 
