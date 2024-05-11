@@ -7,6 +7,9 @@ The Crop-Hydrological-Agent Modeling Platform (PyCHAMP) is a Python-based open-s
 ### Preprint
 [http://dx.doi.org/10.2139/ssrn.4814225](http://dx.doi.org/10.2139/ssrn.4814225)
 
+### Manual
+[https://diese-pychamp.readthedocs.io](https://diese-pychamp.readthedocs.io/en/latest/?badge=latest#)
+
 ## To install PyCHAMP, proceed with the following steps:
 
 1. Install Gurobi package. For detailed instructions on how to download and install Gurobi with a free license, please refer https://www.gurobi.com/academia/academic-program-and-licenses.
