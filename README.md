@@ -1,4 +1,4 @@
-[![Documentation Status](https://readthedocs.org/projects/diese-pychamp/badge/?version=latest)](https://diese-pychamp.readthedocs.io/en/latest/?badge=latest)
+[![Documentation Status](https://readthedocs.org/projects/dises-pychamp/badge/?version=latest)](https://dises-pychamp.readthedocs.io/en/latest/?badge=latest)
 
 # PyCHAMP
 
