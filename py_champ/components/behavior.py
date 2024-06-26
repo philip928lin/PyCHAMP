@@ -1979,7 +1979,8 @@ class Behavior(mesa.Agent):
 
         dm = self.optimization_class(
             unique_id=self.unique_id,
-            LogToConsole=self.gb_dict.get("LogToConsole")
+            LogToConsole=self.gb_dict.get("LogToConsole"),
+            gpenv=self.model.gpenv
             )
         
         dm.setup_ini_model(

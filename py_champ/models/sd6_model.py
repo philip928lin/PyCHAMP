@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 import mesa
+import gurobipy as gp
 from ..utility.util import TimeRecorder, Indicator
 from ..components.aquifer import Aquifer
 from ..components.behavior import Behavior
@@ -142,7 +143,9 @@ class SD6Model(mesa.Model):
                  optimization_class=Optimization,
                  lema_options=(True, 'wr_LEMA_5yr', 2013),
                  fix_state=None, show_step=True,
-                 seed=None, shared_config=None, **kwargs):
+                 seed=None, shared_config=None, 
+                 gurobi_dict={"LogToConsole": 0, "NonConvex": 2, "Presolve": -1},
+                 **kwargs):
         
         # MESA required attributes
         self.running = True     # Required for batch run
@@ -184,6 +187,12 @@ class SD6Model(mesa.Model):
 
         # Create schedule and assign it to the model
         self.schedule = BaseSchedulerByTypeFiltered(self)
+        
+        # Setup Gurobi environment, gpenv
+        self.gpenv = gp.Env(empty=True)
+        for k, v in gurobi_dict.items():
+            self.gpenv.setParam(k, v)
+        self.gpenv.start()
         
         # Copy the dictionaries before correction from shared_config
         aquifers_dict, fields_dict, wells_dict, finances_dict, behaviors_dict = \
@@ -501,7 +510,10 @@ class SD6Model(mesa.Model):
             print("Done!", f"\t{self.time_recorder.get_elapsed_time()}")
     
     def end(self):
-        pass
+        """Depose the Gurobi environment, ensuring that it is executed only when
+        the instance is no longer needed."""
+        self.gpenv.dispose()
+        
     
     @staticmethod
     def get_dfs(model):

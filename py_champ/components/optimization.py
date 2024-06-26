@@ -72,7 +72,7 @@ class Optimization():
         The name of the Model.
 
     """
-    def __init__(self, unique_id="", LogToConsole=1):
+    def __init__(self, unique_id="", LogToConsole=1, gpenv=None):
         """
         Instantiate an optimization environment and object for a farmer agent.
 
@@ -88,10 +88,13 @@ class Optimization():
         # self.gpenv = gp.Env()
 
         # This will remove all output from gurobi to the console.
-        self.gpenv = gp.Env(empty=True)
-        if LogToConsole is not None:
-            self.gpenv.setParam("LogToConsole", LogToConsole)
-        self.gpenv.start()
+        if gpenv:
+            self.gpenv = gp.Env(empty=True)
+            if LogToConsole is not None:
+                self.gpenv.setParam("LogToConsole", LogToConsole)
+            self.gpenv.start()
+        else:
+            self.gpenv = gpenv
 
         self.model = gp.Model(name=unique_id, env=self.gpenv)
 
