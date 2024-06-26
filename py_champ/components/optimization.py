@@ -8,7 +8,8 @@ import gurobipy as gp
 
 #################
 
-class Optimization():
+
+class Optimization:
     """
     This class represents a farmer making decisions on irrigation depth,
     crop types, the type of field: rainfed or irrigated, and irrigation technologies. The
@@ -47,11 +48,11 @@ class Optimization():
     Notations
     ---------
     n_s: Number of the splits in a field.
-    
+
     n_c: Number of the crop choices.
-    
+
     n_h: Planning horizon or approximated horizon.
-    
+
     n_te: Number of the irrigation technology choices.
 
     Notes
@@ -72,6 +73,7 @@ class Optimization():
         The name of the Model.
 
     """
+
     def __init__(self, unique_id="", LogToConsole=1, gpenv=None):
         """
         Instantiate an optimization environment and object for a farmer agent.
@@ -121,20 +123,26 @@ class Optimization():
         """
         self.gpenv.dispose()
 
-    def setup_ini_model(self, target="profit", horizon=1, area_split=1,
-                        crop_options=["corn", "sorghum", "soybeans", "fallow"],
-                        tech_options=["center pivot", "center pivot LEPA"],
-                        consumat_dict={
-                            "alpha": {  # [0-1] Sensitivity factor for the "satisfaction" calculation.
-                            "profit":     1,
-                            "yield_rate": 1
-                            },
-                        "scale": {  # Normalize "need" for "satisfaction" calculation.
-                            "profit": 0.23 * 50, # Use corn 1e4$*bu*ha
-                            "yield_rate": 1
-                            },
-                        },
-                        approx_horizon=False, gurobi_kwargs={}):
+    def setup_ini_model(
+        self,
+        target="profit",
+        horizon=1,
+        area_split=1,
+        crop_options=["corn", "sorghum", "soybeans", "fallow"],
+        tech_options=["center pivot", "center pivot LEPA"],
+        consumat_dict={
+            "alpha": {  # [0-1] Sensitivity factor for the "satisfaction" calculation.
+                "profit": 1,
+                "yield_rate": 1,
+            },
+            "scale": {  # Normalize "need" for "satisfaction" calculation.
+                "profit": 0.23 * 50,  # Use corn 1e4$*bu*ha
+                "yield_rate": 1,
+            },
+        },
+        approx_horizon=False,
+        gurobi_kwargs={},
+    ):
         """
         Set up the initial settings for an optimization model. The new
         optimization model will be created within the same Gurobi environment
@@ -143,13 +151,13 @@ class Optimization():
         Parameters
         ----------
         target : str, optional
-            The target variable ("profit" or "yield_rate") for optimization, 
-            which can be provided as an input in the decision making dictionary 
+            The target variable ("profit" or "yield_rate") for optimization,
+            which can be provided as an input in the decision making dictionary
             under behavior dictionary. The default is "profit".
         horizon : str, optional
             The planing horizon [yr]. The default is 1 year.
         area_split: str, optional
-            The number of splits for each field that a farmer agent owns. 
+            The number of splits for each field that a farmer agent owns.
             The default is 1.
         crop_options : list, optional
             A list of crop type options available, which can be fed as an input to the model. The
@@ -159,19 +167,19 @@ class Optimization():
             The default is ["center pivot", "center pivot LEPA"].
         consumat_dict: dict, optional
             A dictionary containing parameters related to the CONSUMAT model, including sensitivities and scales.
-            The default is 
-            
+            The default is
+
             >>> consumat_dict = {
             >>>     "alpha": {
             >>>         "profit":     1,
             >>>         "yield_rate": 1
             >>>         },
             >>>     "scale": {
-            >>>         "profit": 0.23 * 50, 
+            >>>         "profit": 0.23 * 50,
             >>>         "yield_rate": 1
             >>>         },
             >>>    }
-            
+
         approx_horizon: bool, optional
             When set to True, the model will calculate two points (start and
             end) over the given horizon to determine the objective, which is
@@ -194,23 +202,23 @@ class Optimization():
 
         """
         self.target = target
-        self.horizon = horizon 
+        self.horizon = horizon
         self.crop_options = crop_options
         self.tech_options = tech_options
         self.approx_horizon = approx_horizon
-        
+
         ## The gurobi keywords. These will be fed to the solver in solve().
         self.gurobi_kwargs = gurobi_kwargs
 
         ## Dimension coefficients
         self.n_s = area_split
-        self.n_c = len(crop_options)    # No. of crop choice options
-        self.n_te = len(tech_options)   # No. of irr_depth tech options
+        self.n_c = len(crop_options)  # No. of crop choice options
+        self.n_te = len(tech_options)  # No. of irr_depth tech options
         self.n_h = horizon
         if approx_horizon and horizon > 2:
             # Approximate obj with the average of the start and end points.
             self.n_h = 2
-            
+
         ## Records fields and wells
         self.field_ids = []
         self.well_ids = []
@@ -220,16 +228,18 @@ class Optimization():
         self.n_water_rights = 0
 
         # For consumat
-        self.alphas = consumat_dict['alpha']
-        self.scales = consumat_dict['scale']
-        self.eval_metrics = [metric for metric, v in self.alphas.items() if v is not None]
+        self.alphas = consumat_dict["alpha"]
+        self.scales = consumat_dict["scale"]
+        self.eval_metrics = [
+            metric for metric, v in self.alphas.items() if v is not None
+        ]
 
         ## Optimization Model
         # self.model.dispose()    # release the memory of the previous model
         self.model = gp.Model(name=self.unique_id, env=self.gpenv)
-        self.vars = {}    # A container to store variables.
+        self.vars = {}  # A container to store variables.
         self.bounds = {}
-        self.inf = float('inf')
+        self.inf = float("inf")
 
         ## Add shared variables
         m = self.model
@@ -238,9 +248,13 @@ class Optimization():
         n_c = self.n_c
         n_h = self.n_h
         # Total irrigation depth per split per crop per yr
-        irr_depth = m.addMVar((n_s, n_c, n_h), vtype="C", name="irr_depth(cm)", lb=0, ub=inf)
+        irr_depth = m.addMVar(
+            (n_s, n_c, n_h), vtype="C", name="irr_depth(cm)", lb=0, ub=inf
+        )
         # Average irrigation depth over fields per split per crop per yr
-        irr_depth_per_field = m.addMVar((n_s, n_c, n_h), vtype="C", name="irr_depth_per_field(cm)", lb=0, ub=inf)
+        irr_depth_per_field = m.addMVar(
+            (n_s, n_c, n_h), vtype="C", name="irr_depth_per_field(cm)", lb=0, ub=inf
+        )
         # Total irrigation volumn per yr
         v = m.addMVar((n_h), vtype="C", name="v(m-ha)", lb=0, ub=inf)
         # Total yield per split per crop type per yr
@@ -251,16 +265,16 @@ class Optimization():
         e = m.addMVar((n_h), vtype="C", name="e(PJ)", lb=0, ub=inf)
         # Total profit
         profit = m.addMVar((n_h), vtype="C", name="profit(1e4$)", lb=-inf, ub=inf)
-     
+
         ## Record variables
-        self.vars['irr_depth'] = irr_depth
-        self.vars['v'] = v
-        self.vars['y'] = y
-        self.vars['e'] = e
+        self.vars["irr_depth"] = irr_depth
+        self.vars["v"] = v
+        self.vars["y"] = y
+        self.vars["e"] = e
         ## Average values over fields
-        self.vars['y_y'] = y_y
-        self.vars['profit'] = profit
-        self.vars['irr_depth_per_field'] = irr_depth_per_field
+        self.vars["y_y"] = y_y
+        self.vars["profit"] = profit
+        self.vars["irr_depth_per_field"] = irr_depth_per_field
         self.bigM = 100
         self.penalties = []
 
@@ -270,10 +284,21 @@ class Optimization():
         ## Record water rights info.
         self.wrs_info = {}
 
-    def setup_constr_field(self, field_id, field_area, prec_aw, 
-                           water_yield_curves, tech_pumping_rate_coefs,
-                           pre_i_crop, pre_i_te, field_type="optimize", 
-                           i_crop=None, i_rainfed=None, i_te=None, **kwargs):
+    def setup_constr_field(
+        self,
+        field_id,
+        field_area,
+        prec_aw,
+        water_yield_curves,
+        tech_pumping_rate_coefs,
+        pre_i_crop,
+        pre_i_te,
+        field_type="optimize",
+        i_crop=None,
+        i_rainfed=None,
+        i_te=None,
+        **kwargs,
+    ):
         """
         This method adds constraints for a field. You can assign multiple fields by calling
         this function repeatedly with different field_id. If
@@ -294,14 +319,14 @@ class Optimization():
             A dictionary containing water-yield response curves for different crop types.
             This has to be given as an input under settings dictionary for a field.
         tech_pumping_rate_coefs: dict
-            A dictionary containing coefficients for calculating pumping rates based on selected irrigation technology. 
+            A dictionary containing coefficients for calculating pumping rates based on selected irrigation technology.
             Pumping rate [m-ha/day] = a * annual withdrawal [m-ha] + b
         pre_i_crop: str or 3darray
             Crop name or the i_crop from the previous time step.
         pre_i_te: str or 3darray
             Irrigation technology or i_te from the previous time step.
         field_type : str or list, optional
-            Field type can be "rainfed", "irrigated", or "optimize". A list can 
+            Field type can be "rainfed", "irrigated", or "optimize". A list can
             be given to define field type for each area split. The default value is
             "optimize".
         i_crop : 3darray, optional
@@ -311,41 +336,41 @@ class Optimization():
         i_rainfed : 3darray, optional
             The field type (irrigated or rainfed) for the current time step. The indicator matrix has a dimension of (n_s, n_c, 1). In this
             matrix, a value of 1 indicates that the unit area in the field is
-            rainfed. Given i_rainfed will force field_type to be "rainfed"; 
+            rainfed. Given i_rainfed will force field_type to be "rainfed";
             otherwise, the field will be considered to be irrigated. Also, if the i_rainfed is given, make sure 1 exists only
             where i_crop is also 1. The default is None.
         i_te : 1darray or str, optional
-            The irrigation technology chosen for the current time step. The indicator matrix has a dimension of n_te. 
+            The irrigation technology chosen for the current time step. The indicator matrix has a dimension of n_te.
             A value of 1 indicates that the corresponding irrigation technology is selected. The default is None.
-        **kwargs: 
+        **kwargs:
             Additional keyword arguments that can be dynamically set as a field parameter.
-        
+
         Returns
         -------
         None.
-        
+
         """
         # Append field_id
         self.field_ids.append(field_id)
         fid = field_id
-        
+
         crop_options = self.crop_options
         n_c = self.n_c
         n_h = self.n_h
         n_s = self.n_s
         n_te = self.n_te
-        
-        unit_area = field_area/n_s
-        
+
+        unit_area = field_area / n_s
+
         ## Extract parameters from water_yield_curves
         crop_par = np.array([water_yield_curves[c] for c in crop_options])
-        ymax = crop_par[:, 0].reshape((-1, 1))     # (n_c, 1)
-        wmax = crop_par[:, 1].reshape((-1, 1))     # (n_c, 1)
-        a = crop_par[:, 2].reshape((-1, 1))        # (n_c, 1)
-        b = crop_par[:, 3].reshape((-1, 1))        # (n_c, 1)
-        c = crop_par[:, 4].reshape((-1, 1))        # (n_c, 1)
+        ymax = crop_par[:, 0].reshape((-1, 1))  # (n_c, 1)
+        wmax = crop_par[:, 1].reshape((-1, 1))  # (n_c, 1)
+        a = crop_par[:, 2].reshape((-1, 1))  # (n_c, 1)
+        b = crop_par[:, 3].reshape((-1, 1))  # (n_c, 1)
+        c = crop_par[:, 4].reshape((-1, 1))  # (n_c, 1)
         try:
-            min_y_ratio = crop_par[:, 5].reshape((-1, 1))    # (n_c, 1)
+            min_y_ratio = crop_par[:, 5].reshape((-1, 1))  # (n_c, 1)
         except:
             min_y_ratio = np.zeros((n_c, 1))
 
@@ -354,131 +379,166 @@ class Optimization():
             field_type_list = [field_type] * n_s  # [rainfed, rainfed, rainfed] if n_s=3
         elif isinstance(field_type, list):
             field_type_list = field_type
-        
+
         # Overwrite field_type_list if i_rainfed is given.
         if i_rainfed is not None:
             rain_feds = np.sum(i_rainfed, axis=1).flatten()
             field_type_list = ["rainfed" if r > 0.5 else "irrigated" for r in rain_feds]
-        
+
         # Summary message for the setting.
         self.msg[fid] = {
             "Crop types": "optimize",
             "Irr tech": "optimize",
-            "Field type": field_type_list
-            }
+            "Field type": field_type_list,
+        }
 
         # Record the input
         i_crop_input = i_crop
         i_rainfed_input = i_rainfed
         i_te_input = i_te
-        
+
         # Take out some values
         m = self.model
         inf = self.inf
-        self.bounds['ub_w'] = np.max(wmax)
-        ub_w = self.bounds['ub_w']
-        ub_irr = ub_w #ub_w - prec_aw (maximum water required - available precipitation)
+        self.bounds["ub_w"] = np.max(wmax)
+        ub_w = self.bounds["ub_w"]
+        ub_irr = (
+            ub_w  # ub_w - prec_aw (maximum water required - available precipitation)
+        )
         self.bounds[fid] = {}
-        self.bounds[fid]['ub_irr'] = ub_irr
+        self.bounds[fid]["ub_irr"] = ub_irr
 
-        # Create the available precipitiation for each crop. 
+        # Create the available precipitiation for each crop.
         prec_aw_ = np.ones((n_s, n_c, n_h))
         for ci, crop in enumerate(crop_options):
             prec_aw_[:, ci, :] = prec_aw[crop]
-            
-        # Approximate robust optimization by prorating prec_aw with a ratio 
+
+        # Approximate robust optimization by prorating prec_aw with a ratio
         # This is only for internal testing.
         # uncertainty_ratio = 1
         # for hi in range(n_h):
         #     prec_aw_[:, :, hi] = prec_aw_[:, :, hi] * uncertainty_ratio**hi
 
         ### Add general variables
-        irr_depth     = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.irr_depth(cm)", lb=0, ub=ub_irr)
-        w       = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.w(cm)", lb=0, ub=ub_w)
-        w_temp  = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.w_temp", lb=0, ub=inf)
-        w_      = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.w_", lb=0, ub=1)
-        y       = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.y(1e4bu)", lb=0, ub=inf)
-        y_      = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.y_", lb=0, ub=1)
-        yw_temp = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.yw_temp", lb=-inf, ub=1)
-        yw_bi   = m.addMVar((n_s, n_c, n_h), vtype="B", name=f"{fid}.yw_bi")
-        yw_     = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.yw_", lb=0, ub=1)
-        v_c     = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.v_c(m-ha)", lb=0, ub=inf)
-        y_y     = m.addMVar((n_h), vtype="C", name=f"{fid}.y_y", lb=0, ub=1)    # avg y_ per yr
-        v       = m.addMVar((n_h), vtype="C", name=f"{fid}.v(m-ha)", lb=0, ub=inf)
-        i_crop  = m.addMVar((n_s, n_c, 1), vtype="B", name=f"{fid}.i_crop")
+        irr_depth = m.addMVar(
+            (n_s, n_c, n_h), vtype="C", name=f"{fid}.irr_depth(cm)", lb=0, ub=ub_irr
+        )
+        w = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.w(cm)", lb=0, ub=ub_w)
+        w_temp = m.addMVar(
+            (n_s, n_c, n_h), vtype="C", name=f"{fid}.w_temp", lb=0, ub=inf
+        )
+        w_ = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.w_", lb=0, ub=1)
+        y = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.y(1e4bu)", lb=0, ub=inf)
+        y_ = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.y_", lb=0, ub=1)
+        yw_temp = m.addMVar(
+            (n_s, n_c, n_h), vtype="C", name=f"{fid}.yw_temp", lb=-inf, ub=1
+        )
+        yw_bi = m.addMVar((n_s, n_c, n_h), vtype="B", name=f"{fid}.yw_bi")
+        yw_ = m.addMVar((n_s, n_c, n_h), vtype="C", name=f"{fid}.yw_", lb=0, ub=1)
+        v_c = m.addMVar(
+            (n_s, n_c, n_h), vtype="C", name=f"{fid}.v_c(m-ha)", lb=0, ub=inf
+        )
+        y_y = m.addMVar(
+            (n_h), vtype="C", name=f"{fid}.y_y", lb=0, ub=1
+        )  # avg y_ per yr
+        v = m.addMVar((n_h), vtype="C", name=f"{fid}.v(m-ha)", lb=0, ub=inf)
+        i_crop = m.addMVar((n_s, n_c, 1), vtype="B", name=f"{fid}.i_crop")
         i_rainfed = m.addMVar((n_s, n_c, 1), vtype="B", name=f"{fid}.i_rainfed")
 
-        # Given crop type 
+        # Given crop type
         ## Crop type is set to be the same accross the planning horizon.
         if i_crop_input is not None:
             m.addConstr(i_crop == i_crop_input, name=f"c.{fid}.i_crop_input")
             self.msg[fid]["Crop types"] = "user input"
-            
+
         # One unit area can be occupied by only one type of crop.
-        m.addConstr(gp.quicksum(i_crop[:,ci,:] for ci in range(n_c)) == 1,
-                    name=f"c.{fid}.i_crop")
+        m.addConstr(
+            gp.quicksum(i_crop[:, ci, :] for ci in range(n_c)) == 1,
+            name=f"c.{fid}.i_crop",
+        )
 
         ### Include rain-fed option
         for si, field_type in enumerate(field_type_list):
             if field_type == "rainfed":
                 # Given i_rainfed,
                 if i_rainfed_input is not None:
-                    m.addConstr(i_rainfed[si,:,:] == i_rainfed_input[si,:,:],
-                                name=f"c.{fid}_{si}.i_rainfed_input")
+                    m.addConstr(
+                        i_rainfed[si, :, :] == i_rainfed_input[si, :, :],
+                        name=f"c.{fid}_{si}.i_rainfed_input",
+                    )
                     self.msg[fid]["Rainfed field"] = "user input"
 
                 # i_rainfed[si, ci, hi] can be 1 only when i_crop[si, ci, hi] is 1.
                 # Otherwise, it has to be zero.
-                m.addConstr(i_crop[si,:,:] - i_rainfed[si,:,:] >= 0,
-                            name=f"c.{fid}_{si}.i_rainfed")
-                m.addConstr(irr_depth[si,:,:] == 0, name=f"c.{fid}_{si}.irr_rain_fed")
-                
+                m.addConstr(
+                    i_crop[si, :, :] - i_rainfed[si, :, :] >= 0,
+                    name=f"c.{fid}_{si}.i_rainfed",
+                )
+                m.addConstr(irr_depth[si, :, :] == 0, name=f"c.{fid}_{si}.irr_rain_fed")
+
             elif field_type == "irrigated":
-                m.addConstr(i_rainfed[si,:,:] == 0,
-                            name=f"c.{fid}_{si}.no_i_rainfed")
-                
+                m.addConstr(i_rainfed[si, :, :] == 0, name=f"c.{fid}_{si}.no_i_rainfed")
+
             elif field_type == "optimize":
                 # i_rainfed[si, ci, hi] can be 1 only when i_crop[si, ci, hi] is 1.
                 # Otherwise, it has to be zero.
-                m.addConstr(i_crop[si,:,:] - i_rainfed[si,:,:] >= 0,
-                            name=f"c.{fid}_{si}.i_rainfed")
-                m.addConstr(irr_depth[si,:,:] * i_rainfed[si,:,:] == 0, name=f"c.{fid}_{si}.irr_rainfed")
+                m.addConstr(
+                    i_crop[si, :, :] - i_rainfed[si, :, :] >= 0,
+                    name=f"c.{fid}_{si}.i_rainfed",
+                )
+                m.addConstr(
+                    irr_depth[si, :, :] * i_rainfed[si, :, :] == 0,
+                    name=f"c.{fid}_{si}.irr_rainfed",
+                )
             else:
                 raise ValueError(f"{field_type} is not a valid value for field_type.")
-        
+
         # See the numpy broadcast rules:
         # https://numpy.org/doc/stable/user/basics.broadcasting.html
         m.addConstr((w == irr_depth + prec_aw_), name=f"c.{fid}.w(cm)")
-        m.addConstr((w_temp == w/wmax), name=f"c.{fid}.w_temp")
-        m.addConstrs((w_[si,ci,hi] == gp.min_(w_temp[si,ci,hi], constant=1) \
-                    for si in range(n_s) for ci in range(n_c) for hi in range(n_h)),
-                    name=f"c.{fid}.w_") # w_ = minimum of 1 or w/w_max
+        m.addConstr((w_temp == w / wmax), name=f"c.{fid}.w_temp")
+        m.addConstrs(
+            (
+                w_[si, ci, hi] == gp.min_(w_temp[si, ci, hi], constant=1)
+                for si in range(n_s)
+                for ci in range(n_c)
+                for hi in range(n_h)
+            ),
+            name=f"c.{fid}.w_",
+        )  # w_ = minimum of 1 or w/w_max
 
         # We force irr_depth to be zero but prec_aw_ will add to w & w_, which will
         # output positive y_ leading to violation for y_y (< 1)
         # Also, we need to seperate yw_ and y_ into two constraints. Otherwise,
         # gurobi will crash. No idea why.
-        
+
         m.addConstr((yw_temp == (a * w_**2 + b * w_ + c)), name=f"c.{fid}.yw_temp")
-        
+
         # Minimum yield_rate cutoff (aim to capture fallow field)
-        m.addConstr((yw_bi * (yw_temp - min_y_ratio) + (1-yw_bi) * (min_y_ratio - yw_temp) >= 0),
-                    name=f"c.{fid}.yw_bi") #yw_bi is 1 or 0 based on yw_temp is greater or less than min_y_ratio
-        m.addConstr((yw_ == yw_bi * yw_temp),
-                    name=f"c.{fid}.yw_")
-        
+        m.addConstr(
+            (
+                yw_bi * (yw_temp - min_y_ratio) + (1 - yw_bi) * (min_y_ratio - yw_temp)
+                >= 0
+            ),
+            name=f"c.{fid}.yw_bi",
+        )  # yw_bi is 1 or 0 based on yw_temp is greater or less than min_y_ratio
+        m.addConstr((yw_ == yw_bi * yw_temp), name=f"c.{fid}.yw_")
+
         m.addConstr((y_ == yw_ * i_crop), name=f"c.{fid}.y_")
-        m.addConstr((y == y_ * ymax * unit_area * 1e-4), name=f"c.{fid}.y") # 1e4 bu
-        m.addConstr((irr_depth * (1-i_crop) == 0), name=f"c.{fid}.irr_depth(cm)")
+        m.addConstr((y == y_ * ymax * unit_area * 1e-4), name=f"c.{fid}.y")  # 1e4 bu
+        m.addConstr((irr_depth * (1 - i_crop) == 0), name=f"c.{fid}.irr_depth(cm)")
         cm2m = 0.01
         m.addConstr((v_c == irr_depth * unit_area * cm2m), name=f"c.{fid}.v_c(m-ha)")
-        m.addConstr(v == gp.quicksum(v_c[i,j,:] \
-                    for i in range(n_s) for j in range(n_c)),
-                    name=f"c.{fid}.v(m-ha)")
-        m.addConstr(y_y == gp.quicksum( y_[i,j,:] \
-                    for i in range(n_s) for j in range(n_c) ) / n_s,
-                    name=f"c.{fid}.y_y")
-        
+        m.addConstr(
+            v == gp.quicksum(v_c[i, j, :] for i in range(n_s) for j in range(n_c)),
+            name=f"c.{fid}.v(m-ha)",
+        )
+        m.addConstr(
+            y_y
+            == gp.quicksum(y_[i, j, :] for i in range(n_s) for j in range(n_c)) / n_s,
+            name=f"c.{fid}.y_y",
+        )
+
         # [Deprecated] Add penalty for a given w interval for corn to block the choice
         # block_w_interval_for_corn = kwargs.get("block_w_interval_for_corn")
         # if block_w_interval_for_corn is not None:
@@ -489,7 +549,7 @@ class Optimization():
         #     corn_w = w[:, corn_idx, :]
         #     w_bi1 = m.addMVar((n_s, 1, n_h), vtype="B", name=f"{fid}.w_bi1")
         #     w_bi2 = m.addMVar((n_s, 1, n_h), vtype="B", name=f"{fid}.w_bi2")
-        
+
         #     #if x<b then y=1
         #     m.addConstr((58-corn_w <= bigM * w_bi1),
         #                 name=f"c.{fid}.w_bi1")
@@ -499,34 +559,52 @@ class Optimization():
         #     m.addConstr(penalty == gp.quicksum(bigM*w_bi1[si,0,hi]*w_bi2[si,0,hi] \
         #                 for si in range(n_s) for hi in range(n_h)),
         #                 name=f"c.{fid}.penalty")
-        #     penalties.append(penalty)    
-            
+        #     penalties.append(penalty)
+
         # Create i_crop_change to indicate crop type change
         if isinstance(pre_i_crop, str):
             i_c = crop_options.index(pre_i_crop)
             pre_i_crop = np.zeros((n_s, n_c, 1))
             pre_i_crop[:, i_c, :] = 1
-        i_crop_change_ = m.addMVar((n_s, n_c, 1), vtype="I", name=f"{fid}.i_crop_change_", lb=-1, ub=1)
+        i_crop_change_ = m.addMVar(
+            (n_s, n_c, 1), vtype="I", name=f"{fid}.i_crop_change_", lb=-1, ub=1
+        )
         i_crop_change = m.addMVar((n_s, n_c, 1), vtype="B", name=f"{fid}.i_crop_change")
-        m.addConstr(i_crop_change_ == i_crop - pre_i_crop, name=f"c.{fid}.i_crop_change_")
-        m.addConstrs((i_crop_change[s,c,0] == gp.max_(i_crop_change_[s,c,0], constant=0) \
-                    for s in range(n_s) for c in range(n_c)),
-                    name=f"c.{fid}.i_crop_change")
+        m.addConstr(
+            i_crop_change_ == i_crop - pre_i_crop, name=f"c.{fid}.i_crop_change_"
+        )
+        m.addConstrs(
+            (
+                i_crop_change[s, c, 0] == gp.max_(i_crop_change_[s, c, 0], constant=0)
+                for s in range(n_s)
+                for c in range(n_c)
+            ),
+            name=f"c.{fid}.i_crop_change",
+        )
 
         # Tech decisions
         techs = tech_pumping_rate_coefs
         tech_options = self.tech_options
 
-        q       = m.addMVar((n_h), vtype="C", name=f"{fid}.q(m-ha/d)", lb=0, ub=inf)
-        l_pr    = m.addVar(vtype="C", name=f"{fid}.l_pr(m)", lb=0, ub=inf)
-        i_te    = m.addMVar((n_te), vtype="B", name=f"{fid}.i_te")
-        m.addConstr(q == gp.quicksum((techs[te][0] * v + techs[te][1]) * i_te[i] \
-                    for i, te in enumerate(tech_options)), name=f"c.{fid}.q(m-ha/d)")
-        m.addConstr(gp.quicksum(i_te[i] for i in range(n_te)) == 1,
-                    name=f"c.{fid}.i_te")
-        m.addConstr(l_pr == gp.quicksum( techs[te][2] * i_te[i] \
-                    for i, te in enumerate(tech_options) ),
-                    name=f"c.{fid}.l_pr(m)")
+        q = m.addMVar((n_h), vtype="C", name=f"{fid}.q(m-ha/d)", lb=0, ub=inf)
+        l_pr = m.addVar(vtype="C", name=f"{fid}.l_pr(m)", lb=0, ub=inf)
+        i_te = m.addMVar((n_te), vtype="B", name=f"{fid}.i_te")
+        m.addConstr(
+            q
+            == gp.quicksum(
+                (techs[te][0] * v + techs[te][1]) * i_te[i]
+                for i, te in enumerate(tech_options)
+            ),
+            name=f"c.{fid}.q(m-ha/d)",
+        )
+        m.addConstr(
+            gp.quicksum(i_te[i] for i in range(n_te)) == 1, name=f"c.{fid}.i_te"
+        )
+        m.addConstr(
+            l_pr
+            == gp.quicksum(techs[te][2] * i_te[i] for i, te in enumerate(tech_options)),
+            name=f"c.{fid}.l_pr(m)",
+        )
 
         # Given tech as an input
         if i_te_input is not None:
@@ -546,36 +624,55 @@ class Optimization():
             i_t = tech_options.index(pre_i_te)
             pre_i_te = np.zeros((n_te))
             pre_i_te[i_t] = 1
-        i_tech_change_ = m.addMVar((n_te), vtype="I", name=f"{fid}.i_tech_change_", lb=-1, ub=1)
+        i_tech_change_ = m.addMVar(
+            (n_te), vtype="I", name=f"{fid}.i_tech_change_", lb=-1, ub=1
+        )
         i_tech_change = m.addMVar((n_te), vtype="B", name=f"{fid}.i_tech_change")
         m.addConstr(i_tech_change_ == i_te - pre_i_te, name=f"c.{fid}.i_tech_change_")
-        m.addConstrs((i_tech_change[t] == gp.max_(i_tech_change_[t], constant=0) \
-                      for t in range(n_te)),
-                      name=f"c.{fid}.i_tech_change")
+        m.addConstrs(
+            (
+                i_tech_change[t] == gp.max_(i_tech_change_[t], constant=0)
+                for t in range(n_te)
+            ),
+            name=f"c.{fid}.i_tech_change",
+        )
 
         self.vars[fid] = {}
-        self.vars[fid]['v'] = v
-        self.vars[fid]['y'] = y
-        self.vars[fid]['y_y'] = y_y
-        self.vars[fid]['irr_depth'] = irr_depth
-        self.vars[fid]['i_crop'] = i_crop
-        self.vars[fid]['i_rainfed'] = i_rainfed
-        self.vars[fid]['i_te'] = i_te
-        self.vars[fid]['l_pr'] = l_pr
-        self.vars[fid]['q'] = q
+        self.vars[fid]["v"] = v
+        self.vars[fid]["y"] = y
+        self.vars[fid]["y_y"] = y_y
+        self.vars[fid]["irr_depth"] = irr_depth
+        self.vars[fid]["i_crop"] = i_crop
+        self.vars[fid]["i_rainfed"] = i_rainfed
+        self.vars[fid]["i_te"] = i_te
+        self.vars[fid]["l_pr"] = l_pr
+        self.vars[fid]["q"] = q
 
-        self.vars[fid]['pre_i_crop'] = pre_i_crop
-        self.vars[fid]['pre_i_te'] = pre_i_te
-        self.vars[fid]['i_crop_change'] = i_crop_change
-        self.vars[fid]['i_tech_change'] = i_tech_change
+        self.vars[fid]["pre_i_crop"] = pre_i_crop
+        self.vars[fid]["pre_i_te"] = pre_i_te
+        self.vars[fid]["i_crop_change"] = i_crop_change
+        self.vars[fid]["i_tech_change"] = i_tech_change
 
-        self.vars[fid]['field_type'] = field_type
+        self.vars[fid]["field_type"] = field_type
 
         self.n_fields += 1
 
-    def setup_constr_well(self, well_id, dwl, st, l_wt, r, k, sy, eff_pump,
-                          eff_well, pumping_days, pumping_capacity=None,
-                          rho=1000., g=9.8016):
+    def setup_constr_well(
+        self,
+        well_id,
+        dwl,
+        st,
+        l_wt,
+        r,
+        k,
+        sy,
+        eff_pump,
+        eff_well,
+        pumping_days,
+        pumping_capacity=None,
+        rho=1000.0,
+        g=9.8016,
+    ):
         """
         Set up well constraints for the optimization model. You can assign multiple wells by calling
         this function repeatedly with different well_id.
@@ -606,7 +703,7 @@ class Optimization():
         eff_well: float
             Well efficiency as a fraction [-]. Given as an input in the well settings.
         pumping_days: int
-            Number of days the well is operational [day]. Given as an input in the init dictionary 
+            Number of days the well is operational [day]. Given as an input in the init dictionary
             of the well settings.
         pumping_capacity: float
             Maximum pumping capacity of the well [m-ha/yr]. The default is None.
@@ -615,7 +712,7 @@ class Optimization():
             density of water [kg/m3].
         g: float
             acceleration due to gravity [m/s²].
-        
+
 
         Returns
         -------
@@ -632,7 +729,7 @@ class Optimization():
         # Project the future lift head.
         approx_horizon = self.approx_horizon
         if approx_horizon and self.horizon > 2:
-            dwls = np.array([0, dwl * (self.horizon-1)])
+            dwls = np.array([0, dwl * (self.horizon - 1)])
         else:
             dwls = np.array([dwl * (i) for i in range(n_h)])
         # Assume a linear projection to the future
@@ -641,66 +738,71 @@ class Optimization():
 
         # Calculate proportion of the irrigation water (v), daily pumping rate
         # (q), and head for irr tech (l_pr) of this well.
-        v    = m.addMVar((n_h), vtype="C", name=f"{wid}.v(m-ha)", lb=0, ub=inf)
-        q    = m.addMVar((n_h), vtype="C", name=f"{wid}.q(m-ha/d)", lb=0, ub=inf)
+        v = m.addMVar((n_h), vtype="C", name=f"{wid}.v(m-ha)", lb=0, ub=inf)
+        q = m.addMVar((n_h), vtype="C", name=f"{wid}.q(m-ha/d)", lb=0, ub=inf)
         l_pr = m.addVar(vtype="C", name=f"{wid}.l_pr(m)", lb=0, ub=inf)
         # The allocation constraints are added when run finish setup.
         # E.g., m.addConstr((v == v * a_r[w_c, :]), name=f"c.{wid}.v")
         if pumping_capacity is not None:
-            m.addConstr((v <= pumping_capacity),
-                        name=f"c.{wid}.pumping_capacity")
+            m.addConstr((v <= pumping_capacity), name=f"c.{wid}.pumping_capacity")
 
         tr = st * k
         # Cannot divided by zero
         if tr < 0.001:
             tr = 0.001
-        
+
         fpitr = 4 * np.pi * tr
         ftrd = 4 * tr * pumping_days
-        
-        e     = m.addMVar((n_h), vtype="C", name=f"{wid}.e(PJ)", lb=0, ub=inf)
-        l_t   = m.addMVar((n_h), vtype="C", name=f"{wid}.l_t(m)", lb=0, ub=inf) #total effective lift needed
+
+        e = m.addMVar((n_h), vtype="C", name=f"{wid}.e(PJ)", lb=0, ub=inf)
+        l_t = m.addMVar(
+            (n_h), vtype="C", name=f"{wid}.l_t(m)", lb=0, ub=inf
+        )  # total effective lift needed
         q_lnx = m.addMVar((n_h), vtype="C", name=f"{wid}.q_lnx", lb=0, ub=inf)
         # The upper bound of q_lny is set to -0.5772 to avoid l_cd_l_wd to be
         # negative.
-        q_lny     = m.addMVar((n_h), vtype="C", name=f"{wid}.q_lny", lb=-inf, ub=-0.5772)
-        l_cd_l_wd = m.addMVar((n_h), vtype="C", name=f"{wid}.l_cd_l_wd(m)", lb=0, ub=inf)
+        q_lny = m.addMVar((n_h), vtype="C", name=f"{wid}.q_lny", lb=-inf, ub=-0.5772)
+        l_cd_l_wd = m.addMVar(
+            (n_h), vtype="C", name=f"{wid}.l_cd_l_wd(m)", lb=0, ub=inf
+        )
 
         # 10000 is to convert m-ha to m3
         m_ha_2_m3 = 10000
-        m.addConstr((q_lnx == r**2*sy/ftrd), name=f"c.{wid}.q_lnx")
+        m.addConstr((q_lnx == r**2 * sy / ftrd), name=f"c.{wid}.q_lnx")
         # y = ln(x)  addGenConstrLog(x, y)
         # m.addConstr((q_lny == np.log(r**2*sy/fpitr)), name=f"c.{wid}.q_lny")
         # Due to TypeError: unsupported operand type(s) for *: 'MLinExpr' and
         # 'gurobipy.LinExpr'
         for h in range(n_h):
             m.addGenConstrLog(q_lnx[h], q_lny[h])
-        m.addConstr(l_cd_l_wd == q/fpitr * (-0.5772 - q_lny) * m_ha_2_m3 / eff_well,
-                    name=f"c.{wid}.l_cd_l_wd(m)")
+        m.addConstr(
+            l_cd_l_wd == q / fpitr * (-0.5772 - q_lny) * m_ha_2_m3 / eff_well,
+            name=f"c.{wid}.l_cd_l_wd(m)",
+        )
         m.addConstr((l_t == l_wt + l_cd_l_wd + l_pr), name=f"c.{wid}.l_t(m)")
         # e could be large. Make sure no numerical issue here.
         # J to PJ (1e-15)
         r_g_m_ha_2_m3_eff = rho * g * m_ha_2_m3 / eff_pump / 1e15
-        m.addConstr((e ==  r_g_m_ha_2_m3_eff * v * l_t), name=f"c.{wid}.e(PJ)")
+        m.addConstr((e == r_g_m_ha_2_m3_eff * v * l_t), name=f"c.{wid}.e(PJ)")
 
         self.vars[wid] = {}
-        self.vars[wid]['e'] = e
-        self.vars[wid]['v'] = v
-        self.vars[wid]['q'] = q
-        self.vars[wid]['l_pr'] = l_pr
+        self.vars[wid]["e"] = e
+        self.vars[wid]["v"] = v
+        self.vars[wid]["q"] = q
+        self.vars[wid]["l_pr"] = l_pr
         self.n_wells += 1
 
     def setup_constr_finance(self, finance_dict):
         """
         Set up financial constraints for the optimization model. The output is in 1e4 $.
-        
+
         Parameters
         ----------
         finance_dict: dict
-            A dictionary containing financial settings, which include energy price, 
-            crop price, and crop cost, irrigation operational cost, 
+            A dictionary containing financial settings, which include energy price,
+            crop price, and crop cost, irrigation operational cost,
             irr_tech_change_cost, and crop_change_cost. For more detail, refer to the finance module.
-        
+
         Returns
         -------
         None.
@@ -716,9 +818,9 @@ class Optimization():
         inf = self.inf
         vars = self.vars
         field_ids = self.field_ids
-        
+
         ## Form tech change cost matrix from the finance_dict
-        irr_tech_change_cost = finance_dict['irr_tech_change_cost']
+        irr_tech_change_cost = finance_dict["irr_tech_change_cost"]
         tech_change_cost_matrix = np.zeros((n_te, n_te))
         for k, v in irr_tech_change_cost.items():
             try:
@@ -728,9 +830,9 @@ class Optimization():
             except:
                 pass
         tech_change_cost_matrix = tech_change_cost_matrix
-        
+
         ## Form crop change cost matrix from the finance_dict
-        crop_change_cost = finance_dict['crop_change_cost']
+        crop_change_cost = finance_dict["crop_change_cost"]
         crop_change_cost_matrix = np.zeros((n_c, n_c))
         for k, v in crop_change_cost.items():
             try:
@@ -740,19 +842,18 @@ class Optimization():
             except:
                 pass
         crop_change_cost_matrix = crop_change_cost_matrix
-        
-        energy_price = finance_dict['energy_price']    #[1e4$/PJ]
-        crop_profit = {
-            c: finance_dict['crop_price'][c] - finance_dict['crop_cost'][c] \
-                for c in crop_options
-            }
-        cost_tech = np.array(
-            [finance_dict['irr_tech_operational_cost'][te] \
-             for te in tech_options]
-            )
 
-        e = vars['e']     # (n_h) [PJ]
-        y = vars['y']     # (n_s, n_c, n_h) [1e4 bu]
+        energy_price = finance_dict["energy_price"]  # [1e4$/PJ]
+        crop_profit = {
+            c: finance_dict["crop_price"][c] - finance_dict["crop_cost"][c]
+            for c in crop_options
+        }
+        cost_tech = np.array(
+            [finance_dict["irr_tech_operational_cost"][te] for te in tech_options]
+        )
+
+        e = vars["e"]  # (n_h) [PJ]
+        y = vars["y"]  # (n_s, n_c, n_h) [1e4 bu]
 
         cost_e = m.addMVar((n_h), vtype="C", name="cost_e(1e4$)", lb=0, ub=inf)
         rev = m.addMVar((n_h), vtype="C", name="rev(1e4$)", lb=-inf, ub=inf)
@@ -761,42 +862,63 @@ class Optimization():
         annual_tech_change_cost = 0
         annual_crop_change_cost = 0
         for fid in field_ids:
-            i_te = vars[fid]['i_te']
+            i_te = vars[fid]["i_te"]
             annual_tech_cost += i_te * cost_tech
 
-            pre_i_te = vars[fid]['pre_i_te']
-            tech_change_cost_arr = tech_change_cost_matrix[np.argmax(pre_i_te), :] # ==1
-            i_tech_change = vars[fid]['i_tech_change']
+            pre_i_te = vars[fid]["pre_i_te"]
+            tech_change_cost_arr = tech_change_cost_matrix[
+                np.argmax(pre_i_te), :
+            ]  # ==1
+            i_tech_change = vars[fid]["i_tech_change"]
             # uniformly allocate into planning horizon, "/n_h"
-            annual_tech_change_cost += tech_change_cost_arr * i_tech_change/n_h 
+            annual_tech_change_cost += tech_change_cost_arr * i_tech_change / n_h
 
             for s in range(n_s):
-                pre_i_crop = vars[fid]['pre_i_crop'][s, :, 0]
-                crop_change_cost_arr = crop_change_cost_matrix[np.argmax(pre_i_crop), :] # ==1
-                i_crop_change = vars[fid]['i_crop_change'][s, :, 0]
+                pre_i_crop = vars[fid]["pre_i_crop"][s, :, 0]
+                crop_change_cost_arr = crop_change_cost_matrix[
+                    np.argmax(pre_i_crop), :
+                ]  # ==1
+                i_crop_change = vars[fid]["i_crop_change"][s, :, 0]
                 # uniformly allocate into planning horizon, "/n_h"
-                annual_crop_change_cost += crop_change_cost_arr * i_crop_change/n_h 
-        annual_cost = m.addMVar((n_h), vtype="C", name="annual_cost(1e4$)", lb=-inf, ub=inf)
-        m.addConstr(annual_cost == \
-                    gp.quicksum(annual_tech_cost[t] for t in range(n_te))
-                    + gp.quicksum(annual_tech_change_cost[t] for t in range(n_te))
-                    + gp.quicksum(annual_crop_change_cost[c] for c in range(n_c)),
-                    name="c.annual_cost(1e4$)")
+                annual_crop_change_cost += crop_change_cost_arr * i_crop_change / n_h
+        annual_cost = m.addMVar(
+            (n_h), vtype="C", name="annual_cost(1e4$)", lb=-inf, ub=inf
+        )
+        m.addConstr(
+            annual_cost
+            == gp.quicksum(annual_tech_cost[t] for t in range(n_te))
+            + gp.quicksum(annual_tech_change_cost[t] for t in range(n_te))
+            + gp.quicksum(annual_crop_change_cost[c] for c in range(n_c)),
+            name="c.annual_cost(1e4$)",
+        )
 
         m.addConstr((cost_e == e * energy_price), name="c.cost_e")
-        m.addConstr(rev == gp.quicksum(y[i,j,:] * crop_profit[c] \
-                    for i in range(n_s) for j, c in enumerate(crop_options)),
-                    name="c.rev")
-        vars['rev'] = rev
-        vars['cost_e'] = cost_e
-        vars['other_cost'] = annual_cost
+        m.addConstr(
+            rev
+            == gp.quicksum(
+                y[i, j, :] * crop_profit[c]
+                for i in range(n_s)
+                for j, c in enumerate(crop_options)
+            ),
+            name="c.rev",
+        )
+        vars["rev"] = rev
+        vars["cost_e"] = cost_e
+        vars["other_cost"] = annual_cost
 
-        # Note the average profit per field is calculated in finish_setup(). 
+        # Note the average profit per field is calculated in finish_setup().
         # That way we can ensure the final field numbers added by users.
 
-    def setup_constr_wr(self, water_right_id, wr_depth, applied_field_ids="all",
-                        time_window=1, remaining_tw=None, remaining_wr=None,
-                        tail_method="proportion"):
+    def setup_constr_wr(
+        self,
+        water_right_id,
+        wr_depth,
+        applied_field_ids="all",
+        time_window=1,
+        remaining_tw=None,
+        remaining_wr=None,
+        tail_method="proportion",
+    ):
         """
         Set up water right constraints for the optimization model. You can assign multiple water rights
         constraints by calling this function repeatedly with different
@@ -815,32 +937,32 @@ class Optimization():
             Depth of the water right [cm].
         applied_field_ids : "all" or list, optional
             A list of field ids. If given, the water right constraints apply
-            only to the subset of the fields. Note that water rights are 
-            applied to constrain the average irrigation depth (cm) over 
-            fields. If you want to add the same water rights setting for all 
-            individual fields, you can call setup_constr_wr() for all the fields that the farmer owns. 
+            only to the subset of the fields. Note that water rights are
+            applied to constrain the average irrigation depth (cm) over
+            fields. If you want to add the same water rights setting for all
+            individual fields, you can call setup_constr_wr() for all the fields that the farmer owns.
             The default is "all".
         time_window : int, optional
             If given, the water right constrains the total irrigation depth
             over the time window [yr]. The default is 1.
         remaining_tw : int, optional
-            Remaining years of time window that the remaining_wr will be applied to [yr]. The 
+            Remaining years of time window that the remaining_wr will be applied to [yr]. The
             default is None.
         remaining_wr : float, optional
             The remaining water rights left unused from the previous time window
             [cm]. The default is None.
         tail_method : "proportion" or "all" or float, optional
             Method to allocate water rights to the incomplete part of the time window at the end of the
-            planning period. 
-            
+            planning period.
+
             "proportion" means water equivalent to wr_depth*(tail length/time_window) is
-            applied to the tail part of the planning period. 
-            
-            "all" means water equivalent to wr_depth is applied to the tail part of planning period. 
-            
+            applied to the tail part of the planning period.
+
+            "all" means water equivalent to wr_depth is applied to the tail part of planning period.
+
             If a float is given, the given value
-            will be applied directly to the tail part of planning period. 
-            
+            will be applied directly to the tail part of planning period.
+
             The default is "proportion".
 
         Returns
@@ -850,9 +972,11 @@ class Optimization():
         """
         # As the msg said.
         if time_window != 1 and self.approx_horizon:
-            raise ValueError("Approximation is not allowed with the water rights "
-                             +"constraints that have time_window larger than 1."
-                             +" Please set approx_horizon parameter to False.")
+            raise ValueError(
+                "Approximation is not allowed with the water rights "
+                + "constraints that have time_window larger than 1."
+                + " Please set approx_horizon parameter to False."
+            )
 
         m = self.model
         fids = applied_field_ids
@@ -863,28 +987,35 @@ class Optimization():
 
         # Collect irrigation depth over the constrained fields.
         if fids == "all":
-            irr_sub = vars['irr_depth_per_field']         # (n_s, n_c, n_h) averaged irrigation for all the fields a farmer owns
+            irr_sub = vars[
+                "irr_depth_per_field"
+            ]  # (n_s, n_c, n_h) averaged irrigation for all the fields a farmer owns
         else:
             for i, fid in enumerate(fids):
                 if i == 0:
-                    irr_sub = vars[fid]['irr_depth']
+                    irr_sub = vars[fid]["irr_depth"]
                 else:
-                    irr_sub += vars[fid]['irr_depth']
-            irr_sub = irr_sub/len(fids)
+                    irr_sub += vars[fid]["irr_depth"]
+            irr_sub = irr_sub / len(fids)
 
         # Initial period
         # The structure is to fit within a larger simulation framework, which
         # we allow the remaining water rights that are not used in the previous
         # year.
         c_i = 0
-        
+
         if remaining_tw is not None and remaining_wr is not None:
             m.addConstr(
-                gp.quicksum(irr_sub[i,j,h] \
-                for i in range(n_s) for j in range(n_c) \
-                for h in range(remaining_tw))/n_s <= remaining_wr,
-                name=f"c.{water_right_id}.wr_{c_i}(cm)"
+                gp.quicksum(
+                    irr_sub[i, j, h]
+                    for i in range(n_s)
+                    for j in range(n_c)
+                    for h in range(remaining_tw)
                 )
+                / n_s
+                <= remaining_wr,
+                name=f"c.{water_right_id}.wr_{c_i}(cm)",
+            )
             c_i += 1
             start_index = remaining_tw
             remaining_length = n_h - remaining_tw
@@ -895,11 +1026,16 @@ class Optimization():
         # Middle period
         while remaining_length >= time_window:
             m.addConstr(
-                gp.quicksum(irr_sub[i,j,h] \
-                for i in range(n_s) for j in range(n_c) \
-                for h in range(start_index, start_index+time_window))/n_s <= wr_depth,
-                name=f"c.{water_right_id}.wr_{c_i}(cm)"
+                gp.quicksum(
+                    irr_sub[i, j, h]
+                    for i in range(n_s)
+                    for j in range(n_c)
+                    for h in range(start_index, start_index + time_window)
                 )
+                / n_s
+                <= wr_depth,
+                name=f"c.{water_right_id}.wr_{c_i}(cm)",
+            )
             c_i += 1
             start_index += time_window
             remaining_length -= time_window
@@ -907,7 +1043,7 @@ class Optimization():
         # Last period (if any)
         if remaining_length > 0:
             if tail_method == "proportion":
-                wr_tail = wr_depth * remaining_length/time_window
+                wr_tail = wr_depth * remaining_length / time_window
             elif tail_method == "all":
                 wr_tail = wr_depth
             # Otherwise, we expect a value given by users.
@@ -915,11 +1051,16 @@ class Optimization():
                 wr_tail = tail_method
 
             m.addConstr(
-                gp.quicksum(irr_sub[i,j,h] \
-                for i in range(n_s) for j in range(n_c) \
-                for h in range(start_index, n_h))/n_s <= wr_tail,
-                name=f"c.{water_right_id}.wr_{c_i}(cm)"
+                gp.quicksum(
+                    irr_sub[i, j, h]
+                    for i in range(n_s)
+                    for j in range(n_c)
+                    for h in range(start_index, n_h)
                 )
+                / n_s
+                <= wr_tail,
+                name=f"c.{water_right_id}.wr_{c_i}(cm)",
+            )
 
         self.water_right_ids.append(water_right_id)
         self.n_water_rights += 1
@@ -927,29 +1068,29 @@ class Optimization():
         # Record for the next run. Assume the simulation runs annually and will
         # apply the irr_depth solved by the opt model.
         # This record will be updated in solve() and added to the sols.
-        if time_window == 1: 
+        if time_window == 1:
             remaining_wr = None
             remaining_tw = None
         else:
-            if remaining_tw is None: # This is the first year of the tw.
+            if remaining_tw is None:  # This is the first year of the tw.
                 remaining_wr = wr_depth  # wait to be updated
                 remaining_tw = time_window - 1
             elif (remaining_tw - 1) == 0:
                 # remaining_tw - 1 = 0 means that next year will be a new round.
-                remaining_wr = None # will not update
+                remaining_wr = None  # will not update
                 remaining_tw = time_window
             else:
                 # remaining_wr = remaining_wr
                 remaining_tw -= 1
-            
+
         self.wrs_info[water_right_id] = {
             "wr_depth": wr_depth,
             "applied_field_ids": applied_field_ids,
             "time_window": time_window,
-            "remaining_tw": remaining_tw, # Assume we optimize on a rolling basis
-            "remaining_wr": remaining_wr, # If not None, the number will be updated later
-            "tail_method": tail_method
-            }
+            "remaining_tw": remaining_tw,  # Assume we optimize on a rolling basis
+            "remaining_wr": remaining_wr,  # If not None, the number will be updated later
+            "tail_method": tail_method,
+        }
 
     def setup_obj(self, alpha_dict=None):
         """
@@ -962,7 +1103,7 @@ class Optimization():
         Parameters
         ----------
         alpha_dict : dict, optional
-            A dictionary containing sensitivity factor for satisfaction calculation, 
+            A dictionary containing sensitivity factor for satisfaction calculation,
             given as an input under the CONSUMAT dictionary. The default value is None.
 
         Returns
@@ -977,7 +1118,9 @@ class Optimization():
         # Update alpha list
         if alpha_dict is not None:
             alphas.update(alpha_dict)
-            self.eval_metrics = [metric for metric, v in self.alphas.items() if v is not None]
+            self.eval_metrics = [
+                metric for metric, v in self.alphas.items() if v is not None
+            ]
 
         # Check the selected target exist
         eval_metrics = self.eval_metrics
@@ -987,34 +1130,34 @@ class Optimization():
 
         # Currently supported metrices
         # We use average value per field (see finish_setup())
-        eval_metric_vars = {
-            "profit": vars['profit'],
-            "yield_rate": vars['y_y']
-            }
+        eval_metric_vars = {"profit": vars["profit"], "yield_rate": vars["y_y"]}
 
         inf = self.inf
         m = self.model
         n_h = self.n_h
 
-        vars['Sa'] = {}
+        vars["Sa"] = {}
+
         def add_metric(metric):
             # fakeSa will be forced to be nonnegative later on for Sa calculation
             fakeSa = m.addVar(vtype="C", name=f"fakeSa.{metric}", lb=-inf, ub=inf)
             metric_var = eval_metric_vars.get(metric)
-            m.addConstr((fakeSa == gp.quicksum(metric_var[h] for h in range(n_h))/n_h),
-                        name=f"c.Sa.{metric}")
-            vars['Sa'][metric] = fakeSa    #fake Sa for each metric (profit and y_Y)
+            m.addConstr(
+                (fakeSa == gp.quicksum(metric_var[h] for h in range(n_h)) / n_h),
+                name=f"c.Sa.{metric}",
+            )
+            vars["Sa"][metric] = fakeSa  # fake Sa for each metric (profit and y_Y)
 
         penalties = self.penalties
         penalty = 0
         for p in penalties:
             penalty += p
-        
+
         for metric in eval_metrics:
             # Add objective
             if metric == target:
                 add_metric(metric)
-                m.setObjective(vars['Sa'][metric] - penalty, gp.GRB.MAXIMIZE)
+                m.setObjective(vars["Sa"][metric] - penalty, gp.GRB.MAXIMIZE)
         self.obj_post_calculation = True
 
     def finish_setup(self, display_summary=True):
@@ -1039,31 +1182,54 @@ class Optimization():
         n_f = self.n_fields
         n_w = self.n_wells
 
-
         ### Add some final constraints
         # Allocation ratios for the amount of water withdraw from each well to
         # satisfy v. Sum of the ratios is equal to 1.
         allo_r = m.addMVar((n_f, n_w, n_h), vtype="C", name="allo_r", lb=0, ub=1)
         allo_r_w = m.addMVar((n_w, n_h), vtype="C", name="allo_r_w", lb=0, ub=1)
-        vars['allo_r'] = allo_r
-        vars['allo_r_w'] = allo_r_w
-        m.addConstr(allo_r_w == gp.quicksum(allo_r[f,:,:] for f in range(n_f))/n_f,
-                    name="c.allo_r_w")
-        m.addConstrs((gp.quicksum(allo_r[f,k,h] for k in range(n_w)) == 1 \
-                      for f in range(n_f) for h in range(n_h)), name="c.allo_r")
-        v = vars['v']
+        vars["allo_r"] = allo_r
+        vars["allo_r_w"] = allo_r_w
+        m.addConstr(
+            allo_r_w == gp.quicksum(allo_r[f, :, :] for f in range(n_f)) / n_f,
+            name="c.allo_r_w",
+        )
+        m.addConstrs(
+            (
+                gp.quicksum(allo_r[f, k, h] for k in range(n_w)) == 1
+                for f in range(n_f)
+                for h in range(n_h)
+            ),
+            name="c.allo_r",
+        )
+        v = vars["v"]
         for k, wid in enumerate(wids):
-            m.addConstr((vars[wid]['v'] == v * allo_r_w[k,:]), name=f"c.{wid}.v(m-ha)")
-            m.addConstr((vars[wid]['q'] == gp.quicksum(vars[fid]['q'] * allo_r[f,k,:] \
-                        for f, fid in enumerate(fids))), name=f"c.{wid}.q(m-ha/d)")
-            m.addConstr((vars[wid]['l_pr'] == gp.quicksum(vars[fid]['l_pr'] * allo_r[f,k,:] \
-                        for f, fid in enumerate(fids))), name=f"c.{wid}.l_pr(m)")
+            m.addConstr((vars[wid]["v"] == v * allo_r_w[k, :]), name=f"c.{wid}.v(m-ha)")
+            m.addConstr(
+                (
+                    vars[wid]["q"]
+                    == gp.quicksum(
+                        vars[fid]["q"] * allo_r[f, k, :] for f, fid in enumerate(fids)
+                    )
+                ),
+                name=f"c.{wid}.q(m-ha/d)",
+            )
+            m.addConstr(
+                (
+                    vars[wid]["l_pr"]
+                    == gp.quicksum(
+                        vars[fid]["l_pr"] * allo_r[f, k, :]
+                        for f, fid in enumerate(fids)
+                    )
+                ),
+                name=f"c.{wid}.l_pr(m)",
+            )
 
-        irr_depth = vars['irr_depth']
-        irr_depth_per_field = vars['irr_depth_per_field']
-        y = vars['y']
-        y_y = vars['y_y']
-        e = vars['e']
+        irr_depth = vars["irr_depth"]
+        irr_depth_per_field = vars["irr_depth_per_field"]
+        y = vars["y"]
+        y_y = vars["y_y"]
+        e = vars["e"]
+
         # Sum to the total
         def get_sum(ids, vars, var):
             """Sum over ids"""
@@ -1073,21 +1239,26 @@ class Optimization():
                 else:
                     acc += vars[v][var]
             return acc
+
         # Sum over fields
-        m.addConstr(irr_depth == get_sum(fids, vars, "irr_depth"), name="c.irr_depth(cm)")
+        m.addConstr(
+            irr_depth == get_sum(fids, vars, "irr_depth"), name="c.irr_depth(cm)"
+        )
         m.addConstr(v == get_sum(fids, vars, "v"), name="c.v(m-ha)")
         m.addConstr(y == get_sum(fids, vars, "y"), name="c.y(1e4bu)")
         m.addConstr(e == get_sum(wids, vars, "e"), name="c.e(PJ)")
-        
+
         # Calculate average value per field
-        m.addConstr(y_y == get_sum(fids, vars, "y_y")/n_f, name="c.y_y")
-        m.addConstr(irr_depth_per_field == get_sum(fids, vars, "irr_depth")/n_f,
-                    name="c.irr_depth_per_field(cm)")
-        profit = vars['profit']
-        rev = vars['rev']
-        cost_e = vars['cost_e']
-        annual_cost = vars['other_cost']
-        m.addConstr((profit == (rev - cost_e - annual_cost)/n_f), name="c.profit")
+        m.addConstr(y_y == get_sum(fids, vars, "y_y") / n_f, name="c.y_y")
+        m.addConstr(
+            irr_depth_per_field == get_sum(fids, vars, "irr_depth") / n_f,
+            name="c.irr_depth_per_field(cm)",
+        )
+        profit = vars["profit"]
+        rev = vars["rev"]
+        cost_e = vars["cost_e"]
+        annual_cost = vars["other_cost"]
+        m.addConstr((profit == (rev - cost_e - annual_cost) / n_f), name="c.profit")
 
         m.update()
 
@@ -1111,8 +1282,9 @@ class Optimization():
         if display_summary:
             print(summary)
 
-    def solve(self, keep_gp_model=False, keep_gp_output=False,
-              display_report=True, **kwargs):
+    def solve(
+        self, keep_gp_model=False, keep_gp_output=False, display_report=True, **kwargs
+    ):
         """
         This method solves the optimization problem.
         Note that, by default, we set the gurobi parameter, NonConvex = 2 for a
@@ -1121,7 +1293,7 @@ class Optimization():
         Parameters
         ----------
         keep_gp_model : bool
-            Keep the gurobi model instance for further use. This should be used 
+            Keep the gurobi model instance for further use. This should be used
             with caution.
             The default is False.
 
@@ -1130,7 +1302,7 @@ class Optimization():
             dictionary format. The default is False.
 
         display_report : bool
-            This parameter displays the summary report if set to True. 
+            This parameter displays the summary report if set to True.
             The default is True.
 
         **kwargs : **kwargs
@@ -1146,8 +1318,10 @@ class Optimization():
             https://www.gurobi.com/documentation/9.5/refman/mip_models.html
 
         """
+
         def extract_sol(vars):
             sols = {}
+
             def get_inner_dict(d, new_dict):
                 for k, v in d.items():
                     if isinstance(v, dict):
@@ -1155,9 +1329,12 @@ class Optimization():
                         get_inner_dict(v, new_dict[k])
                     else:
                         try:
-                            new_dict[k] = v.X   # for variables associated with the gurobi solver
+                            new_dict[
+                                k
+                            ] = v.X  # for variables associated with the gurobi solver
                         except:
-                            new_dict[k] = v     # for all others
+                            new_dict[k] = v  # for all others
+
             get_inner_dict(vars, sols)
             return sols
 
@@ -1172,16 +1349,16 @@ class Optimization():
         m.optimize()
 
         ## Collect the results and do some post calculations.
-        # Optimal solution found or reach time limit 
-        if m.Status == 2 or m.Status == 9:   
+        # Optimal solution found or reach time limit
+        if m.Status == 2 or m.Status == 9:
             self.optimal_obj_value = m.objVal
             self.sols = extract_sol(self.vars)
             sols = self.sols
-            sols['obj'] = m.objVal
-            sols['field_ids'] = self.field_ids
-            sols['well_ids'] = self.well_ids
-            sols['gp_status'] = m.Status
-            sols['gp_MIPGap'] = m.MIPGap
+            sols["obj"] = m.objVal
+            sols["field_ids"] = self.field_ids
+            sols["well_ids"] = self.well_ids
+            sols["gp_status"] = m.Status
+            sols["gp_MIPGap"] = m.MIPGap
 
             # Calculate satisfaction
             if self.obj_post_calculation:
@@ -1192,73 +1369,81 @@ class Optimization():
                 # Currently supported metrices
                 if self.approx_horizon and self.horizon > 2:
                     horizon = self.horizon
-                    profits = sols['profit']
-                    y_ys = sols['y_y']
+                    profits = sols["profit"]
+                    y_ys = sols["y_y"]
                     eval_metric_vars = {
-                        "profit": np.linspace(profits[0], profits[1], num=horizon)/scales['profit'],
-                        "yield_rate": np.linspace(y_ys[0], y_ys[1], num=horizon)/scales['yield_rate']
-                        }
+                        "profit": np.linspace(profits[0], profits[1], num=horizon)
+                        / scales["profit"],
+                        "yield_rate": np.linspace(y_ys[0], y_ys[1], num=horizon)
+                        / scales["yield_rate"],
+                    }
                 else:
                     eval_metric_vars = {
-                        "profit": sols['profit']/scales['profit'],
-                        "yield_rate": sols['y_y']/scales['yield_rate']
-                        }
+                        "profit": sols["profit"] / scales["profit"],
+                        "yield_rate": sols["y_y"] / scales["yield_rate"],
+                    }
                 for metric in eval_metrics:
                     alpha = alphas[metric]
                     metric_var = eval_metric_vars.get(metric)
                     # force the minimum value to be zero since there is an exponential function
-                    metric_var[metric_var<0] = 0
+                    metric_var[metric_var < 0] = 0
                     N_yr = 1 - np.exp(-alpha * metric_var)
                     Sa = np.mean(N_yr)
-                    sols['Sa'][metric] = Sa
-                    
+                    sols["Sa"][metric] = Sa
+
             # Update rainfed info
             for fid in self.field_ids:
                 sols_fid = sols[fid]
-                irr_depth = sols_fid['irr_depth'][:,:,0].sum(axis=1)
-                i_rainfed = sols_fid['i_rainfed']
-                i_rainfed[np.where(irr_depth <= 0), :, :] = 1 # avoid using irr_depth == 0
-                sols_fid['i_rainfed'] = i_rainfed * sols_fid['i_crop']
+                irr_depth = sols_fid["irr_depth"][:, :, 0].sum(axis=1)
+                i_rainfed = sols_fid["i_rainfed"]
+                i_rainfed[
+                    np.where(irr_depth <= 0), :, :
+                ] = 1  # avoid using irr_depth == 0
+                sols_fid["i_rainfed"] = i_rainfed * sols_fid["i_crop"]
 
             # Update remaining water rights
             wrs_info = self.wrs_info
             for k, v in wrs_info.items():
-                if v['remaining_wr'] is not None:
-                    fids = v['applied_field_ids']
+                if v["remaining_wr"] is not None:
+                    fids = v["applied_field_ids"]
                     if fids == "all":
-                        irr_sub = sols['irr_depth_per_field']         # (n_s, n_c, n_h)
+                        irr_sub = sols["irr_depth_per_field"]  # (n_s, n_c, n_h)
                     else:
                         for i, fid in enumerate(fids):
                             if i == 0:
-                                irr_sub = sols[fid]['irr_depth'].copy()
+                                irr_sub = sols[fid]["irr_depth"].copy()
                             else:
-                                irr_sub += sols[fid]['irr_depth']
-                        irr_sub = irr_sub/len(fids)
-                    v['remaining_wr'] -= np.sum(irr_sub[:, :, 0])
-            sols['water_rights'] = wrs_info
+                                irr_sub += sols[fid]["irr_depth"]
+                        irr_sub = irr_sub / len(fids)
+                    v["remaining_wr"] -= np.sum(irr_sub[:, :, 0])
+            sols["water_rights"] = wrs_info
 
             # Display report
             crop_options = self.crop_options
             tech_options = self.tech_options
             n_s = self.n_s
             fids = self.field_ids
-            #sols = self.sols
-            irrs = list(sols['irr_depth'].mean(axis=0).sum(axis=0).round(2))
+            # sols = self.sols
+            irrs = list(sols["irr_depth"].mean(axis=0).sum(axis=0).round(2))
             decisions = {"Irrigation depths": irrs}
             for fid in fids:
                 sols_fid = sols[fid]
-                i_crop = sols_fid['i_crop'][:, :, 0]
+                i_crop = sols_fid["i_crop"][:, :, 0]
                 # Avoid using == 0 or 1 => it can have numerical issues
-                crop_type = [crop_options[np.argmax(i_crop[s,:])] for s in range(n_s)]
-                tech = tech_options[np.argmax(sols_fid['i_te'][:])]
-                Irrigated = list((sols_fid['i_rainfed'][:, :, 0].sum(axis=1).round(0) <= 0))
-                decisions[fid] = {"Crop types": crop_type,
-                                  "Irr tech": tech,
-                                  "Irrigated": Irrigated}
+                crop_type = [crop_options[np.argmax(i_crop[s, :])] for s in range(n_s)]
+                tech = tech_options[np.argmax(sols_fid["i_te"][:])]
+                Irrigated = list(
+                    (sols_fid["i_rainfed"][:, :, 0].sum(axis=1).round(0) <= 0)
+                )
+                decisions[fid] = {
+                    "Crop types": crop_type,
+                    "Irr tech": tech,
+                    "Irrigated": Irrigated,
+                }
             self.decisions = decisions
             decisions = dict_to_string(decisions, prefix="\t\t", level=2)
             msg = dict_to_string(self.msg, prefix="\t\t", level=2)
-            sas = dict_to_string(sols['Sa'], prefix="\t\t", level=2, roun=4)
+            sas = dict_to_string(sols["Sa"], prefix="\t\t", level=2, roun=4)
             if self.approx_horizon:
                 h_msg = str(self.horizon) + " (approximated with 2)"
             else:
@@ -1279,13 +1464,13 @@ class Optimization():
             self.gp_report = gp_report
             if display_report:
                 print(gp_report)
-            sols['gp_report'] = gp_report
-            #self.sols = sols
+            sols["gp_report"] = gp_report
+            # self.sols = sols
         else:
             print("Optimal solution is not found.")
             self.optimal_obj_value = None
             sols = {}
-            sols['gp_report'] = "Optimal solution is not found."
+            sols["gp_report"] = "Optimal solution is not found."
             self.sols = sols
 
         if keep_gp_output:
@@ -1326,13 +1511,13 @@ class Optimization():
         # do IIS
         m.computeIIS()
         if m.IISMinimal:
-            print('IIS is minimal\n')
+            print("IIS is minimal\n")
         else:
-            print('IIS is not minimal\n')
-        print('\nThe following constraint(s) cannot be satisfied:')
+            print("IIS is not minimal\n")
+        print("\nThe following constraint(s) cannot be satisfied:")
         for c in m.getConstrs():
             if c.IISConstr:
-                print('%s' % c.ConstrName)
+                print("%s" % c.ConstrName)
 
         if filename is not None:
             if filename[-4:] != ".ilp":
@@ -1416,6 +1601,7 @@ class Optimization():
         m = self.model
         m.write(filename)
 
+
 # Utility code
 def dict_to_string(dictionary, prefix="", indentor="  ", level=2, roun=None):
     """Ture a dictionary into a printable string.
@@ -1431,17 +1617,21 @@ def dict_to_string(dictionary, prefix="", indentor="  ", level=2, roun=None):
     str
         A printable string.
     """
+
     def dict_to_string_list(dictionary, indentor="  ", count=1, string=[]):
         for key, value in dictionary.items():
             string.append(prefix + indentor * count + str(key))
             if isinstance(value, dict) and count < level:
-                string = dict_to_string_list(value, indentor, count+1, string)
+                string = dict_to_string_list(value, indentor, count + 1, string)
             elif isinstance(value, dict) is False and count == level:
                 string[-1] += ":\t" + str(value)
             else:
                 if roun is not None and isinstance(value, float):
-                    string.append(prefix + indentor * (count+1) + str(round(value, roun)))
+                    string.append(
+                        prefix + indentor * (count + 1) + str(round(value, roun))
+                    )
                 else:
-                    string.append(prefix + indentor * (count+1) + str(value))
+                    string.append(prefix + indentor * (count + 1) + str(value))
         return string
+
     return "\n".join(dict_to_string_list(dictionary, indentor))

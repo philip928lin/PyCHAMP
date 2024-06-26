@@ -18,3 +18,16 @@ dependencies = [
   "joblib",
   "mesa==2.1.1"
 ]
+
+[project.optional-dependencies]
+dev = [
+    "ipython"
+]
+lint = [
+    "pre-commit>=2.20.0",
+]
+
+# tools
+[tool.black]
+line-length = 88
+target-version = ["py310", "py311", "py312"]

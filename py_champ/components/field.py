@@ -5,9 +5,10 @@
 import numpy as np
 import mesa
 
+
 class Field(mesa.Agent):
     """
-    This module is a field simulator. 
+    This module is a field simulator.
 
     Parameters
     ----------
@@ -16,31 +17,31 @@ class Field(mesa.Agent):
     model
         The model instance to which this agent belongs.
     settings : dict
-        A dictionary containing initial settings for the field, which include field 
-        area, water yield curves, technology pumping rate coefficients, 
+        A dictionary containing initial settings for the field, which include field
+        area, water yield curves, technology pumping rate coefficients,
         climate data id, and initial conditions.
-        
+
         - 'field_area': The total area of the field [ha].
         - 'water_yield_curves': Water yield response curves for different crops.
         - 'tech_pumping_rate_coefs': Coefficients for calculating pumping rates based on irrigation technology. Pumping rate [m-ha/day] = a * annual withdrawal [m-ha] + b
         - 'prec_aw_id': Identifier for available precipitation data.
         - 'init': Initial conditions: irrigation technology, crop type, and field type.
-        
+
         >>> # A sample settings dictionary
         >>> settings = {
-        >>>     "field_area": 50.,      
+        >>>     "field_area": 50.,
         >>>     "water_yield_curves": {
         >>>     "corn": [ymax [bu], wmax [cm], a, b, c, min_yield_ratio]}, # Replace variables with actual values
         >>>     "tech_pumping_rate_coefs": {
         >>>         "center pivot LEPA": [a, b, l_pr [m]]}, # Replace variables with actual values
         >>>     "prec_aw_id": None,
         >>>     "init":{
-        >>>         "tech": None, 
+        >>>         "tech": None,
         >>>         "crop": None,
-        >>>         "field_type": None, # "optimize" or "irrigated" or "rainfed"  
+        >>>         "field_type": None, # "optimize" or "irrigated" or "rainfed"
         >>>         },
         >>>    }
-    
+
     **kwargs
         Additional keyword arguments that can be dynamically set as field agent attributes.
 
@@ -69,6 +70,7 @@ class Field(mesa.Agent):
     - The irrigation volume is measured in meter-hectares [m-ha].
     - Field area should be provided in hectares [ha].
     """
+
     def __init__(self, unique_id, model, settings: dict, **kwargs):
         """
         Initialize a Field agent in the Mesa model.
@@ -91,7 +93,7 @@ class Field(mesa.Agent):
         if isinstance(ini_crop, str):
             i_c = crop_options.index(ini_crop)
             i_crop[:, i_c, 0] = 1
-            self.crops = [ini_crop]*self.n_s
+            self.crops = [ini_crop] * self.n_s
         else:
             self.crops = ini_crop
             for s, c in enumerate(ini_crop):
@@ -99,7 +101,7 @@ class Field(mesa.Agent):
                 i_crop[s, i_c, 0] = 1
         self.i_crop = i_crop
         self.update_crops(i_crop)
-        
+
         # Initialize field type
         self.field_type = self.init["field_type"]
 
@@ -111,13 +113,13 @@ class Field(mesa.Agent):
         # Initialize other variables
         self.t = 0
         self.irr_vol = None
-        self.yield_rate_per_field = None    # Averaged value across a field 
-        self.irr_vol_per_field = None       # Averaged value across a field 
+        self.yield_rate_per_field = None  # Averaged value across a field
+        self.irr_vol_per_field = None  # Averaged value across a field
 
     def load_settings(self, settings: dict):
         """
         Load the field settings from a dictionary.
-    
+
         Parameters
         ----------
         settings : dict
@@ -130,22 +132,22 @@ class Field(mesa.Agent):
         self.tech_pumping_rate_coefs = settings["tech_pumping_rate_coefs"]
         self.prec_aw_id = settings["prec_aw_id"]
         self.init = settings["init"]
-        
+
         self.n_s = self.model.area_split
         self.n_c = len(crop_options)
-        
+
         crop_par = np.array([self.water_yield_curves[c] for c in crop_options])
-        self.ymax = crop_par[:, 0].reshape((-1, 1))     # (n_c, 1)
-        self.wmax = crop_par[:, 1].reshape((-1, 1))     # (n_c, 1)
-        self.a = crop_par[:, 2].reshape((-1, 1))        # (n_c, 1)
-        self.b = crop_par[:, 3].reshape((-1, 1))        # (n_c, 1)
-        self.c = crop_par[:, 4].reshape((-1, 1))        # (n_c, 1)
+        self.ymax = crop_par[:, 0].reshape((-1, 1))  # (n_c, 1)
+        self.wmax = crop_par[:, 1].reshape((-1, 1))  # (n_c, 1)
+        self.a = crop_par[:, 2].reshape((-1, 1))  # (n_c, 1)
+        self.b = crop_par[:, 3].reshape((-1, 1))  # (n_c, 1)
+        self.c = crop_par[:, 4].reshape((-1, 1))  # (n_c, 1)
         try:
-            self.min_y_ratio = crop_par[:, 5].reshape((-1, 1))    # (n_c, 1)
+            self.min_y_ratio = crop_par[:, 5].reshape((-1, 1))  # (n_c, 1)
         except:
             self.min_y_ratio = np.zeros((self.n_c, 1))
-            
-        self.unit_area = self.field_area/self.n_s
+
+        self.unit_area = self.field_area / self.n_s
 
     def update_irr_tech(self, i_te):
         """
@@ -155,7 +157,7 @@ class Field(mesa.Agent):
         Parameters
         ----------
         i_te : 1d array or str
-            Indicator array or string representing the chosen irrigation 
+            Indicator array or string representing the chosen irrigation
             technology for the next year. The dimension of the array should be
             (n_te).
 
@@ -199,7 +201,7 @@ class Field(mesa.Agent):
         """
         Perform a single step of field operation, calculating yields and
         irrigation volumes.
-    
+
         Parameters
         ----------
         irr_depth : 3d array
@@ -211,21 +213,21 @@ class Field(mesa.Agent):
             Indicator array or string representing the chosen irrigation
             technology. Dimensions: (n_te).
         prec_aw : dict
-            A dictionary of available precipitation for each crop. 
+            A dictionary of available precipitation for each crop.
             {"corn": 27.02, "sorghum": 22.81}
-    
+
         Returns
         -------
         tuple
-            A tuple containing yield [1e4 bu], average yield rate [-], and 
+            A tuple containing yield [1e4 bu], average yield rate [-], and
             total irrigation volume [m-ha].
-    
+
         Notes
         -----
-        This method calculates the yield based on the applied irrigation, chosen crops, 
-        install technology, and available precipitation. 
+        This method calculates the yield based on the applied irrigation, chosen crops,
+        install technology, and available precipitation.
         """
-        self.t +=1
+        self.t += 1
 
         a = self.a
         b = self.b
@@ -237,19 +239,19 @@ class Field(mesa.Agent):
         crop_options = self.model.crop_options
 
         ### Yield calculation
-        irr_depth = irr_depth.copy()[:,:,[0]]
+        irr_depth = irr_depth.copy()[:, :, [0]]
         prec_aw_ = np.ones(irr_depth.shape)
         for ci, crop in enumerate(crop_options):
             prec_aw_[:, ci, :] = prec_aw[crop]
 
         w = irr_depth + prec_aw_
         w = w * i_crop
-        w_ = w/wmax    #normalized applied water
+        w_ = w / wmax  # normalized applied water
         w_ = np.minimum(w_, 1)
-        y_ = (a * w_**2 + b * w_ + c)   #normalized yield
+        y_ = a * w_**2 + b * w_ + c  # normalized yield
         y_ = np.maximum(0, y_)
         y_ = y_ * i_crop
-        
+
         # No force fallow here. The decisions are made. 0 yield only mean failure in that decisions.
         # Force a margin cutoff
         # min_y_ratio = np.tile(self.min_y_ratio, (self.n_s, 1, 1))
@@ -260,14 +262,14 @@ class Field(mesa.Agent):
         #     # Set the fourth row of those columns to 1
         #     i_crop[zero_columns[0], fallow_ind] = 1
         # y_[y_ < min_y_ratio] = 0
-        
-        self.update_crops(i_crop)   # update pre_i_crop
-        
-        y = y_ * ymax * unit_area * 1e-4      # 1e4 bu
+
+        self.update_crops(i_crop)  # update pre_i_crop
+
+        y = y_ * ymax * unit_area * 1e-4  # 1e4 bu
 
         cm2m = 0.01
-        v_c = irr_depth * unit_area * cm2m    # m-ha
-        irr_vol = np.sum(v_c)                 # m-ha
+        v_c = irr_depth * unit_area * cm2m  # m-ha
+        irr_vol = np.sum(v_c)  # m-ha
         avg_y_y = np.sum(y_) / n_s
         avg_w = np.sum(w) / n_s
 
@@ -275,13 +277,13 @@ class Field(mesa.Agent):
         self.update_irr_tech(i_te)  # update tech
         a_te = self.a_te
         b_te = self.b_te
-        pumping_rate = a_te * irr_vol + b_te    # (McCarthy et al., 2020)
-        self.pumping_rate = pumping_rate        # m-ha/day
+        pumping_rate = a_te * irr_vol + b_te  # (McCarthy et al., 2020)
+        self.pumping_rate = pumping_rate  # m-ha/day
 
         # record
-        self.y = y 
+        self.y = y
         self.w = avg_w
         self.yield_rate_per_field = avg_y_y
-        self.irr_vol_per_field = irr_vol    # m-ha
+        self.irr_vol_per_field = irr_vol  # m-ha
 
         return y, avg_y_y, irr_vol
