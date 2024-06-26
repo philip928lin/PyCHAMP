@@ -5,11 +5,12 @@ import pandas as pd
 from tqdm import tqdm
 import mesa
 from ..utility.util import TimeRecorder, Indicator
-# from ..components.aquifer import Aquifer
-# from ..components.behavior import Behavior
-# from ..components.field import Field
-# from ..components.well import Well
-# from ..components.finance import Finance
+from ..components.aquifer import Aquifer
+from ..components.behavior import Behavior
+from ..components.field import Field
+from ..components.well import Well
+from ..components.finance import Finance
+from ..components.optimization import Optimization
 
 class BaseSchedulerByTypeFiltered(mesa.time.BaseScheduler):
     """
@@ -131,18 +132,26 @@ class SD6Model(mesa.Model):
     """
     def __init__(self, pars, crop_options, tech_options, area_split,
                  aquifers_dict, fields_dict, wells_dict, finances_dict, behaviors_dict, 
-                 aquifer_agtType, field_agtType, well_agtType, finance_agtType, behavior_agtType,
-                 optimization_class,
                  prec_aw_step, init_year=2007, end_year=2022,
+                 components={
+                     "aquifer":Aquifer, 
+                     "field":Field, 
+                     "well":Well, 
+                     "finance":Finance, 
+                     "behavior":Behavior},
+                 optimization_class=Optimization,
                  lema_options=(True, 'wr_LEMA_5yr', 2013),
                  fix_state=None, show_step=True,
                  seed=None, shared_config=None, **kwargs):
+        
         # MESA required attributes
         self.running = True     # Required for batch run
 
         # Time and Step recorder
         self.time_recorder = TimeRecorder()
 
+        self.components = components
+        self.optimization_class = optimization_class
         self.init_year  = init_year
         self.start_year = self.init_year + 1
         self.end_year   = end_year
@@ -153,7 +162,7 @@ class SD6Model(mesa.Model):
         self.lema_wr_name = lema_options[1]
         self.lema_year      = lema_options[2]
         self.show_step = show_step
-
+        
         # mesa has self.random.seed(seed) but it is not usable for truncnorm
         # We create our own random generator.
         self.seed = seed
@@ -206,7 +215,7 @@ class SD6Model(mesa.Model):
         # Initialize aquifer environment (this is not associated with farmers)
         aquifers = {}
         for aqid, aquifer_dict in aquifers_dict.items():
-            agt_aquifer = aquifer_agtType(
+            agt_aquifer = components["aquifer"](
                 unique_id=aqid, 
                 model=self, 
                 settings=aquifer_dict)
@@ -223,7 +232,7 @@ class SD6Model(mesa.Model):
                 field_dict['init']['crop'] = self.rngen.choice(init_crop)
             
             # Initialize fields
-            agt_field = field_agtType(
+            agt_field = components["field"](
                 unique_id=fid,
                 model=self, 
                 settings=field_dict,
@@ -244,7 +253,7 @@ class SD6Model(mesa.Model):
         # Initialize wells
         wells = {}
         for wid, well_dict in wells_dict.items():
-            agt_well = well_agtType(
+            agt_well = components["well"](
                 unique_id=wid, 
                 model=self, 
                 settings=well_dict
@@ -264,7 +273,7 @@ class SD6Model(mesa.Model):
             # Initialize finance
             finance_id = behavior_dict['finance_id']
             finance_dict = finances_dict[finance_id]
-            agt_finance = finance_agtType(
+            agt_finance = components["finance"](
                 unique_id=f"{finance_id}_{behavior_id}", 
                 model=self, 
                 settings=finance_dict
@@ -273,7 +282,7 @@ class SD6Model(mesa.Model):
             finances[behavior_id] = agt_finance # Assume one behavior agent has one finance object
             self.schedule.add(agt_finance)
             
-            agt_behavior = behavior_agtType(
+            agt_behavior = components["behavior"](
                 unique_id=behavior_id, 
                 model=self, 
                 settings=behavior_dict, 
@@ -282,7 +291,7 @@ class SD6Model(mesa.Model):
                 wells={wid: self.wells[wid] for i, wid in enumerate(behavior_dict['well_ids'])}, 
                 finance=agt_finance, 
                 aquifers=self.aquifers,
-                optimization_class=optimization_class,
+                optimization_class=self.optimization_class,
                 # kwargs
                 rngen=self.rngen,   
                 fix_state=fix_state
@@ -490,7 +499,10 @@ class SD6Model(mesa.Model):
         if self.current_year == self.end_year:
             self.running = False
             print("Done!", f"\t{self.time_recorder.get_elapsed_time()}")
-
+    
+    def end(self):
+        pass
+    
     @staticmethod
     def get_dfs(model):
         """

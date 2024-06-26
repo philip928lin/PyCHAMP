@@ -7,9 +7,6 @@ import numpy as np
 import pandas as pd
 import mesa
 from scipy.stats import truncnorm
-<<<<<<< Updated upstream:py_champ/entities/behavior.py
-from .optimization import Optimization
-=======
 #from .optimization import Optimization
 
 class Behavior_1f1w(mesa.Agent):
@@ -734,7 +731,6 @@ class Behavior_1f1w(mesa.Agent):
             dm_sols=self.pre_dm_sols,
             neighbor=neighbor
             )
->>>>>>> Stashed changes:py_champ/components/behavior.py
 
 class Behavior_revised(mesa.Agent):
     """
@@ -848,21 +844,14 @@ class Behavior_revised(mesa.Agent):
     """
     def __init__(self, unique_id, model, settings: dict, pars: dict,
                  fields: dict, wells: dict, finance, aquifers: dict,
-<<<<<<< Updated upstream:py_champ/entities/behavior.py
-                 **kwargs):
-=======
                  optimization_class: object, **kwargs):
->>>>>>> Stashed changes:py_champ/components/behavior.py
         """
         Initialize a Behavior agent in the Mesa model.
         """
         # MESA required attributes => (unique_id, model)
         super().__init__(unique_id, model)
         self.agt_type = "Behavior"
-<<<<<<< Updated upstream:py_champ/entities/behavior.py
-=======
         self.Optimization = optimization_class
->>>>>>> Stashed changes:py_champ/components/behavior.py
 
         # Load other kwargs
         for k, v in kwargs.items():
@@ -1237,9 +1226,6 @@ class Behavior_revised(mesa.Agent):
         dm_dict = self.dm_dict      # decision-making settings
         consumat_dict = self.consumat_dict
 
-<<<<<<< Updated upstream:py_champ/entities/behavior.py
-        dm = Optimization(
-=======
         dm = self.Optimization()
         
         dm.setup_ini_model(
@@ -1992,7 +1978,6 @@ class Behavior(mesa.Agent):
         consumat_dict = self.consumat_dict
 
         dm = self.optimization_class(
->>>>>>> Stashed changes:py_champ/components/behavior.py
             unique_id=self.unique_id,
             LogToConsole=self.gb_dict.get("LogToConsole")
             )
@@ -2250,4 +2235,3 @@ class Behavior(mesa.Agent):
             dm_sols=self.pre_dm_sols,
             neighbor=neighbor
             )
-
