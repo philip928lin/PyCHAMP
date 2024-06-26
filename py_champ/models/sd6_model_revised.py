@@ -4,12 +4,8 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 import mesa
+import gurobipy as gp
 from ..utility.util import TimeRecorder, Indicator
-# from ..components.aquifer import Aquifer
-# from ..components.behavior import Behavior
-# from ..components.field import Field
-# from ..components.well import Well
-# from ..components.finance import Finance
 
 class BaseSchedulerByTypeFiltered(mesa.time.BaseScheduler):
     """
@@ -129,14 +125,16 @@ class SD6Model(mesa.Model):
     and their interactions within the simulated environment. It can be used to study the impacts
     of different agricultural practices and environmental policies.
     """
-    def __init__(self, pars, crop_options, tech_options, area_split,
+    def __init__(self, pars, crop_options, tech_options, area_split, prec_aw_step,
                  aquifers_dict, fields_dict, wells_dict, finances_dict, behaviors_dict, 
                  aquifer_agtType, field_agtType, well_agtType, finance_agtType, behavior_agtType,
                  optimization_class,
-                 prec_aw_step, init_year=2007, end_year=2022,
+                 crop_price_step=None, init_year=2007, end_year=2022,
                  lema_options=(True, 'wr_LEMA_5yr', 2013),
                  fix_state=None, show_step=True,
-                 seed=None, shared_config=None, **kwargs):
+                 seed=None, shared_config=None, 
+                 gurobi_dict={"LogToConsole": 0, "NonConvex": 2, "Presolve": -1},
+                 **kwargs):
         # MESA required attributes
         self.running = True     # Required for batch run
 
@@ -151,7 +149,7 @@ class SD6Model(mesa.Model):
         self.t              = 0                         # This is initial step
         self.lema = lema_options[0]
         self.lema_wr_name = lema_options[1]
-        self.lema_year      = lema_options[2]
+        self.lema_year    = lema_options[2]
         self.show_step = show_step
 
         # mesa has self.random.seed(seed) but it is not usable for truncnorm
@@ -164,7 +162,7 @@ class SD6Model(mesa.Model):
 
         # Input timestep data
         self.prec_aw_step = prec_aw_step    # [prec_aw_id][year][crop]
-        self.crop_price_step = kwargs.get("crop_price_step") # [finance_id][year][crop]
+        self.crop_price_step = crop_price_step # [finance_id][year][crop]
         self.irr_depth_step = kwargs.get("irr_depth_step")
         self.field_type_step = kwargs.get("field_type_step")
         
@@ -172,9 +170,24 @@ class SD6Model(mesa.Model):
         self.area_split = area_split # n_s
         self.crop_options = crop_options # n_c
         self.tech_options = tech_options # n_te
+        
+        # Store agent type
+        self.aquifer_agtType = aquifer_agtType
+        self.field_agtType = field_agtType
+        self.well_agtType = well_agtType
+        self.finance_agtType = finance_agtType
+        self.behavior_agtType = behavior_agtType
+        self.optimization_class = optimization_class
 
         # Create schedule and assign it to the model
         self.schedule = BaseSchedulerByTypeFiltered(self)
+        
+        # Setup Gurobi environment, gpenv
+        self.gpenv = gp.Env(empty=True)
+        for k, v in gurobi_dict.items():
+            self.gpenv.setParam(k, v)
+        self.gpenv.start()
+        
         
         # Copy the dictionaries before correction from shared_config
         aquifers_dict, fields_dict, wells_dict, finances_dict, behaviors_dict = \
@@ -206,7 +219,7 @@ class SD6Model(mesa.Model):
         # Initialize aquifer environment (this is not associated with farmers)
         aquifers = {}
         for aqid, aquifer_dict in aquifers_dict.items():
-            agt_aquifer = aquifer_agtType(
+            agt_aquifer = self.aquifer_agtType(
                 unique_id=aqid, 
                 model=self, 
                 settings=aquifer_dict)
@@ -223,7 +236,7 @@ class SD6Model(mesa.Model):
                 field_dict['init']['crop'] = self.rngen.choice(init_crop)
             
             # Initialize fields
-            agt_field = field_agtType(
+            agt_field = self.field_agtType(
                 unique_id=fid,
                 model=self, 
                 settings=field_dict,
@@ -234,8 +247,6 @@ class SD6Model(mesa.Model):
                 lon=field_dict.get("lon"),
                 x=field_dict.get("x"),
                 y=field_dict.get("y"),
-                regen=self.rngen,
-                field_type_rn=None
                 )
             fields[fid] = agt_field
             self.schedule.add(agt_field)
@@ -244,7 +255,7 @@ class SD6Model(mesa.Model):
         # Initialize wells
         wells = {}
         for wid, well_dict in wells_dict.items():
-            agt_well = well_agtType(
+            agt_well = self.well_agtType(
                 unique_id=wid, 
                 model=self, 
                 settings=well_dict
@@ -264,7 +275,7 @@ class SD6Model(mesa.Model):
             # Initialize finance
             finance_id = behavior_dict['finance_id']
             finance_dict = finances_dict[finance_id]
-            agt_finance = finance_agtType(
+            agt_finance = self.finance_agtType(
                 unique_id=f"{finance_id}_{behavior_id}", 
                 model=self, 
                 settings=finance_dict
@@ -273,7 +284,7 @@ class SD6Model(mesa.Model):
             finances[behavior_id] = agt_finance # Assume one behavior agent has one finance object
             self.schedule.add(agt_finance)
             
-            agt_behavior = behavior_agtType(
+            agt_behavior = self.behavior_agtType(
                 unique_id=behavior_id, 
                 model=self, 
                 settings=behavior_dict, 
@@ -282,7 +293,7 @@ class SD6Model(mesa.Model):
                 wells={wid: self.wells[wid] for i, wid in enumerate(behavior_dict['well_ids'])}, 
                 finance=agt_finance, 
                 aquifers=self.aquifers,
-                optimization_class=optimization_class,
+                optimization_class=self.optimization_class,
                 # kwargs
                 rngen=self.rngen,   
                 fix_state=fix_state
@@ -491,6 +502,11 @@ class SD6Model(mesa.Model):
             self.running = False
             print("Done!", f"\t{self.time_recorder.get_elapsed_time()}")
 
+    def end(self):
+        """Depose the Gurobi environment, ensuring that it is executed only when
+        the instance is no longer needed."""
+        self.gpenv.dispose()
+        
     @staticmethod
     def get_dfs(model):
         """
