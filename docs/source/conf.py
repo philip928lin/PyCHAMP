@@ -22,25 +22,31 @@ version = "1.0.0"
 
 autodoc_member_order = "bysource"
 
-extensions = [  # myst_parse to write in markdown (need to install as well); mathjax for equation
-    "sphinx.ext.duration",
+extensions = [
     "sphinx.ext.doctest",
+    "sphinx.ext.duration",
     "sphinx-prompt",
+    # to include docstrings from modules
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
+    # to link to other Sphinx docs
     "sphinx.ext.intersphinx",
-    "sphinx.ext.napoleon",  # enables Sphinx to parse both NumPy and Google style docstrings
-    "myst_parser",  # to use markdown
-    # "autoapi.extension"
+    # enables Sphinx to parse both NumPy and Google style docstrings
+    "sphinx.ext.napoleon",  
+    # to use markdown
+    "myst_parser",  
 ]
 
-# autoapi_type = 'python'
-# autoapi_dirs = ['../../your/source/code']
+napoleon_numpy_docstring = True
+napoleon_google_docstring = False
 
-intersphinx_mapping = {  # can add numpy and pandas
-    "python": ("https://docs.python.org/3/", None),
+intersphinx_mapping = {
+    'python': ('https://docs.python.org/3.6', None),
+    'pandas': ('http://pandas.pydata.org/pandas-docs/stable/', None),
+    'numpy': ('https://docs.scipy.org/doc/numpy/', None),
     "sphinx": ("https://www.sphinx-doc.org/en/master/", None),
 }
+
 intersphinx_disabled_domains = ["std"]
 
 templates_path = ["_templates"]

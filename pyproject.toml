@@ -19,6 +19,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+doc = [
+    myst_parser
+]
 build = [
     "hatchling",
 ]
