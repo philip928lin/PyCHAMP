@@ -1,11 +1,11 @@
-# -*- coding: utf-8 -*-
 # The code is developed by Chung-Yi Lin at Virginia Tech, in April 2023.
 # Email: chungyi@vt.edu
 # Last modified on Dec 30, 2023
 import warnings
+
+import mesa
 import numpy as np
 import pandas as pd
-import mesa
 from scipy.stats import truncnorm
 
 # from .optimization import Optimization
@@ -13,7 +13,7 @@ from scipy.stats import truncnorm
 
 class Behavior_1f1w(mesa.Agent):
     """
-    This module is a farmer's behavior simulator.
+    Simulate a farmer's behavior.
 
     Parameters
     ----------
@@ -135,9 +135,7 @@ class Behavior_1f1w(mesa.Agent):
         optimization_class: object,
         **kwargs,
     ):
-        """
-        Initialize a Behavior agent in the Mesa model.
-        """
+        """Initialize a Behavior agent in the Mesa model."""
         # MESA required attributes => (unique_id, model)
         super().__init__(unique_id, model)
         self.agt_type = "Behavior"
@@ -414,7 +412,7 @@ class Behavior_1f1w(mesa.Agent):
         well_ids = dm_sols["well_ids"]
         self.irr_vol = sum([field.irr_vol_per_field for _, field in fields.items()])
 
-        for k, wid in enumerate(well_ids):
+        for _k, wid in enumerate(well_ids):
             well = wells[wid]
             # We only take first year optimization solution for simulation.
             withdrawal = self.irr_vol
@@ -751,12 +749,7 @@ class Behavior_1f1w(mesa.Agent):
         """
         selected_behavior_id_in_network = self.selected_behavior_id_in_network
         if selected_behavior_id_in_network is None:
-            try:  # if rngen is given in the model
-                selected_behavior_id_in_network = self.rngen.choice(
-                    self.behavior_ids_in_network
-                )
-            except:
-                selected_behavior_id_in_network = np.random.choice(
+            selected_behavior_id_in_network = self.model.rngen.choice(
                     self.behavior_ids_in_network
                 )
 
@@ -766,9 +759,10 @@ class Behavior_1f1w(mesa.Agent):
             state="Imitation", dm_sols=self.pre_dm_sols, neighbor=neighbor
         )
 
+
 class Behavior(mesa.Agent):
     """
-    This module is a farmer's behavior simulator.
+    Simulate a farmer's behavior.
 
     Parameters
     ----------
@@ -890,9 +884,7 @@ class Behavior(mesa.Agent):
         optimization_class: object,
         **kwargs,
     ):
-        """
-        Initialize a Behavior agent in the Mesa model.
-        """
+        """Initialize a Behavior agent in the Mesa model."""
         # MESA required attributes => (unique_id, model)
         super().__init__(unique_id, model)
         self.agt_type = "Behavior"
@@ -1455,7 +1447,8 @@ class Behavior(mesa.Agent):
         dm_sols = dm.sols
         if dm_sols is None:
             warnings.warn(
-                "Gurobi returns empty solutions (likely due to infeasible problem."
+                "Gurobi returns empty solutions (likely due to infeasible problem.",
+                stacklevel=2
             )
         dm.depose_gp_env()  # Delete the entire environment to release memory.
 
@@ -1556,12 +1549,7 @@ class Behavior(mesa.Agent):
         """
         selected_behavior_id_in_network = self.selected_behavior_id_in_network
         if selected_behavior_id_in_network is None:
-            try:  # if rngen is given in the model
-                selected_behavior_id_in_network = self.rngen.choice(
-                    self.behavior_ids_in_network
-                )
-            except:
-                selected_behavior_id_in_network = np.random.choice(
+            selected_behavior_id_in_network = self.model.rngen.choice(
                     self.behavior_ids_in_network
                 )
 

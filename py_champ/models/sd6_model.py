@@ -1,17 +1,18 @@
-# -*- coding: utf-8 -*-
 from copy import deepcopy
+
+import gurobipy as gp
+import mesa
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-import mesa
-import gurobipy as gp
-from ..utility.util import TimeRecorder, Indicator
+
 from ..components.aquifer import Aquifer
 from ..components.behavior import Behavior
 from ..components.field import Field
-from ..components.well import Well
 from ..components.finance import Finance
 from ..components.optimization import Optimization
+from ..components.well import Well
+from ..utility.util import Indicator, TimeRecorder
 
 
 class BaseSchedulerByTypeFiltered(mesa.time.BaseScheduler):
@@ -20,6 +21,7 @@ class BaseSchedulerByTypeFiltered(mesa.time.BaseScheduler):
     of agents by .agt_type.
 
     Example:
+    -------
     >>> scheduler = BaseSchedulerByTypeFiltered(model)
     >>> scheduler.step(agt_type="Behavior")
     """
@@ -148,23 +150,27 @@ class SD6Model(mesa.Model):
         prec_aw_step,
         init_year=2007,
         end_year=2022,
-        components={
-            "aquifer": Aquifer,
-            "field": Field,
-            "well": Well,
-            "finance": Finance,
-            "behavior": Behavior,
-        },
+        components=None,
         optimization_class=Optimization,
         lema_options=(True, "wr_LEMA_5yr", 2013),
         fix_state=None,
         show_step=True,
         seed=None,
         shared_config=None,
-        gurobi_dict={"LogToConsole": 0, "NonConvex": 2, "Presolve": -1},
+        gurobi_dict=None,
         **kwargs,
     ):
         # MESA required attributes
+        if gurobi_dict is None:
+            gurobi_dict = {"LogToConsole": 0, "NonConvex": 2, "Presolve": -1}
+        if components is None:
+            components = {
+                "aquifer": Aquifer,
+                "field": Field,
+                "well": Well,
+                "finance": Finance,
+                "behavior": Behavior,
+            }
         self.running = True  # Required for batch run
 
         # Time and Step recorder
@@ -272,8 +278,6 @@ class SD6Model(mesa.Model):
                 lon=field_dict.get("lon"),
                 x=field_dict.get("x"),
                 y=field_dict.get("y"),
-                regen=self.rngen,
-                field_type_rn=None,
             )
             fields[fid] = agt_field
             self.schedule.add(agt_field)
@@ -328,7 +332,6 @@ class SD6Model(mesa.Model):
                 aquifers=self.aquifers,
                 optimization_class=self.optimization_class,
                 # kwargs
-                rngen=self.rngen,
                 fix_state=fix_state,
             )
             behaviors[behavior_id] = agt_behavior
@@ -343,13 +346,13 @@ class SD6Model(mesa.Model):
         self.finances = finances
 
         if self.crop_price_step is not None:
-            for unique_id, finance in self.finances.items():
+            for _unique_id, finance in self.finances.items():
                 crop_prices = self.crop_price_step.get(finance.finance_id)
                 if crop_prices is not None:
                     finance.crop_price = crop_prices[self.current_year]
 
         def get_nested_attr(obj, attr_str):
-            """A patch to collect a nested attribute using MESA's datacollector"""
+            """A patch to collect a nested attribute using MESA's datacollector."""
             attrs = attr_str.split(".", 1)
             current_attr = getattr(obj, attrs[0], None)
             if len(attrs) == 1 or current_attr is None:
@@ -362,7 +365,7 @@ class SD6Model(mesa.Model):
             We have to do this to return None if the attribute is not exist
             in the given agent type.
             def func(agent):
-                return getattr(agent, attr, None)
+                return getattr(agent, attr, None).
             """
 
             def get_nested_attr(obj):
@@ -452,7 +455,6 @@ class SD6Model(mesa.Model):
         The method controls the flow of the simulation, ensuring that each agent and component
         of the model acts according to the current time step and the state of the environment.
         """
-
         self.current_year += 1
         self.t += 1
 
@@ -461,7 +463,7 @@ class SD6Model(mesa.Model):
 
         # Update crop price
         if self.crop_price_step is not None:
-            for unique_id, finance in self.finances.items():
+            for _unique_id, finance in self.finances.items():
                 crop_prices = self.crop_price_step.get(finance.finance_id)
                 if crop_prices is not None:
                     finance.crop_price = crop_prices[self.current_year]
@@ -469,7 +471,7 @@ class SD6Model(mesa.Model):
         # Assign field type based on each behavioral agent.
         # irr_depth_step = self.irr_depth_step
         # field_type_step = self.field_type_step
-        for behavior_id, behavior in self.behaviors.items():
+        for _behavior_id, behavior in self.behaviors.items():
             # Randomly select rainfed field
             for fid_, field in behavior.fields.items():
                 rn_irr = True
@@ -549,7 +551,8 @@ class SD6Model(mesa.Model):
 
     def end(self):
         """Depose the Gurobi environment, ensuring that it is executed only when
-        the instance is no longer needed."""
+        the instance is no longer needed.
+        """
         self.gpenv.dispose()
 
     @staticmethod
@@ -684,9 +687,8 @@ class SD6Model(mesa.Model):
     def get_metrices(
         df_sys,
         data,
-        targets=["GW_st", "withdrawal", "rainfed"]
-        + ["corn", "sorghum", "soybeans", "wheat", "fallow"],
-        indicators_list=["r", "rmse", "KGE"],
+        targets=None,
+        indicators_list=None,
     ):
         """
         Calculate various metrics based on system-level data and specified targets.
@@ -710,6 +712,19 @@ class SD6Model(mesa.Model):
         This method is useful for evaluating the performance of the model against real-world data
         or specific objectives, providing insights into the accuracy and reliability of the simulation.
         """
+        if targets is None:
+            targets = [
+                "GW_st",
+                "withdrawal",
+                "rainfed",
+                "corn",
+                "sorghum",
+                "soybeans",
+                "wheat",
+                "fallow",
+            ]
+        if indicators_list is None:
+            indicators_list = ["r", "rmse", "KGE"]
         indicators = Indicator()
         metrices = []
         for tar in targets:
