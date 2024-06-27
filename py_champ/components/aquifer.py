@@ -1,17 +1,13 @@
-# -*- coding: utf-8 -*-
 # The code is developed by Chung-Yi Lin at Virginia Tech, in April 2023.
 # Email: chungyi@vt.edu
 # Last modified on Dec 30, 2023
 import warnings
+
 import mesa
 
 
 class Aquifer(mesa.Agent):
-    """
-    This module is an aquifer simulator based on the KGS-WBM model.
-
-    This class simulates changes in the aquifer's groundwater level, based on
-    water withdrawals.
+    """A class to represent the aquifer component in PyCHAMP based on the KGS-WBM model.
 
 
     Parameters
@@ -43,7 +39,7 @@ class Aquifer(mesa.Agent):
 
 
     Attributes
-    -----------
+    ----------
     agt_type : str
         The type of the agent, set to 'Aquifer'.
     st : float
@@ -58,22 +54,20 @@ class Aquifer(mesa.Agent):
         The current water withdrawal [m-ha], initialized to None.
 
     Notes
-    ------
+    -----
     The unit of water level is meters [m]. The area is expected in hectares [ha].
 
     For more details on the KGS-WBM model, refer to:
 
     Butler, J. J., Whittemore, D. O., Wilson, B. B., & Bohling, G. C. (2018).
     Sustainability of aquifers supporting irrigated agriculture: A case study
-    of the High Plains aquifer in Kansas. Water International, 43(6), 815–828.
+    of the High Plains aquifer in Kansas. Water International, 43(6), 815-828.
     https://doi.org/10.1080/02508060.2018.1515566
 
     """
 
     def __init__(self, unique_id, model, settings: dict):
-        """
-        Initialize an Aquifer agent in the Mesa model.
-        """
+        """Initialize an Aquifer agent in the Mesa model."""
         # MESA required attributes => (unique_id, model)
         super().__init__(unique_id, model)
         self.agt_type = "Aquifer"
@@ -107,7 +101,7 @@ class Aquifer(mesa.Agent):
         self.sy = settings["sy"]
         self.init = settings["init"]
 
-    def step(self, withdrawal: float, inflow: float = None) -> float:
+    def step(self, withdrawal: float, inflow: float | None = None) -> float:
         """
         Perform a single step of the aquifer simulation.
 
@@ -148,6 +142,7 @@ class Aquifer(mesa.Agent):
         # Check st is not negative
         if self.st < 0:
             warnings.warn(
-                f"The saturated thickness is negative in aquifer {self.unique_id}."
+                f"The saturated thickness is negative in aquifer {self.unique_id}.",
+                stacklevel=2
             )
         return dwl
