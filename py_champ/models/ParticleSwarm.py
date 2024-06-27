@@ -2,13 +2,16 @@
 import logging
 import os
 import sys
+
 join = os.path.join
 import dill
+
 sys.setrecursionlimit(10000)
 # Import modules
 import numpy as np
 from joblib import Parallel, delayed
 from joblib.externals.loky import set_loky_pickler
+
 set_loky_pickler("dill")
 
 import matplotlib.pyplot as plt
@@ -19,6 +22,7 @@ from pyswarms.backend.handlers import BoundaryHandler, VelocityHandler, OptionsH
 from pyswarms.base import SwarmOptimizer
 from pyswarms.utils.reporter import Reporter
 from pyswarms.utils.plotters import plot_cost_history
+
 
 class GlobalBestPSO(SwarmOptimizer):
     def __init__(
@@ -36,7 +40,7 @@ class GlobalBestPSO(SwarmOptimizer):
         ftol_iter=1,
         init_pos=None,
         wd=None,
-        load_dict=None
+        load_dict=None,
     ):
         """Initialize the swarm
 
@@ -91,13 +95,15 @@ class GlobalBestPSO(SwarmOptimizer):
             center=center,
             ftol=ftol,
             ftol_iter=ftol_iter,
-            init_pos=init_pos
+            init_pos=init_pos,
         )
 
         if oh_strategy is None:
             oh_strategy = {}
         # Initialize logger
-        self.rep = Reporter(log_path=join(wd, "Report.log"),logger=logging.getLogger(__name__))
+        self.rep = Reporter(
+            log_path=join(wd, "Report.log"), logger=logging.getLogger(__name__)
+        )
         self.wd = wd
         # Initialize the resettable attributes
         if load_dict is None:
@@ -108,7 +114,7 @@ class GlobalBestPSO(SwarmOptimizer):
         self.vh = VelocityHandler(strategy=vh_strategy)
         self.oh = OptionsHandler(strategy=oh_strategy)
         self.name = __name__
-        
+
         # Populate memory of the handlers
         self.bh.memory = self.swarm.position
         self.vh.memory = self.swarm.position
@@ -118,22 +124,20 @@ class GlobalBestPSO(SwarmOptimizer):
             self.culmulated_iter = 0
         else:
             self.swarm = load_dict["swarm"]
-            self.pos_history=load_dict['pos_history']
-            self.cost_history=load_dict['cost_history']
-            self.culmulated_iter=load_dict['culmulated_iter']
-            
+            self.pos_history = load_dict["pos_history"]
+            self.cost_history = load_dict["cost_history"]
+            self.culmulated_iter = load_dict["culmulated_iter"]
+
     def to_dict(self):
         dict_to_save = {
             "swarm": self.swarm,
-            'pos_history': self.pos_history,
-            'cost_history':self.cost_history,
-            'culmulated_iter': self.culmulated_iter,
-            }
+            "pos_history": self.pos_history,
+            "cost_history": self.cost_history,
+            "culmulated_iter": self.culmulated_iter,
+        }
         return dict_to_save
-    
-    def optimize(
-        self, objective_func, iters, n_processes=None, verbose=60, **kwargs
-    ):
+
+    def optimize(self, objective_func, iters, n_processes=None, verbose=60, **kwargs):
         """Optimize the swarm for a number of iterations
 
         Performs the optimization to evaluate the objective
@@ -169,7 +173,7 @@ class GlobalBestPSO(SwarmOptimizer):
             "Optimize for {} iters with {}".format(iters, self.options),
             lvl=log_level,
         )
-        
+
         ftol_history = deque(maxlen=self.ftol_iter)
         for i_iter in self.rep.pbar(iters, self.name) if verbose > 0 else range(iters):
             culmulated_iter = self.culmulated_iter
@@ -178,21 +182,36 @@ class GlobalBestPSO(SwarmOptimizer):
             if n_processes is None:
                 current_cost = []
                 for i_particle in range(self.swarm.n_particles):
-                    current_cost.append(objective_func(positions[i_particle, :], **kwargs, i_iter=culmulated_iter, i_particle=i_particle))
+                    current_cost.append(
+                        objective_func(
+                            positions[i_particle, :],
+                            **kwargs,
+                            i_iter=culmulated_iter,
+                            i_particle=i_particle,
+                        )
+                    )
             else:
                 current_cost = Parallel(n_jobs=n_processes, verbose=verbose)(
-                    delayed(objective_func)(positions[i_particle, :], **kwargs, i_iter=culmulated_iter, i_particle=i_particle) \
-                        for i_particle in range(self.swarm.n_particles))
+                    delayed(objective_func)(
+                        positions[i_particle, :],
+                        **kwargs,
+                        i_iter=culmulated_iter,
+                        i_particle=i_particle,
+                    )
+                    for i_particle in range(self.swarm.n_particles)
+                )
             self.swarm.current_cost = np.array(current_cost)
-                
+
             self.swarm.pbest_pos, self.swarm.pbest_cost = compute_pbest(self.swarm)
             # Set best_cost_yet_found for ftol
             best_cost_yet_found = self.swarm.best_cost
-            self.swarm.best_pos, self.swarm.best_cost = self.top.compute_gbest(self.swarm)
+            self.swarm.best_pos, self.swarm.best_cost = self.top.compute_gbest(
+                self.swarm
+            )
             # fmt: on
             if verbose > 0:
                 self.rep.hook(best_cost=self.swarm.best_cost)
-                
+
             # Save to history
             hist = self.ToHistory(
                 best_cost=self.swarm.best_cost,
@@ -205,8 +224,7 @@ class GlobalBestPSO(SwarmOptimizer):
             # Verify stop criteria based on the relative acceptable cost ftol
             relative_measure = self.ftol * (1 + np.abs(best_cost_yet_found))
             delta = (
-                np.abs(self.swarm.best_cost - best_cost_yet_found)
-                < relative_measure
+                np.abs(self.swarm.best_cost - best_cost_yet_found) < relative_measure
             )
             if i_iter < self.ftol_iter:
                 ftol_history.append(delta)
@@ -215,9 +233,7 @@ class GlobalBestPSO(SwarmOptimizer):
                 if all(ftol_history):
                     break
             # Perform options update  (ignore this for continue optimize)
-            self.swarm.options = self.oh(
-                self.options, iternow=i_iter, itermax=iters
-            )
+            self.swarm.options = self.oh(self.options, iternow=i_iter, itermax=iters)
             # Perform velocity and position updates
             self.swarm.velocity = self.top.compute_velocity(
                 self.swarm, self.velocity_clamp, self.vh, self.bounds
@@ -225,27 +241,24 @@ class GlobalBestPSO(SwarmOptimizer):
             self.swarm.position = self.top.compute_position(
                 self.swarm, self.bounds, self.bh
             )
-            
-            
+
             if verbose > 0:
                 # Plot cost
                 fig, ax = plt.subplots()
                 plot_cost_history(cost_history=self.cost_history, ax=ax)
                 fig.savefig(join(self.wd, "cost_history.png"))
                 plt.close()
-            
+
             # save
             dict_item = self.to_dict()
             with open(join(self.wd, f"PSO_it{culmulated_iter}.pkl"), "wb") as f:
                 dill.dump(dict_item, f)
-            
+
             self.culmulated_iter += 1
-            
+
         # Obtain the final best_cost and the final best_position
         final_best_cost = self.swarm.best_cost.copy()
-        final_best_pos = self.swarm.pbest_pos[
-            self.swarm.pbest_cost.argmin()
-        ].copy()
+        final_best_pos = self.swarm.pbest_pos[self.swarm.pbest_cost.argmin()].copy()
         # Write report in log and return final cost and position
         self.rep.log(
             "Optimization finished | best cost: {}, best pos: {}".format(

@@ -13,6 +13,7 @@ import pandas as pd
 #         for k, v in dicts.items():
 #             setattr(self, k, v)
 
+
 def dict_to_string(dictionary, prefix="", indentor="  ", level=2):
     """Ture a dictionary into a printable string.
     Parameters
@@ -27,22 +28,26 @@ def dict_to_string(dictionary, prefix="", indentor="  ", level=2):
     str
         A printable string.
     """
+
     def dict_to_string_list(dictionary, indentor="  ", count=1, string=[]):
         for key, value in dictionary.items():
             string.append(prefix + indentor * count + str(key))
             if isinstance(value, dict) and count < level:
-                string = dict_to_string_list(value, indentor, count+1, string)
+                string = dict_to_string_list(value, indentor, count + 1, string)
             elif isinstance(value, dict) is False and count == level:
                 string[-1] += ":\t" + str(value)
             else:
-                string.append(prefix + indentor * (count+1) + str(value))
+                string.append(prefix + indentor * (count + 1) + str(value))
         return string
+
     return "\n".join(dict_to_string_list(dictionary, indentor))
 
-class TimeRecorder():
+
+class TimeRecorder:
     def __init__(self):
         self.start = time.monotonic()
         self.records = {}
+
     def get_elapsed_time(self, event=None, strf=True):
         elapsed_time = time.monotonic() - self.start
         if strf:
@@ -50,6 +55,7 @@ class TimeRecorder():
         if event is not None:
             self.records[event] = elapsed_time
         return elapsed_time
+
     @staticmethod
     def sec2str(secs, fmt="%H:%M:%S"):
         return time.strftime(fmt, time.gmtime(secs))
@@ -103,30 +109,35 @@ class Indicator(object):
         """
         x_obv = np.array(x_obv)
         y_sim = np.array(y_sim)
-        index = [True if np.isnan(x) == False and np.isnan(y) == False \
-                    else False for x, y in zip(x_obv, y_sim)]
+        index = [
+            True if np.isnan(x) == False and np.isnan(y) == False else False
+            for x, y in zip(x_obv, y_sim)
+        ]
         x_obv = x_obv[index]
         y_sim = y_sim[index]
-        #print("Usable data ratio = {}/{}.".format(len(index), len(x_obv)))
+        # print("Usable data ratio = {}/{}.".format(len(index), len(x_obv)))
         return x_obv, y_sim
 
     @staticmethod
-    def cal_indicator_df(x_obv, y_sim, index_name="value",
-                         indicators_list=None, r_na=True):
+    def cal_indicator_df(
+        x_obv, y_sim, index_name="value", indicators_list=None, r_na=True
+    ):
         if r_na:
             x_obv, y_sim = Indicator.remove_na(x_obv, y_sim)
-            
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
-            dict = {"r"   : Indicator.r(x_obv, y_sim, False),
-                    "r2"  : Indicator.r2(x_obv, y_sim, False),
-                    "rmse": Indicator.rmse(x_obv, y_sim, False),
-                    "NSE" : Indicator.NSE(x_obv, y_sim, False),
-                    "iNSE": Indicator.iNSE(x_obv, y_sim, False),
-                    "KGE" : Indicator.KGE(x_obv, y_sim, False),
-                    "iKGE": Indicator.iKGE(x_obv, y_sim, False),
-                    "CP"  : Indicator.CP(x_obv, y_sim, False),
-                    "RSR" : Indicator.RSR(x_obv, y_sim, False)}
+            dict = {
+                "r": Indicator.r(x_obv, y_sim, False),
+                "r2": Indicator.r2(x_obv, y_sim, False),
+                "rmse": Indicator.rmse(x_obv, y_sim, False),
+                "NSE": Indicator.NSE(x_obv, y_sim, False),
+                "iNSE": Indicator.iNSE(x_obv, y_sim, False),
+                "KGE": Indicator.KGE(x_obv, y_sim, False),
+                "iKGE": Indicator.iKGE(x_obv, y_sim, False),
+                "CP": Indicator.CP(x_obv, y_sim, False),
+                "RSR": Indicator.RSR(x_obv, y_sim, False),
+            }
             df = pd.DataFrame(dict, index=[index_name])
             if indicators_list is None:
                 return df
@@ -153,7 +164,7 @@ class Indicator(object):
         """
         if r_na:
             x_obv, y_sim = Indicator.remove_na(x_obv, y_sim)
-        r = np.corrcoef(x_obv, y_sim)[0,1]
+        r = np.corrcoef(x_obv, y_sim)[0, 1]
         if np.isnan(r):
             # We don't consider 2 identical horizontal line as r = 1!
             r = 0
@@ -200,7 +211,7 @@ class Indicator(object):
         """
         if r_na:
             x_obv, y_sim = Indicator.remove_na(x_obv, y_sim)
-        return np.nanmean((x_obv - y_sim)**2)**0.5
+        return np.nanmean((x_obv - y_sim) ** 2) ** 0.5
 
     @staticmethod
     def NSE(x_obv, y_sim, r_na=False):
@@ -222,10 +233,9 @@ class Indicator(object):
         """
         if r_na:
             x_obv, y_sim = Indicator.remove_na(x_obv, y_sim)
-        
 
         mu_xObv = np.nanmean(x_obv)
-        return 1 - np.nansum((y_sim-x_obv)**2) / np.nansum((x_obv-mu_xObv)**2)
+        return 1 - np.nansum((y_sim - x_obv) ** 2) / np.nansum((x_obv - mu_xObv) ** 2)
 
     @staticmethod
     def iNSE(x_obv, y_sim, r_na=False):
@@ -251,15 +261,15 @@ class Indicator(object):
         if np.nanmean(x_obv) == 0:
             x_obv = 1 / (x_obv + 0.0000001)
         else:
-            x_obv = 1 / (x_obv + 0.01*np.nanmean(x_obv))
+            x_obv = 1 / (x_obv + 0.01 * np.nanmean(x_obv))
 
         if np.nanmean(y_sim) == 0:
             y_sim = 1 / (y_sim + 0.0000001)
         else:
-            y_sim = 1 / (y_sim + 0.01*np.nanmean(y_sim))
-        
+            y_sim = 1 / (y_sim + 0.01 * np.nanmean(y_sim))
+
         mu_xObv = np.nanmean(x_obv)
-        return 1 - np.nansum((y_sim-x_obv)**2) / np.nansum((x_obv-mu_xObv)**2)
+        return 1 - np.nansum((y_sim - x_obv) ** 2) / np.nansum((x_obv - mu_xObv) ** 2)
 
     @staticmethod
     def CP(x_obv, y_sim, r_na=False):
@@ -281,10 +291,10 @@ class Indicator(object):
         """
         if r_na:
             x_obv, y_sim = Indicator.remove_na(x_obv, y_sim)
-        a = np.nansum((x_obv[1:] - x_obv[:-1])**2)
+        a = np.nansum((x_obv[1:] - x_obv[:-1]) ** 2)
         if a == 0:
             a = 0.0000001
-        return 1 - np.nansum((x_obv[1:] - y_sim[1:])**2) / a
+        return 1 - np.nansum((x_obv[1:] - y_sim[1:]) ** 2) / a
 
     @staticmethod
     def RSR(x_obv, y_sim, r_na=False):
@@ -329,12 +339,20 @@ class Indicator(object):
         """
         if r_na:
             x_obv, y_sim = Indicator.remove_na(x_obv, y_sim)
-        
-        mu_ySim = np.nanmean(y_sim); mu_xObv = np.nanmean(x_obv)
-        sig_ySim = np.nanstd(y_sim); sig_xObv = np.nanstd(x_obv)
-        kge = 1 - ((Indicator.r(x_obv, y_sim, False) - 1)**2
-                    + (sig_ySim/sig_xObv - 1)**2
-                    + (mu_ySim/mu_xObv - 1)**2)**0.5
+
+        mu_ySim = np.nanmean(y_sim)
+        mu_xObv = np.nanmean(x_obv)
+        sig_ySim = np.nanstd(y_sim)
+        sig_xObv = np.nanstd(x_obv)
+        kge = (
+            1
+            - (
+                (Indicator.r(x_obv, y_sim, False) - 1) ** 2
+                + (sig_ySim / sig_xObv - 1) ** 2
+                + (mu_ySim / mu_xObv - 1) ** 2
+            )
+            ** 0.5
+        )
         return kge
 
     @staticmethod
@@ -360,20 +378,26 @@ class Indicator(object):
 
         # Prevent dividing zero.
         if np.nanmean(x_obv) == 0:
-            x_obv = 1/(x_obv + 0.0000001)
+            x_obv = 1 / (x_obv + 0.0000001)
         else:
-            x_obv = 1/(x_obv + 0.01*np.nanmean(x_obv))
+            x_obv = 1 / (x_obv + 0.01 * np.nanmean(x_obv))
 
         if np.nanmean(y_sim) == 0:
-            y_sim = 1/(y_sim + 0.0000001)
+            y_sim = 1 / (y_sim + 0.0000001)
         else:
-            y_sim = 1/(y_sim + 0.01*np.nanmean(y_sim))
-        
-        mu_ySim = np.nanmean(y_sim); mu_xObv = np.nanmean(x_obv)
-        sig_ySim = np.nanstd(y_sim); sig_xObv = np.nanstd(x_obv)
-        ikge = 1 - ((Indicator.r(x_obv, y_sim, False) - 1)**2
-                    + (sig_ySim/sig_xObv - 1)**2
-                    + (mu_ySim/mu_xObv - 1)**2)**0.5
+            y_sim = 1 / (y_sim + 0.01 * np.nanmean(y_sim))
+
+        mu_ySim = np.nanmean(y_sim)
+        mu_xObv = np.nanmean(x_obv)
+        sig_ySim = np.nanstd(y_sim)
+        sig_xObv = np.nanstd(x_obv)
+        ikge = (
+            1
+            - (
+                (Indicator.r(x_obv, y_sim, False) - 1) ** 2
+                + (sig_ySim / sig_xObv - 1) ** 2
+                + (mu_ySim / mu_xObv - 1) ** 2
+            )
+            ** 0.5
+        )
         return ikge
-
-
