@@ -22,7 +22,7 @@ version = "1.0.0"
 
 autodoc_member_order = "bysource"
 
-extensions = [
+extensions = [  # myst_parse to write in markdown (need to install as well); mathjax for equation
     "sphinx.ext.duration",
     "sphinx.ext.doctest",
     "sphinx-prompt",
@@ -37,7 +37,7 @@ extensions = [
 # autoapi_type = 'python'
 # autoapi_dirs = ['../../your/source/code']
 
-intersphinx_mapping = {
+intersphinx_mapping = {  # can add numpy and pandas
     "python": ("https://docs.python.org/3/", None),
     "sphinx": ("https://www.sphinx-doc.org/en/master/", None),
 }
@@ -50,7 +50,6 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 numfig = True
 
 # -- Options for HTML output
-import sphinx_rtd_theme
 
 html_theme = "sphinx_rtd_theme"
 

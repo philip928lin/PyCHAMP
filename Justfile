@@ -19,7 +19,7 @@ clean:
 
 # install with all deps
 install:
-    pip install -e .[lint,test,dev]
+    pip install -e .[lint,build,dev]
 
 # lint, format, and check all files
 lint:
