@@ -15,6 +15,7 @@ dependencies = [
   "gurobipy",
   "scipy",
   "joblib",
+  "pyswarms",
   "mesa==2.1.1"
 ]
 
