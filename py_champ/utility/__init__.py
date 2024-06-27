@@ -1,3 +1,1 @@
-"""
-This is the utility subpackage of PyCHAMP.
-"""
+"""Provides utility functions and classes for the PyCHAMP package."""

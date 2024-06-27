@@ -1,27 +1,23 @@
-# -*- coding: utf-8 -*-
-# The code is developed by Chung-Yi Lin at Virginia Tech, in April 2023.
-# Email: chungyi@vt.edu
-# Last modified on Dec 30, 2023
 import time
 import warnings
+
 import numpy as np
 import pandas as pd
-
-# class Box():
-#     def __init__(self, dicts):
-#         """A container that enable dotted access."""
-#         for k, v in dicts.items():
-#             setattr(self, k, v)
 
 
 def dict_to_string(dictionary, prefix="", indentor="  ", level=2):
     """Ture a dictionary into a printable string.
+
     Parameters
     ----------
     dictionary : dict
         A dictionary.
+    prefix : str, optional
+        Prefix, by default "".
     indentor : str, optional
         Indentor, by default "  ".
+    level : int, optional
+        Level of indentation, by default 2.
 
     Returns
     -------
@@ -29,7 +25,10 @@ def dict_to_string(dictionary, prefix="", indentor="  ", level=2):
         A printable string.
     """
 
-    def dict_to_string_list(dictionary, indentor="  ", count=1, string=[]):
+    def dict_to_string_list(dictionary, indentor="  ", count=1, string=None):
+        """Convert dictionary to string list."""
+        if string is None:
+            string = []
         for key, value in dictionary.items():
             string.append(prefix + indentor * count + str(key))
             if isinstance(value, dict) and count < level:
@@ -44,11 +43,27 @@ def dict_to_string(dictionary, prefix="", indentor="  ", level=2):
 
 
 class TimeRecorder:
+    """A class for recording time."""
+
     def __init__(self):
         self.start = time.monotonic()
         self.records = {}
 
     def get_elapsed_time(self, event=None, strf=True):
+        """Get elapsed time since the start of the recorder.
+
+        Parameters
+        ----------
+        event : str, optional
+            Record event, by default None.
+        strf : bool, optional
+            Convert seconds to string format, by default True.
+
+        Returns
+        -------
+        float or str
+        Elapsed time or string format of the elapsed time.
+        """
         elapsed_time = time.monotonic() - self.start
         if strf:
             elapsed_time = time.strftime("%H:%M:%S", time.gmtime(elapsed_time))
@@ -58,31 +73,47 @@ class TimeRecorder:
 
     @staticmethod
     def sec2str(secs, fmt="%H:%M:%S"):
+        """Convert seconds to string format.
+
+        Parameters
+        ----------
+        secs : int
+            Seconds.
+        fmt : str, optional
+            Format, by default "%H:%M:%S".
+
+        Returns
+        -------
+        str
+            A string.
+        """
         return time.strftime(fmt, time.gmtime(secs))
 
 
 # Indicator module
 # adopted from Chung-Yi Lin @ Lehigh University (philip928lin@gmail.com)
 # Last update at 2021/12/23.
-class Indicator(object):
+class Indicator:
+    """A class for calculating indicators."""
+
     def __init__(self) -> None:
-        """A class containing following indicator functions.
+        """Initialize an Indicator class to manage various hydrological calculations.
 
         r   : Correlation of correlation
         r2  : Coefficient of determination
         rmse: Root mean square error
-        NSE : Nash–Sutcliffe efficiency
-        iNSE: NSE with inverse transformed Q.
-        CP  : Correlation of persistence
-        RSR : RMSE-observations standard deviation ratio
-        KGE : Kling–Gupta efficiency
-        iKGE: KGE with inverse transformed Q.
+        nse : Nash-Sutcliffe efficiency
+        inse: nse with inverse transformed Q.
+        cp  : Correlation of persistence
+        rsr : RMSE-observations standard deviation ratio
+        kge : Kling-Gupta efficiency
+        ikge: kge with inverse transformed Q.
 
         Note
         ----
         The code is adopted from HydroCNHS (Lin et al., 2022).
         Lin, C. Y., Yang, Y. C. E., & Wi, S. (2022). HydroCNHS: A Python Package of
-        Hydrological Model for Coupled Natural–Human Systems. Journal of Water
+        Hydrological Model for Coupled Natural-Human Systems. Journal of Water
         Resources Planning and Management, 148(12), 06022005.
         """
         pass
@@ -110,8 +141,8 @@ class Indicator(object):
         x_obv = np.array(x_obv)
         y_sim = np.array(y_sim)
         index = [
-            True if np.isnan(x) == False and np.isnan(y) == False else False
-            for x, y in zip(x_obv, y_sim)
+            True if np.isnan(x) is False and np.isnan(y) is False else False
+            for x, y in zip(x_obv, y_sim, strict=True)
         ]
         x_obv = x_obv[index]
         y_sim = y_sim[index]
@@ -122,30 +153,50 @@ class Indicator(object):
     def cal_indicator_df(
         x_obv, y_sim, index_name="value", indicators_list=None, r_na=True
     ):
+        """Calculate indicators and return as a DataFrame.
+
+        Parameters
+        ----------
+        x_obv : array
+            Observation data.
+        y_sim : array
+            Simulation data.
+        index_name : str, optional
+            Index name, by default "value".
+        indicators_list : list, optional
+            List of indicators, by default None.
+        r_na : bool, optional
+            Remove nan, by default True.
+
+        Returns
+        -------
+        DataFrame
+            A DataFrame of indicators.
+        """
         if r_na:
             x_obv, y_sim = Indicator.remove_na(x_obv, y_sim)
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
-            dict = {
-                "r": Indicator.r(x_obv, y_sim, False),
-                "r2": Indicator.r2(x_obv, y_sim, False),
-                "rmse": Indicator.rmse(x_obv, y_sim, False),
-                "NSE": Indicator.NSE(x_obv, y_sim, False),
-                "iNSE": Indicator.iNSE(x_obv, y_sim, False),
-                "KGE": Indicator.KGE(x_obv, y_sim, False),
-                "iKGE": Indicator.iKGE(x_obv, y_sim, False),
-                "CP": Indicator.CP(x_obv, y_sim, False),
-                "RSR": Indicator.RSR(x_obv, y_sim, False),
+            indicators_dict = {
+                "r": Indicator.get_r(x_obv, y_sim, False),
+                "r2": Indicator.get_r2(x_obv, y_sim, False),
+                "rmse": Indicator.get_rmse(x_obv, y_sim, False),
+                "nse": Indicator.get_nse(x_obv, y_sim, False),
+                "inse": Indicator.get_inse(x_obv, y_sim, False),
+                "kge": Indicator.get_kge(x_obv, y_sim, False),
+                "ikge": Indicator.get_ikge(x_obv, y_sim, False),
+                "cp": Indicator.get_cp(x_obv, y_sim, False),
+                "rsr": Indicator.get_rsr(x_obv, y_sim, False),
             }
-            df = pd.DataFrame(dict, index=[index_name])
+            df = pd.DataFrame(indicators_dict, index=[index_name])
             if indicators_list is None:
                 return df
             else:
                 return df.loc[:, indicators_list]
 
     @staticmethod
-    def r(x_obv, y_sim, r_na=True):
+    def get_r(x_obv, y_sim, r_na=True):
         """Correlation.
 
         Parameters
@@ -171,7 +222,7 @@ class Indicator(object):
         return r
 
     @staticmethod
-    def r2(x_obv, y_sim, r_na=True):
+    def get_r2(x_obv, y_sim, r_na=True):
         """Coefficient of determination.
 
         Parameters
@@ -192,7 +243,7 @@ class Indicator(object):
         return r**2
 
     @staticmethod
-    def rmse(x_obv, y_sim, r_na=False):
+    def get_rmse(x_obv, y_sim, r_na=False):
         """Root mean square error.
 
         Parameters
@@ -214,8 +265,8 @@ class Indicator(object):
         return np.nanmean((x_obv - y_sim) ** 2) ** 0.5
 
     @staticmethod
-    def NSE(x_obv, y_sim, r_na=False):
-        """Nash–Sutcliffe efficiency.
+    def get_nse(x_obv, y_sim, r_na=False):
+        """Nash-Sutcliffe efficiency.
 
         Parameters
         ----------
@@ -229,7 +280,7 @@ class Indicator(object):
         Returns
         -------
         float
-            Nash–Sutcliffe efficiency.
+            Nash-Sutcliffe efficiency.
         """
         if r_na:
             x_obv, y_sim = Indicator.remove_na(x_obv, y_sim)
@@ -238,8 +289,8 @@ class Indicator(object):
         return 1 - np.nansum((y_sim - x_obv) ** 2) / np.nansum((x_obv - mu_xObv) ** 2)
 
     @staticmethod
-    def iNSE(x_obv, y_sim, r_na=False):
-        """Inverse Nash–Sutcliffe efficiency.
+    def get_inse(x_obv, y_sim, r_na=False):
+        """Inverse Nash-Sutcliffe efficiency.
 
         Parameters
         ----------
@@ -253,7 +304,7 @@ class Indicator(object):
         Returns
         -------
         float
-            Inverse Nash–Sutcliffe efficiency.
+            Inverse Nash-Sutcliffe efficiency.
         """
         if r_na:
             x_obv, y_sim = Indicator.remove_na(x_obv, y_sim)
@@ -272,7 +323,7 @@ class Indicator(object):
         return 1 - np.nansum((y_sim - x_obv) ** 2) / np.nansum((x_obv - mu_xObv) ** 2)
 
     @staticmethod
-    def CP(x_obv, y_sim, r_na=False):
+    def get_cp(x_obv, y_sim, r_na=False):
         """Correlation of persistence.
 
         Parameters
@@ -297,7 +348,7 @@ class Indicator(object):
         return 1 - np.nansum((x_obv[1:] - y_sim[1:]) ** 2) / a
 
     @staticmethod
-    def RSR(x_obv, y_sim, r_na=False):
+    def get_rsr(x_obv, y_sim, r_na=False):
         """RMSE-observations standard deviation ratio.
 
         Parameters
@@ -320,8 +371,8 @@ class Indicator(object):
         return Indicator.rmse(x_obv, y_sim) / sig_xObv
 
     @staticmethod
-    def KGE(x_obv, y_sim, r_na=True):
-        """Kling–Gupta efficiency.
+    def get_kge(x_obv, y_sim, r_na=True):
+        """Kling-Gupta efficiency.
 
         Parameters
         ----------
@@ -335,7 +386,7 @@ class Indicator(object):
         Returns
         -------
         float
-            Kling–Gupta efficiency.
+            Kling-Gupta efficiency.
         """
         if r_na:
             x_obv, y_sim = Indicator.remove_na(x_obv, y_sim)
@@ -356,8 +407,8 @@ class Indicator(object):
         return kge
 
     @staticmethod
-    def iKGE(x_obv, y_sim, r_na=True):
-        """Inverse Kling–Gupta efficiency.
+    def get_ikge(x_obv, y_sim, r_na=True):
+        """Inverse Kling-Gupta efficiency.
 
         Parameters
         ----------
@@ -371,7 +422,7 @@ class Indicator(object):
         Returns
         -------
         float
-            Inverse Kling–Gupta efficiency.
+            Inverse Kling-Gupta efficiency.
         """
         if r_na:
             x_obv, y_sim = Indicator.remove_na(x_obv, y_sim)
