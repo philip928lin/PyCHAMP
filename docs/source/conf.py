@@ -32,18 +32,18 @@ extensions = [
     # to link to other Sphinx docs
     "sphinx.ext.intersphinx",
     # enables Sphinx to parse both NumPy and Google style docstrings
-    "sphinx.ext.napoleon",  
+    "sphinx.ext.napoleon",
     # to use markdown
-    "myst_parser",  
+    "myst_parser",
 ]
 
 napoleon_numpy_docstring = True
 napoleon_google_docstring = False
 
 intersphinx_mapping = {
-    'python': ('https://docs.python.org/3.6', None),
-    'pandas': ('http://pandas.pydata.org/pandas-docs/stable/', None),
-    'numpy': ('https://docs.scipy.org/doc/numpy/', None),
+    "python": ("https://docs.python.org/3.6", None),
+    "pandas": ("http://pandas.pydata.org/pandas-docs/stable/", None),
+    "numpy": ("https://docs.scipy.org/doc/numpy/", None),
     "sphinx": ("https://www.sphinx-doc.org/en/master/", None),
 }
 

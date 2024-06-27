@@ -20,7 +20,7 @@ dependencies = [
 
 [project.optional-dependencies]
 doc = [
-    myst_parser
+    "myst_parser"
 ]
 build = [
     "hatchling",
