@@ -133,11 +133,11 @@ class SD6Model_1f1w(mesa.Model):
         wells_dict,
         finances_dict,
         behaviors_dict,
-        aquifer_agtType,
-        field_agtType,
-        well_agtType,
-        finance_agtType,
-        behavior_agtType,
+        aquifer_agt_type,
+        field_agt_type,
+        well_agt_type,
+        finance_agt_type,
+        behavior_agt_type,
         optimization_class,
         init_year=2007,
         end_year=2022,
@@ -176,11 +176,11 @@ class SD6Model_1f1w(mesa.Model):
         self.pars = pars
 
         # Store agent type
-        self.aquifer_agtType = aquifer_agtType
-        self.field_agtType = field_agtType
-        self.well_agtType = well_agtType
-        self.finance_agtType = finance_agtType
-        self.behavior_agtType = behavior_agtType
+        self.aquifer_agt_type = aquifer_agt_type
+        self.field_agt_type = field_agt_type
+        self.well_agt_type = well_agt_type
+        self.finance_agt_type = finance_agt_type
+        self.behavior_agt_type = behavior_agt_type
         self.optimization_class = optimization_class
 
         # Input timestep data
@@ -213,7 +213,7 @@ class SD6Model_1f1w(mesa.Model):
         # Initialize aquifer environment (this is not associated with farmers)
         aquifers = {}
         for aqid, aquifer_dict in aquifers_dict.items():
-            agt_aquifer = self.aquifer_agtType(
+            agt_aquifer = self.aquifer_agt_type(
                 unique_id=aqid, model=self, settings=aquifer_dict
             )
             aquifers[aqid] = agt_aquifer
@@ -229,7 +229,7 @@ class SD6Model_1f1w(mesa.Model):
                 field_dict["init"]["crop"] = self.rngen.choice(init_crop)
 
             # Initialize fields
-            agt_field = self.field_agtType(
+            agt_field = self.field_agt_type(
                 unique_id=fid,
                 model=self,
                 settings=field_dict,
@@ -248,7 +248,7 @@ class SD6Model_1f1w(mesa.Model):
         # Initialize wells
         wells = {}
         for wid, well_dict in wells_dict.items():
-            agt_well = self.well_agtType(unique_id=wid, model=self, settings=well_dict)
+            agt_well = self.well_agt_type(unique_id=wid, model=self, settings=well_dict)
             wells[wid] = agt_well
             self.schedule.add(agt_well)
         self.wells = wells
@@ -266,7 +266,7 @@ class SD6Model_1f1w(mesa.Model):
             # Initialize finance
             finance_id = behavior_dict["finance_id"]
             finance_dict = finances_dict[finance_id]
-            agt_finance = self.finance_agtType(
+            agt_finance = self.finance_agt_type(
                 unique_id=f"{finance_id}_{behavior_id}",
                 model=self,
                 settings=finance_dict,
@@ -277,7 +277,7 @@ class SD6Model_1f1w(mesa.Model):
             ] = agt_finance  # Assume one behavior agent has one finance object
             self.schedule.add(agt_finance)
 
-            agt_behavior = self.behavior_agtType(
+            agt_behavior = self.behavior_agt_type(
                 unique_id=behavior_id,
                 model=self,
                 settings=behavior_dict,
