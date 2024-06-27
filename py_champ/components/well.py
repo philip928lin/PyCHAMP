@@ -1,9 +1,8 @@
-# -*- coding: utf-8 -*-
 # The code is developed by Chung-Yi Lin at Virginia Tech, in April 2023.
 # Email: chungyi@vt.edu
 # Last modified on Dec 30, 2023
-import numpy as np
 import mesa
+import numpy as np
 
 
 class Well(mesa.Agent):
@@ -76,9 +75,7 @@ class Well(mesa.Agent):
     """
 
     def __init__(self, unique_id, model, settings: dict, **kwargs):
-        """
-        Initialize a Well agent in the Mesa model.
-        """
+        """Initialize a Well agent in the Mesa model."""
         # MESA required attributes => (unique_id, model)
         super().__init__(unique_id, model)
         self.agt_type = "Well"
@@ -124,7 +121,7 @@ class Well(mesa.Agent):
         dwl: float,
         pumping_rate: float,
         l_pr: float,
-        pumping_days: int = None,
+        pumping_days: int | None = None,
     ) -> float:
         """
         Perform a single step of well simulation, calculating the energy consumption.

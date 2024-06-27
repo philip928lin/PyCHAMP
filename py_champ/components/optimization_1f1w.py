@@ -1,9 +1,9 @@
-# -*- coding: utf-8 -*-
 # The code is developed by Chung-Yi Lin at Virginia Tech, in May 2024.
 # Email: chungyi@vt.edu
 import json
-import numpy as np
+
 import gurobipy as gp
+import numpy as np
 
 
 class Optimization_1f1w:
@@ -20,9 +20,11 @@ class Optimization_1f1w:
         unique_id,
         gpenv,
         horizon=1,
-        crop_options=["corn", "sorghum", "soybeans", "fallow"],
+        crop_options=None,
     ):
         ## Basic information
+        if crop_options is None:
+            crop_options = ["corn", "sorghum", "soybeans", "fallow"]
         self.unique_id = unique_id
         self.horizon = horizon
         self.crop_options = crop_options
@@ -41,7 +43,7 @@ class Optimization_1f1w:
 
         ## Optimization Model
         self.model = gp.Model(name=unique_id, env=gpenv)
-        self.vars = {}  # A container to store variables.
+        self.vars_ = {}  # A container to store variables.
         self.bounds = {}
         self.inf = float("inf")
 
@@ -64,13 +66,13 @@ class Optimization_1f1w:
         profit = m.addMVar((n_h), vtype="C", name="profit(1e4$)", lb=-inf, ub=inf)
 
         ## Record variables
-        self.vars["irr_depth"] = irr_depth
-        self.vars["v"] = v
-        self.vars["y"] = y
-        self.vars["e"] = e
+        self.vars_["irr_depth"] = irr_depth
+        self.vars_["v"] = v
+        self.vars_["y"] = y
+        self.vars_["e"] = e
         ## Average values over fields
-        self.vars["y_y"] = y_y
-        self.vars["profit"] = profit
+        self.vars_["y_y"] = y_y
+        self.vars_["profit"] = profit
 
         ## Record msg about the user inputs.
         self.msg = {}
@@ -159,10 +161,10 @@ class Optimization_1f1w:
         i_rainfed = m.addMVar((n_c, 1), vtype="B", name=f"{fid}.i_rainfed")
 
         ## Extract global opt variables
-        irr_depth = self.vars["irr_depth"]
-        y = self.vars["y"]
-        y_y = self.vars["y_y"]
-        v = self.vars["v"]
+        irr_depth = self.vars_["irr_depth"]
+        y = self.vars_["y"]
+        y_y = self.vars_["y_y"]
+        v = self.vars_["v"]
 
         ## Given crop type input
         if i_crop_input is not None:
@@ -241,10 +243,10 @@ class Optimization_1f1w:
             y_y == gp.quicksum(y_[j, :] for j in range(n_c)), name=f"c.{fid}.y_y"
         )
 
-        self.vars[fid] = {}
-        self.vars[fid]["i_crop"] = i_crop
-        self.vars[fid]["i_rainfed"] = i_rainfed
-        self.vars[fid]["field_type"] = field_type
+        self.vars_[fid] = {}
+        self.vars_[fid]["i_crop"] = i_crop
+        self.vars_[fid]["i_rainfed"] = i_rainfed
+        self.vars_[fid]["field_type"] = field_type
 
         self.n_fields += 1
 
@@ -265,7 +267,7 @@ class Optimization_1f1w:
         m = self.model
         n_h = self.n_h
 
-        v = self.vars["v"]
+        v = self.vars_["v"]
         if pumping_capacity is not None:
             m.addConstr((v <= pumping_capacity), name=f"c.{wid}.pumping_capacity")
 
@@ -287,7 +289,7 @@ class Optimization_1f1w:
         AaB = A * tech_a * B  # (n_h)
         A_L_bB = A * (l_wt + l_pr + tech_b * B)  # (n_h)
 
-        e = self.vars["e"]
+        e = self.vars_["e"]
         m.addConstr((e == AaB * v * v + A_L_bB * v), name=f"c.{wid}.e(PJ)")
 
         self.n_wells += 1
@@ -297,7 +299,7 @@ class Optimization_1f1w:
         crop_options = self.crop_options
         n_h = self.n_h
         inf = self.inf
-        vars = self.vars
+        vars_ = self.vars_
 
         energy_price = finance_dict["energy_price"]  # [1e4$/PJ]
         crop_profit = {
@@ -306,8 +308,8 @@ class Optimization_1f1w:
         }
         cost_tech = 1.876  # center pivot LEPA
 
-        e = vars["e"]  # (n_h) [PJ]
-        y = vars["y"]  # (n_c, n_h) [1e4 bu]
+        e = vars_["e"]  # (n_h) [PJ]
+        y = vars_["y"]  # (n_c, n_h) [1e4 bu]
 
         cost_e = m.addMVar((n_h), vtype="C", name="cost_e(1e4$)", lb=0, ub=inf)
         rev = m.addMVar((n_h), vtype="C", name="rev(1e4$)", lb=-inf, ub=inf)
@@ -325,9 +327,9 @@ class Optimization_1f1w:
             ),
             name="c.rev",
         )
-        vars["rev"] = rev
-        vars["cost_e"] = cost_e
-        vars["other_cost"] = annual_cost
+        vars_["rev"] = rev
+        vars_["cost_e"] = cost_e
+        vars_["other_cost"] = annual_cost
 
         # Note the average profit per field is calculated in finish_setup().
         # That way we can ensure the final field numbers added by users.
@@ -385,13 +387,12 @@ class Optimization_1f1w:
         None.
 
         """
-
         m = self.model
         n_h = self.n_h
         n_c = self.n_c
-        vars = self.vars
+        vars_ = self.vars_
 
-        irr_sub = vars["irr_depth"]
+        irr_sub = vars_["irr_depth"]
 
         # Initial period
         # The structure is to fit within a larger simulation framework, which
@@ -479,7 +480,7 @@ class Optimization_1f1w:
     def setup_obj(
         self,
         target="profit",
-        consumat_dict={"alpha": {"profit": 1}, "scale": {"profit": 0.23 * 50}},
+        consumat_dict=None,
     ):
         """
         This method sets the objective of the optimization model, i.e., to maximize the agent's expected satisfaction. Note
@@ -493,18 +494,19 @@ class Optimization_1f1w:
         None.
 
         """
-
+        if consumat_dict is None:
+            consumat_dict = {"alpha": {"profit": 1}, "scale": {"profit": 0.23 * 50}}
         self.target = target
 
         # For consumat
         self.alphas = consumat_dict["alpha"]
         self.scales = consumat_dict["scale"]
 
-        vars = self.vars
+        vars_ = self.vars_
 
         # Currently supported metrices
         # We use average value per field (see finish_setup())
-        eval_metric_vars = {"profit": vars["profit"], "yield_rate": vars["y_y"]}
+        eval_metric_vars = {"profit": vars_["profit"], "yield_rate": vars_["y_y"]}
 
         if target not in eval_metric_vars:
             print(f"{target} is not a valid metric.")
@@ -513,7 +515,7 @@ class Optimization_1f1w:
         m = self.model
         n_h = self.n_h
 
-        vars["Sa"] = {}
+        vars_["Sa"] = {}
 
         def add_metric(metric):
             # fakeSa will be forced to be nonnegative later on for Sa calculation
@@ -523,11 +525,11 @@ class Optimization_1f1w:
                 (fakeSa == gp.quicksum(metric_var[h] for h in range(n_h)) / n_h),
                 name=f"c.Sa.{metric}",
             )
-            vars["Sa"][metric] = fakeSa  # fake Sa for each metric (profit and y_Y)
+            vars_["Sa"][metric] = fakeSa  # fake Sa for each metric (profit and y_Y)
 
         # Add objective
         add_metric(target)
-        m.setObjective(vars["Sa"][target], gp.GRB.MAXIMIZE)
+        m.setObjective(vars_["Sa"][target], gp.GRB.MAXIMIZE)
         self.obj_post_calculation = True
 
     def finish_setup(self, display_summary=True):
@@ -545,14 +547,14 @@ class Optimization_1f1w:
 
         """
         m = self.model
-        vars = self.vars
+        vars_ = self.vars_
         n_f = self.n_fields
 
         # Calculate average value per field
-        profit = vars["profit"]
-        rev = vars["rev"]
-        cost_e = vars["cost_e"]
-        annual_cost = vars["other_cost"]
+        profit = vars_["profit"]
+        rev = vars_["rev"]
+        cost_e = vars_["cost_e"]
+        annual_cost = vars_["other_cost"]
         m.addConstr((profit == (rev - cost_e - annual_cost) / n_f), name="c.profit")
 
         m.update()
@@ -577,7 +579,7 @@ class Optimization_1f1w:
     def solve(
         self, keep_gp_model=False, keep_gp_output=False, display_report=True, **kwargs
     ):
-        def extract_sol(vars):
+        def extract_sol(vars_):
             sols = {}
 
             def get_inner_dict(d, new_dict):
@@ -593,7 +595,7 @@ class Optimization_1f1w:
                         except:
                             new_dict[k] = v  # for all others
 
-            get_inner_dict(vars, sols)
+            get_inner_dict(vars_, sols)
             return sols
 
         ## Solving model
@@ -604,7 +606,7 @@ class Optimization_1f1w:
         # Optimal solution found or reach time limit
         if m.Status == 2 or m.Status == 9:
             self.optimal_obj_value = m.objVal
-            self.sols = extract_sol(self.vars)
+            self.sols = extract_sol(self.vars_)
             sols = self.sols
             sols["obj"] = m.objVal
             sols["field_ids"] = self.field_ids
@@ -643,7 +645,7 @@ class Optimization_1f1w:
 
             # Update remaining water rights
             wrs_info = self.wrs_info
-            for k, v in wrs_info.items():
+            for _k, v in wrs_info.items():
                 if v["remaining_wr"] is not None:
                     irr_sub = sols["irr_depth"]  # (n_c, n_h)
                     v["remaining_wr"] -= np.sum(irr_sub[:, 0])
@@ -828,6 +830,7 @@ class Optimization_1f1w:
 # Utility code
 def dict_to_string(dictionary, prefix="", indentor="  ", level=2, roun=None):
     """Ture a dictionary into a printable string.
+
     Parameters
     ----------
     dictionary : dict
@@ -841,7 +844,9 @@ def dict_to_string(dictionary, prefix="", indentor="  ", level=2, roun=None):
         A printable string.
     """
 
-    def dict_to_string_list(dictionary, indentor="  ", count=1, string=[]):
+    def dict_to_string_list(dictionary, indentor="  ", count=1, string=None):
+        if string is None:
+            string = []
         for key, value in dictionary.items():
             string.append(prefix + indentor * count + str(key))
             if isinstance(value, dict) and count < level:

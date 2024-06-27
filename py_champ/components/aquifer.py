@@ -143,6 +143,6 @@ class Aquifer(mesa.Agent):
         if self.st < 0:
             warnings.warn(
                 f"The saturated thickness is negative in aquifer {self.unique_id}.",
-                stacklevel=2
+                stacklevel=2,
             )
         return dwl

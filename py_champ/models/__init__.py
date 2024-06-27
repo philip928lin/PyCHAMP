@@ -1,3 +1,1 @@
-"""
-This is the model subpackage of PyCHAMP.
-"""
+"""This is the model subpackage of PyCHAMP."""

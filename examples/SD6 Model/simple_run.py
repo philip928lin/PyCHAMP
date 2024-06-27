@@ -5,6 +5,7 @@ import sys
 
 sys.setrecursionlimit(10000)
 import dill
+
 from py_champ.models.sd6_model import SD6Model
 
 # %%
@@ -59,7 +60,7 @@ m = SD6Model(
     crop_price_step=crop_price_step,
 )
 
-for i in range(15):
+for _i in range(15):
     m.step()
 
 m.end()

@@ -1,3 +1,1 @@
-"""
-This is the entities subpackage of PyCHAMP.
-"""
+"""Store the components (modules) of PyCHAMP."""

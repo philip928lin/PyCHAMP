@@ -740,7 +740,7 @@ class SD6Model(mesa.Model):
         return metrices
 
 
-class SD6Model_input_templates:
+class SD6ModelInputTemplates:
     def __init__(self):
         self.prec_aw_dict = {
             "<prec_aw1>": {

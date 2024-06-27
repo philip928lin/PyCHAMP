@@ -750,8 +750,8 @@ class Behavior_1f1w(mesa.Agent):
         selected_behavior_id_in_network = self.selected_behavior_id_in_network
         if selected_behavior_id_in_network is None:
             selected_behavior_id_in_network = self.model.rngen.choice(
-                    self.behavior_ids_in_network
-                )
+                self.behavior_ids_in_network
+            )
 
         neighbor = self.model.behaviors[selected_behavior_id_in_network]
 
@@ -1448,7 +1448,7 @@ class Behavior(mesa.Agent):
         if dm_sols is None:
             warnings.warn(
                 "Gurobi returns empty solutions (likely due to infeasible problem.",
-                stacklevel=2
+                stacklevel=2,
             )
         dm.depose_gp_env()  # Delete the entire environment to release memory.
 
@@ -1550,8 +1550,8 @@ class Behavior(mesa.Agent):
         selected_behavior_id_in_network = self.selected_behavior_id_in_network
         if selected_behavior_id_in_network is None:
             selected_behavior_id_in_network = self.model.rngen.choice(
-                    self.behavior_ids_in_network
-                )
+                self.behavior_ids_in_network
+            )
 
         neighbor = self.model.behaviors[selected_behavior_id_in_network]
 

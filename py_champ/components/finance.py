@@ -1,9 +1,8 @@
-# -*- coding: utf-8 -*-
 # The code is developed by Chung-Yi Lin at Virginia Tech, in April 2023.
 # Email: chungyi@vt.edu
 # Last modified on Dec 30, 2023
-import numpy as np
 import mesa
+import numpy as np
 
 
 class Finance(mesa.Agent):
@@ -70,9 +69,7 @@ class Finance(mesa.Agent):
     """
 
     def __init__(self, unique_id, model, settings: dict):
-        """
-        Initialize a Finance agent in the Mesa model.
-        """
+        """Initialize a Finance agent in the Mesa model."""
         super().__init__(unique_id, model)
         self.agt_type = "Finance"
 

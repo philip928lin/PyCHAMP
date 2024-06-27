@@ -14,14 +14,15 @@ from joblib.externals.loky import set_loky_pickler
 
 set_loky_pickler("dill")
 
-import matplotlib.pyplot as plt
 from collections import deque
+
+import matplotlib.pyplot as plt
+from pyswarms.backend.handlers import BoundaryHandler, OptionsHandler, VelocityHandler
 from pyswarms.backend.operators import compute_pbest
 from pyswarms.backend.topology import Star
-from pyswarms.backend.handlers import BoundaryHandler, VelocityHandler, OptionsHandler
 from pyswarms.base import SwarmOptimizer
-from pyswarms.utils.reporter import Reporter
 from pyswarms.utils.plotters import plot_cost_history
+from pyswarms.utils.reporter import Reporter
 
 
 class GlobalBestPSO(SwarmOptimizer):
@@ -42,7 +43,7 @@ class GlobalBestPSO(SwarmOptimizer):
         wd=None,
         load_dict=None,
     ):
-        """Initialize the swarm
+        """Initialize the swarm.
 
         Attributes
         ----------
@@ -86,7 +87,7 @@ class GlobalBestPSO(SwarmOptimizer):
             option to explicitly set the particles' initial positions. Set to
             :code:`None` if you wish to generate the particles randomly.
         """
-        super(GlobalBestPSO, self).__init__(
+        super().__init__(
             n_particles=n_particles,
             dimensions=dimensions,
             options=options,
@@ -138,7 +139,7 @@ class GlobalBestPSO(SwarmOptimizer):
         return dict_to_save
 
     def optimize(self, objective_func, iters, n_processes=None, verbose=60, **kwargs):
-        """Optimize the swarm for a number of iterations
+        """Optimize the swarm for a number of iterations.
 
         Performs the optimization to evaluate the objective
         function :code:`f` for a number of iterations :code:`iter.`
@@ -161,16 +162,15 @@ class GlobalBestPSO(SwarmOptimizer):
         tuple
             the global best cost and the global best position.
         """
-
         # Apply verbosity
         if verbose > 0:
             log_level = logging.INFO
         else:
             log_level = logging.NOTSET
 
-        self.rep.log("Obj. func. args: {}".format(kwargs), lvl=logging.DEBUG)
+        self.rep.log(f"Obj. func. args: {kwargs}", lvl=logging.DEBUG)
         self.rep.log(
-            "Optimize for {} iters with {}".format(iters, self.options),
+            f"Optimize for {iters} iters with {self.options}",
             lvl=log_level,
         )
 
