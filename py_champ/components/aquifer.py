@@ -94,11 +94,11 @@ class Aquifer(mesa.Agent):
 
         """
         # static inflow
-        self.aq_a = settings["aq_a"]
-        self.aq_b = settings["aq_b"]
+        self.aq_a = settings.get("aq_a")
+        self.aq_b = settings.get("aq_b")
         # dynamic inflow
-        self.area = settings["area"]
-        self.sy = settings["sy"]
+        self.area = settings.get("area")
+        self.sy = settings.get("sy")
         self.init = settings["init"]
 
     def step(self, withdrawal: float, inflow: float | None = None) -> float:

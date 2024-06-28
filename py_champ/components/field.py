@@ -372,6 +372,8 @@ class Field_1f1w_ci(mesa.Agent):
 
         # Initialize field type
         self.field_type = self.init["field_type"]
+
+        # Initialize aph_yield_records & aph_yield_dict
         self.aph_yield_dict = self.init.get("aph_yield")
         self.aph_yield_records = {
             "irrigated": {

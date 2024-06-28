@@ -432,6 +432,8 @@ class Finance_1f1w_ci(mesa.Agent):
         rev = sum([y[j, :] * cp[c] for j, c in enumerate(crop_options)])[0]
 
         # Crop insurance
+        # A list of aph_yield_dicts for all fields that an agent has.
+        # Each aph_yield_dict is a dictionary of aph yield for each crop.
         aph_yield_dicts = [field.aph_yield_dict for _, field in fields.items()]
         premiums = [
             field.premium_dict["irrigated"][field.crop]

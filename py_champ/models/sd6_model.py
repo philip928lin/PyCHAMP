@@ -12,38 +12,7 @@ from ..components.field import Field
 from ..components.finance import Finance
 from ..components.optimization import Optimization
 from ..components.well import Well
-from ..utility.util import Indicator, TimeRecorder
-
-
-class BaseSchedulerByTypeFiltered(mesa.time.BaseScheduler):
-    """
-    A scheduler that overrides the step method to allow for filtering
-    of agents by .agt_type.
-
-    Example:
-    -------
-    >>> scheduler = BaseSchedulerByTypeFiltered(model)
-    >>> scheduler.step(agt_type="Behavior")
-    """
-
-    def step(self, agt_type=None) -> None:
-        """Execute the step of all the agents, one at a time."""
-        # To be able to remove and/or add agents during stepping
-        # it's necessary for the keys view to be a list.
-        self.do_each(method="step", agt_type=agt_type)
-        self.steps += 1
-        self.time += 1
-
-    def do_each(self, method, agent_keys=None, shuffle=False, agt_type=None):
-        if agent_keys is None:
-            agent_keys = self.get_agent_keys()
-        if agt_type is not None:
-            agent_keys = [i for i in agent_keys if self._agents[i].agt_type == agt_type]
-        if shuffle:
-            self.model.random.shuffle(agent_keys)
-        for agent_key in agent_keys:
-            if agent_key in self._agents:
-                getattr(self._agents[agent_key], method)()
+from ..utility.util import Indicator, TimeRecorder, BaseSchedulerByTypeFiltered
 
 
 # % MESA
@@ -160,7 +129,7 @@ class SD6Model(mesa.Model):
         gurobi_dict=None,
         **kwargs,
     ):
-        # MESA required attributes
+        # Prepare the model
         if gurobi_dict is None:
             gurobi_dict = {"LogToConsole": 0, "NonConvex": 2, "Presolve": -1}
         if components is None:
@@ -171,7 +140,7 @@ class SD6Model(mesa.Model):
                 "finance": Finance,
                 "behavior": Behavior,
             }
-        self.running = True  # Required for batch run
+        self.running = True  # MESA required attributes
 
         # Time and Step recorder
         self.time_recorder = TimeRecorder()

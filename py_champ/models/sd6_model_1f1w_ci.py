@@ -12,38 +12,7 @@ from ..components.field import Field_1f1w_ci
 from ..components.finance import Finance_1f1w_ci
 from ..components.optimization_1f1w_ci import Optimization_1f1w_ci
 from ..components.well import Well_1f1w
-from ..utility.util import Indicator, TimeRecorder
-
-
-class BaseSchedulerByTypeFiltered(mesa.time.BaseScheduler):
-    """
-    A scheduler that overrides the step method to allow for filtering
-    of agents by .agt_type.
-
-    Example:
-    -------
-    >>> scheduler = BaseSchedulerByTypeFiltered(model)
-    >>> scheduler.step(agt_type="Behavior")
-    """
-
-    def step(self, agt_type=None) -> None:
-        """Execute the step of all the agents, one at a time."""
-        # To be able to remove and/or add agents during stepping
-        # it's necessary for the keys view to be a list.
-        self.do_each(method="step", agt_type=agt_type)
-        self.steps += 1
-        self.time += 1
-
-    def do_each(self, method, agent_keys=None, shuffle=False, agt_type=None):
-        if agent_keys is None:
-            agent_keys = self.get_agent_keys()
-        if agt_type is not None:
-            agent_keys = [i for i in agent_keys if self._agents[i].agt_type == agt_type]
-        if shuffle:
-            self.model.random.shuffle(agent_keys)
-        for agent_key in agent_keys:
-            if agent_key in self._agents:
-                getattr(self._agents[agent_key], method)()
+from ..utility.util import Indicator, TimeRecorder, BaseSchedulerByTypeFiltered, get_agt_attr
 
 
 # % MESA
@@ -141,30 +110,50 @@ class SD6Model_1f1w_ci(mesa.Model):
         prec_aw_step,
         init_year=2007,
         end_year=2022,
+        components=None,
+        optimization_class=Optimization_1f1w_ci,
         lema_options=(True, "wr_LEMA_5yr", 2013),
         fix_state=None,
         show_step=True,
         seed=None,
         gurobi_dict=None,
+        activate_ci=True,
         **kwargs,
     ):
-        # MESA required attributes
-        if gurobi_dict is None:
-            gurobi_dict = {"LogToConsole": 0, "NonConvex": 2, "Presolve": -1}
-        self.running = True  # Required for batch run
-
         # Time and Step recorder
         self.time_recorder = TimeRecorder()
 
+        # Prepare the model
+        if gurobi_dict is None:
+            gurobi_dict = {"LogToConsole": 0, "NonConvex": 2, "Presolve": -1}
+        if components is None:
+            components = {
+                "aquifer": Aquifer,
+                "field": Field_1f1w_ci,
+                "well": Well_1f1w,
+                "finance": Finance_1f1w_ci,
+                "behavior": Behavior_1f1w_ci,
+            }
+        self.optimization_class = optimization_class
+        self.crop_options = crop_options  # n_c
+        # Create revised mesa scheduler and assign it to the model
+        self.schedule = BaseSchedulerByTypeFiltered(self)
+        # MESA required attributes
+        self.running = True  
+        # Indicate the activation of the crop insurance feature
+        self.activate_ci = activate_ci
+        # Simulation period
         self.init_year = init_year
         self.start_year = self.init_year + 1
         self.end_year = end_year
         self.total_steps = self.end_year - self.init_year
         self.current_year = self.init_year
-        self.t = 0  # This is initial step
+        self.t = 0      # This is initial step
+        # LEMA water right info
         self.lema = lema_options[0]
         self.lema_wr_name = lema_options[1]
         self.lema_year = lema_options[2]
+        # Show step info during the simulation (default: True)
         self.show_step = show_step
 
         # mesa has self.random.seed(seed) but it is not usable for truncnorm
@@ -178,24 +167,25 @@ class SD6Model_1f1w_ci(mesa.Model):
         # Input timestep data
         self.prec_aw_step = prec_aw_step  # [prec_aw_id][year][crop]
         self.crop_price_step = kwargs.get("crop_price_step")  # [finance_id][year][crop]
-        self.harvest_price_step = kwargs.get(
-            "harvest_price_step"
-        )  # [finance_id][year][crop]
-        self.projected_price_step = kwargs.get(
-            "projected_price_step"
-        )  # [finance_id][year][crop]
-        self.aph_revenue_based_coef_step = kwargs.get(
-            "aph_revenue_based_coef_step"
-        )  # [finance_id][year][field_type][crop]
-
+        
+        # Just for internal testing and debugging.
         self.irr_depth_step = kwargs.get("irr_depth_step")
         self.field_type_step = kwargs.get("field_type_step")
 
-        # These three variables will be used to define the dimension of the opt
-        self.crop_options = crop_options  # n_c
-
-        # Create schedule and assign it to the model
-        self.schedule = BaseSchedulerByTypeFiltered(self)
+        if self.activate_ci:
+            self.harvest_price_step = kwargs.get(
+                "harvest_price_step"
+            )  # [finance_id][year][crop]
+            self.projected_price_step = kwargs.get(
+                "projected_price_step"
+            )  # [finance_id][year][crop]
+            self.aph_revenue_based_coef_step = kwargs.get(
+                "aph_revenue_based_coef_step"
+            )  # [finance_id][year][field_type][crop]
+        else:
+            self.harvest_price_step = None
+            self.projected_price_step = None
+            self.aph_revenue_based_coef_step = None
 
         # Copy the dictionaries before correction from shared_config
         aquifers_dict, fields_dict, wells_dict, finances_dict, behaviors_dict = (
@@ -215,7 +205,7 @@ class SD6Model_1f1w_ci(mesa.Model):
         # Initialize aquifer environment (this is not associated with farmers)
         aquifers = {}
         for aqid, aquifer_dict in aquifers_dict.items():
-            agt_aquifer = Aquifer(unique_id=aqid, model=self, settings=aquifer_dict)
+            agt_aquifer = components["aquifer"](unique_id=aqid, model=self, settings=aquifer_dict)
             aquifers[aqid] = agt_aquifer
             self.schedule.add(agt_aquifer)
         self.aquifers = aquifers
@@ -223,13 +213,13 @@ class SD6Model_1f1w_ci(mesa.Model):
         # Initialize fields
         fields = {}
         for fid, field_dict in fields_dict.items():
-            # Initialize crop type
+            # Initialize crop type (considering remove this)
             init_crop = field_dict["init"]["crop"]
             if isinstance(init_crop, list):
                 field_dict["init"]["crop"] = self.rngen.choice(init_crop)
 
             # Initialize fields
-            agt_field = Field_1f1w_ci(
+            agt_field = components["field"](
                 unique_id=fid,
                 model=self,
                 settings=field_dict,
@@ -240,7 +230,6 @@ class SD6Model_1f1w_ci(mesa.Model):
                 lon=field_dict.get("lon"),
                 x=field_dict.get("x"),
                 y=field_dict.get("y"),
-                regen=self.rngen,
                 field_type_rn=None,
             )
             fields[fid] = agt_field
@@ -250,7 +239,7 @@ class SD6Model_1f1w_ci(mesa.Model):
         # Initialize wells
         wells = {}
         for wid, well_dict in wells_dict.items():
-            agt_well = Well_1f1w(unique_id=wid, model=self, settings=well_dict)
+            agt_well = components["well"](unique_id=wid, model=self, settings=well_dict)
             wells[wid] = agt_well
             self.schedule.add(agt_well)
         self.wells = wells
@@ -268,7 +257,7 @@ class SD6Model_1f1w_ci(mesa.Model):
             # Initialize finance
             finance_id = behavior_dict["finance_id"]
             finance_dict = finances_dict[finance_id]
-            agt_finance = Finance_1f1w_ci(
+            agt_finance = components["finance"](
                 unique_id=f"{finance_id}_{behavior_id}",
                 model=self,
                 settings=finance_dict,
@@ -279,7 +268,7 @@ class SD6Model_1f1w_ci(mesa.Model):
             ] = agt_finance  # Assume one behavior agent has one finance object
             self.schedule.add(agt_finance)
 
-            agt_behavior = Behavior_1f1w_ci(
+            agt_behavior = components["behavior"](
                 unique_id=behavior_id,
                 model=self,
                 settings=behavior_dict,
@@ -294,9 +283,8 @@ class SD6Model_1f1w_ci(mesa.Model):
                 },
                 finance=agt_finance,
                 aquifers=self.aquifers,
-                Optimization=Optimization_1f1w_ci,
+                Optimization=self.optimization_class,
                 # kwargs
-                rngen=self.rngen,
                 fix_state=fix_state,
             )
             behaviors[behavior_id] = agt_behavior
@@ -315,35 +303,6 @@ class SD6Model_1f1w_ci(mesa.Model):
                 crop_prices = self.crop_price_step.get(finance.finance_id)
                 if crop_prices is not None:
                     finance.crop_price = crop_prices[self.current_year]
-
-        def get_nested_attr(obj, attr_str):
-            """A patch to collect a nested attribute using MESA's datacollector."""
-            attrs = attr_str.split(".", 1)
-            current_attr = getattr(obj, attrs[0], None)
-            if len(attrs) == 1 or current_attr is None:
-                return current_attr
-            return get_nested_attr(current_attr, attrs[1])
-
-        def get_agt_attr(attr_str):
-            """
-            This replaces, e.g., lambda a: getattr(a, "satisfaction", None)
-            We have to do this to return None if the attribute is not exist
-            in the given agent type.
-            def func(agent):
-                return getattr(agent, attr, None).
-            """
-
-            def get_nested_attr(obj):
-                def get_nested_attr_(obj, attr_str):
-                    attrs = attr_str.split(".", 1)
-                    current_attr = getattr(obj, attrs[0], None)
-                    if len(attrs) == 1 or current_attr is None:
-                        return current_attr
-                    return get_nested_attr_(current_attr, attrs[1])
-
-                return get_nested_attr_(obj, attr_str)
-
-            return get_nested_attr
 
         agent_reporters = {
             "agt_type": get_agt_attr("agt_type"),
@@ -414,25 +373,21 @@ class SD6Model_1f1w_ci(mesa.Model):
 
         # Update crop price
         if self.crop_price_step is not None:
-            for _unique_id, finance in self.finances.items():
+            for _, finance in self.finances.items():
                 crop_prices = self.crop_price_step.get(finance.finance_id)
                 if crop_prices is not None:
                     finance.crop_price = crop_prices[self.current_year]
-
-        if self.harvest_price_step is not None:
-            for _unique_id, finance in self.finances.items():
+        # Update data, harvest price, projected price, and aph_revenue_based_coef
+        if self.activate_ci:
+            for _, finance in self.finances.items():
                 harvest_price = self.harvest_price_step.get(finance.finance_id)
                 if harvest_price is not None:
                     finance.harvest_price = harvest_price[self.current_year]
-
-        if self.projected_price_step is not None:
-            for _unique_id, finance in self.finances.items():
+            for _, finance in self.finances.items():
                 projected_price = self.projected_price_step.get(finance.finance_id)
                 if projected_price is not None:
                     finance.projected_price = projected_price[self.current_year]
-
-        if self.aph_revenue_based_coef_step is not None:
-            for _unique_id, finance in self.finances.items():
+            for _, finance in self.finances.items():
                 aph_revenue_based_coef = self.aph_revenue_based_coef_step.get(
                     finance.finance_id
                 )
@@ -441,27 +396,24 @@ class SD6Model_1f1w_ci(mesa.Model):
                         self.current_year
                     ]
 
-        # Update data, harvest price, projected price
-
         # Assign field type based on each behavioral agent.
-        # irr_depth_step = self.irr_depth_step
-        # field_type_step = self.field_type_step
-        for _behavior_id, behavior in self.behaviors.items():
-            # Randomly select rainfed field
-            for fid_, field in behavior.fields.items():
+        for _, behavior in self.behaviors.items():
+            # Stocastically select rainfed field
+            for _, field in behavior.fields.items():
                 rn_irr = True
                 if rn_irr:
                     irr_freq = field.irr_freq
                     rn = self.rngen.uniform(0, 1)
                     if rn <= irr_freq:
-                        field.field_type = "optimize"  # Optimize it
+                        # Let optimization decide the field type
+                        field.field_type = "optimize"  
                         field.field_type_rn = "optimize"
                     else:
-                        # raise
+                        # Force the field to be rainfed
                         field.field_type = "rainfed"  # Force the field to be rainfed
                         field.field_type_rn = "rainfed"
 
-            # Turn on LEMA (i.e., a water right constraint) starting from 2013
+            # Activate LEMA (i.e., a water right constraint) starting from 2013
             if self.lema and current_year >= self.lema_year:
                 behavior.wr_dict[self.lema_wr_name]["status"] = True
             else:
@@ -486,8 +438,6 @@ class SD6Model_1f1w_ci(mesa.Model):
                     for _, well in self.wells.items()
                 ]
             )
-            # withdrawal += sum([well.withdrawal if well.aquifer_id==aq_id else 0 \
-            #                for _, well in self.wells.items()])
             # Update aquifer
             aquifer.step(withdrawal)
 
