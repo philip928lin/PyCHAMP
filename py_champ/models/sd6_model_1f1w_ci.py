@@ -12,7 +12,12 @@ from ..components.field import Field_1f1w_ci
 from ..components.finance import Finance_1f1w_ci
 from ..components.optimization_1f1w_ci import Optimization_1f1w_ci
 from ..components.well import Well_1f1w
-from ..utility.util import Indicator, TimeRecorder, BaseSchedulerByTypeFiltered, get_agt_attr
+from ..utility.util import (
+    BaseSchedulerByTypeFiltered,
+    Indicator,
+    TimeRecorder,
+    get_agt_attr,
+)
 
 
 # % MESA
@@ -139,7 +144,7 @@ class SD6Model_1f1w_ci(mesa.Model):
         # Create revised mesa scheduler and assign it to the model
         self.schedule = BaseSchedulerByTypeFiltered(self)
         # MESA required attributes
-        self.running = True  
+        self.running = True
         # Indicate the activation of the crop insurance feature
         self.activate_ci = activate_ci
         # Simulation period
@@ -148,7 +153,7 @@ class SD6Model_1f1w_ci(mesa.Model):
         self.end_year = end_year
         self.total_steps = self.end_year - self.init_year
         self.current_year = self.init_year
-        self.t = 0      # This is initial step
+        self.t = 0  # This is initial step
         # LEMA water right info
         self.lema = lema_options[0]
         self.lema_wr_name = lema_options[1]
@@ -167,7 +172,7 @@ class SD6Model_1f1w_ci(mesa.Model):
         # Input timestep data
         self.prec_aw_step = prec_aw_step  # [prec_aw_id][year][crop]
         self.crop_price_step = kwargs.get("crop_price_step")  # [finance_id][year][crop]
-        
+
         # Just for internal testing and debugging.
         self.irr_depth_step = kwargs.get("irr_depth_step")
         self.field_type_step = kwargs.get("field_type_step")
@@ -205,7 +210,9 @@ class SD6Model_1f1w_ci(mesa.Model):
         # Initialize aquifer environment (this is not associated with farmers)
         aquifers = {}
         for aqid, aquifer_dict in aquifers_dict.items():
-            agt_aquifer = components["aquifer"](unique_id=aqid, model=self, settings=aquifer_dict)
+            agt_aquifer = components["aquifer"](
+                unique_id=aqid, model=self, settings=aquifer_dict
+            )
             aquifers[aqid] = agt_aquifer
             self.schedule.add(agt_aquifer)
         self.aquifers = aquifers
@@ -311,23 +318,28 @@ class SD6Model_1f1w_ci(mesa.Model):
             "crop": get_agt_attr("crop"),
             "irr_vol": get_agt_attr("irr_vol_per_field"),  # m-ha
             "yield_rate": get_agt_attr("yield_rate_per_field"),
+            "yield": get_agt_attr("y"),  # 1e4 bu/field
             "w": get_agt_attr("w"),
             "field_area": get_agt_attr("field_area"),  # ha
+            "aph_yield_dict": get_agt_attr("aph_yield_dict"),  # a dictionary
             ### Behavior
             "Sa": get_agt_attr("satisfaction"),
             "E[Sa]": get_agt_attr("expected_sa"),
             "Un": get_agt_attr("uncertainty"),
             "state": get_agt_attr("state"),
-            "profit": get_agt_attr("profit"),  # 1e4 $
-            "revenue": get_agt_attr("finance.rev"),  # 1e4 $
-            "energy_cost": get_agt_attr("finance.cost_e"),  # 1e4 $
-            "tech_cost": get_agt_attr("finance.tech_cost"),  # 1e4 $
-            "premium": get_agt_attr("finance.premium"),  # 1e4 $
-            "payout": get_agt_attr("finance.payout"),  # 1e4 $
             "gp_status": get_agt_attr("gp_status"),
             "gp_MIPGap": get_agt_attr("gp_MIPGap"),
+            ### Finance
+            "profit": get_agt_attr("finance.profit"),  # 1e4 $
+            "revenue": get_agt_attr("finance.rev"),  # 1e4 $
+            "energy_cost": get_agt_attr("finance.cost_e"),  # 1e4 $
+            "tech_cost": get_agt_attr("finance.cost_tech"),  # 1e4 $
+            "premium": get_agt_attr("finance.premium"),  # 1e4 $
+            "payout": get_agt_attr("finance.payout"),  # 1e4 $
+            "premium_dict": get_agt_attr("finance.premium_dict"),  # a dictionary
             ### Well
             "water_depth": get_agt_attr("l_wt"),
+            "energy": get_agt_attr("e"),  # PJ
             ### Aquifer
             "withdrawal": get_agt_attr("withdrawal"),  # m-ha
             "GW_st": get_agt_attr("st"),  # m
@@ -406,7 +418,7 @@ class SD6Model_1f1w_ci(mesa.Model):
                     rn = self.rngen.uniform(0, 1)
                     if rn <= irr_freq:
                         # Let optimization decide the field type
-                        field.field_type = "optimize"  
+                        field.field_type = "optimize"
                         field.field_type_rn = "optimize"
                     else:
                         # Force the field to be rainfed
@@ -462,6 +474,9 @@ class SD6Model_1f1w_ci(mesa.Model):
         """
         self.gpenv.dispose()
 
+    def get_datacollector_output(self):
+        return self.datacollector.get_agent_vars_dataframe()
+
     @staticmethod
     def get_dfs(model):
         df = model.datacollector.get_agent_vars_dataframe().reset_index()
@@ -471,13 +486,23 @@ class SD6Model_1f1w_ci(mesa.Model):
         # =============================================================================
         # df_agt
         # =============================================================================
-        df_agt = pd.DataFrame()
-
         df_behaviors = df[df["agt_type"] == "Behavior"].dropna(axis=1, how="all")
         df_behaviors["bid"] = df_behaviors["AgentID"]
+
+        df_fields = df[df["agt_type"] == "Field"].dropna(axis=1, how="all")
+        df_fields["field_type"] = np.nan
+        df_fields.loc[df_fields["irr_vol"] == 0, "field_type"] = "rainfed"
+        df_fields.loc[df_fields["irr_vol"] > 0, "field_type"] = "irrigated"
+        df_fields["irr_depth"] = (
+            df_fields["irr_vol"] / df_fields["field_area"] * 100
+        )  # cm
+        df_fields["fid"] = df_fields["AgentID"]
+
+        df_wells = df[df["agt_type"] == "Well"].dropna(axis=1, how="all")
+        df_wells["wid"] = df_wells["AgentID"]
+
         df_agt = pd.concat(
             [
-                df_agt,
                 df_behaviors[
                     [
                         "bid",
@@ -488,50 +513,40 @@ class SD6Model_1f1w_ci(mesa.Model):
                         "profit",
                         "revenue",
                         "energy_cost",
+                        "tech_cost",
                         "premium",
                         "payout",
                         "gp_status",
                         "gp_MIPGap",
                     ]
                 ],
-            ],
-            axis=1,
-        )
-
-        df_fields = df[df["agt_type"] == "Field"].dropna(axis=1, how="all")
-        df_fields["field_type"] = np.nan
-        df_fields.loc[df_fields["irr_vol"] == 0, "field_type"] = "rainfed"
-        df_fields.loc[df_fields["irr_vol"] > 0, "field_type"] = "irrigated"
-        df_fields["irr_depth"] = (
-            df_fields["irr_vol"] / df_fields["field_area"] * 100
-        )  # cm
-        df_fields["fid"] = df_fields["AgentID"]
-        df_agt = pd.concat(
-            [
-                df_agt,
                 df_fields[
                     [
                         "fid",
                         "field_type",
                         "crop",
                         "irr_vol",
+                        "yield",
                         "yield_rate",
                         "irr_depth",
                         "w",
                         "field_area",
                     ]
                 ],
+                df_wells[["wid", "water_depth", "withdrawal"]],
             ],
             axis=1,
         )
-
-        df_wells = df[df["agt_type"] == "Well"].dropna(axis=1, how="all")
-        df_wells["wid"] = df_wells["AgentID"]
-        df_agt = pd.concat(
-            [df_agt, df_wells[["wid", "water_depth", "withdrawal"]]], axis=1
-        )
-
+        df_agt["yield"] = df_agt["yield"].apply(sum).apply(sum)
         df_agt = df_agt.round(4)
+
+        df_other = pd.concat(
+            [
+                df_behaviors[["bid", "premium_dict"]],
+                df_fields[["fid", "aph_yield_dict"]],
+            ],
+            axis=1,
+        )
 
         # =============================================================================
         # df_sys
@@ -583,7 +598,7 @@ class SD6Model_1f1w_ci(mesa.Model):
             df_sys[f"{s}"] = dff.xs(s, level="state")
         df_sys = df_sys.round(4)
 
-        return df_sys, df_agt
+        return df_sys, df_agt, df_other
 
     @staticmethod
     def get_metrices(
@@ -640,114 +655,3 @@ class SD6Model_1f1w_ci(mesa.Model):
             )
         metrices = pd.concat(metrices)
         return metrices
-
-
-class SD6Model_input_templates:
-    def __init__(self):
-        self.prec_aw_dict = {
-            "<prec_aw1>": {
-                "<year>": {
-                    "<crop1>": "[cm]",
-                    "<crop2>": "[cm]",
-                }
-            }
-        }
-        self.aquifers_dict = {
-            "<aquifer1>": {
-                "aq_a": "[1e-4 m^-2]",
-                "aq_b": "m",
-                "area": "1e4 m^2",
-                "sy": "[-]",
-                "init": {"st": "m", "dwl": "m"},
-            }
-        }
-
-        self.fields_dict = {
-            "<field1>": {
-                "field_area": "1e4 m^2",
-                "water_yield_curves": {
-                    # If min_yield_ratio is not given, default is zero.
-                    "crop1": [
-                        "<ymax [bu]>",
-                        "<wmax [cm]>",
-                        "<a>",
-                        "<b>",
-                        "<c>",
-                        "optional <min_yield_ratio>",
-                    ],
-                    "crop2": [
-                        "<ymax [bu]>",
-                        "<wmax [cm]>",
-                        "<a>",
-                        "<b>",
-                        "<c>",
-                        "optional <min_yield_ratio>",
-                    ],
-                },
-                "prec_aw_id": "<prec_aw1>",
-                "init": {
-                    "crop": "<crop> or a list of <crop> for each area split",
-                    "field_type": "<'optimize' or 'irrigated' or 'rainfed'>",
-                },
-            }
-        }
-
-        self.wells_dict = {
-            "<well1>": {
-                "rho": "[kg/m3]",
-                "g": "[m/s2]",
-                "eff_pump": "[-]",
-                "aquifer_id": "aquifers_dict's <unique_id>",
-                "pumping_capacity": "[1e4 m^3]",
-                "init": {"l_wt": "[m]", "B": "[m]", "pumping_days": "[days]"},
-            }
-        }
-
-        self.finances_dict = {
-            "<finance1>": {
-                "energy_price": "[1e4$/PJ]",
-                "crop_price": {
-                    "<crop1>": "[$/bu]",
-                    "<crop2>": "[$/bu]",
-                },
-                "crop_cost": {
-                    "<crop1>": "[$/bu]",
-                    "<crop2>": "[$/bu]",
-                },
-                "irr_tech_operational_cost": {"<tech1>": "[1e4$]", "<tech2>": "[1e4$]"},
-            }
-        }
-
-        self.behaviors_dict = {
-            "<behavior1>": {
-                "field_ids": ["field1"],
-                "well_ids": ["well1"],
-                "finance_id": "<finance1>",
-                "behavior_ids_in_network": ["<behavior2>", "<behavior3>"],
-                "decision_making": {
-                    "target": "profit",
-                    "horizon": "[year]",
-                    "n_dwl": "[year]",
-                    "keep_gp_model": False,
-                    "keep_gp_output": False,
-                    "display_summary": False,
-                    "display_report": False,
-                },
-                "water_rights": {
-                    "<water_right1>": {
-                        "wr_depth": "[cm]",
-                        "time_window": "[year]",
-                        "remaining_tw": "[year]",
-                        "remaining_wr": "[cm]",
-                        "tail_method": "<'proportion' or 'all' or float>",
-                        "status": True,
-                    }
-                },
-                "consumat": {
-                    # [0-1] Sensitivity factor for the "satisfication" calculation.
-                    "alpha": {"profit": 1},
-                    # Normalize "need" for "satisfication" calculation.
-                    "scale": {"profit": 0.23 * 50},  # Use corn 1e4$*bu*ha
-                },
-            }
-        }

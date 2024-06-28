@@ -380,7 +380,9 @@ class Field_1f1w_ci(mesa.Agent):
                 "irrigated": {
                     c: [v] * 5 for c, v in self.aph_yield_dict["irrigated"].items()
                 },
-                "rainfed": {c: [v] * 5 for c, v in self.aph_yield_dict["rainfed"].items()},
+                "rainfed": {
+                    c: [v] * 5 for c, v in self.aph_yield_dict["rainfed"].items()
+                },
             }
             # Note that the premium_dict_for_dm will be populated in the behavior
             # module before optimization.
@@ -460,11 +462,11 @@ class Field_1f1w_ci(mesa.Agent):
         self.i_crop = i_crop
 
     def update_aph_yield(self, field_type, crop_yield):
-        """ Update the aph_yield_records & aph_yield_dict for crop insurance.
+        """Update the aph_yield_records & aph_yield_dict for crop insurance.
 
-        Should be triggered after the yield calculation and premium 
+        Should be triggered after the yield calculation and premium
         calculation in the finance after everthing is done.
-        
+
         Parameters
         ----------
         field_type : str

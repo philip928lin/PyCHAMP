@@ -265,11 +265,11 @@ class Finance_1f1w_ci(mesa.Agent):
         self.profit = None
         # premium database for all crops and field types assuming a single field.
         self.premium_dict = self.premium_dict_for_dm = {
-                "irrigated": {c: None for c in self.model.crop_options},
-                "rainfed": {c: None for c in self.model.crop_options},
-            }    
+            "irrigated": {c: None for c in self.model.crop_options},
+            "rainfed": {c: None for c in self.model.crop_options},
+        }
         # the total premium for all fields of the selected crop and field type.
-        self.premium = None  
+        self.premium = None
         self.payout = None
         self.y = None
         self.t = 0
@@ -313,8 +313,8 @@ class Finance_1f1w_ci(mesa.Agent):
         premium_ratio=1,
         coverage_level=0.75,
     ):
-        """ Calculate the premium for a given crop, county, and field type.
-        
+        """Calculate the premium for a given crop, county, and field type.
+
         Parameters
         ----------
         df : pd.DataFrame
@@ -338,8 +338,8 @@ class Finance_1f1w_ci(mesa.Agent):
         -------
         float
             The premium calculated for this step [1e4 $].
-            
-            """
+
+        """
         # Calculate here but store in each individual field.
 
         if crop == "fallow":
@@ -370,8 +370,8 @@ class Finance_1f1w_ci(mesa.Agent):
         def calc_continuous_rating_base_rate(
             aph_yield, ref_yield, exponent, ref_rate, fixed_rate, weight=1.2
         ):
-            """ Calculate the continuous rating base rate.
-            
+            """Calculate the continuous rating base rate.
+
             Parameters
             ----------
             aph_yield : float
@@ -386,7 +386,7 @@ class Finance_1f1w_ci(mesa.Agent):
                 The fixed rate.
             weight : float, optional
                 The weight, by default 1.2.
-            
+
             Returns
             -------
             float
@@ -429,7 +429,7 @@ class Finance_1f1w_ci(mesa.Agent):
 
         # the unit is dependent on the aph_yield unit (1e4 bu/field)
         # Projected price's unit is $/bu
-        premium = base_premium_rate * projected_price * coverage_level * aph_yield 
+        premium = base_premium_rate * projected_price * coverage_level * aph_yield
         # premium (1e4 $/field)
 
         return premium * premium_ratio
@@ -495,7 +495,9 @@ class Finance_1f1w_ci(mesa.Agent):
             # Calculate premium for all possible cases for model diagnosis
             for field_type in ["irrigated", "rainfed"]:
                 for crop in crop_options:
-                    self.premium_dict[field_type][crop] = self.cal_APH_revenue_based_premium(
+                    self.premium_dict[field_type][
+                        crop
+                    ] = self.cal_APH_revenue_based_premium(
                         df=self.aph_revenue_based_coef,
                         crop=crop,
                         county=field.county,
@@ -505,7 +507,7 @@ class Finance_1f1w_ci(mesa.Agent):
                         premium_ratio=self.premium_ratio,
                         coverage_level=0.75,
                     )
-            
+
             # Calculate premium for the selected crop and field type
             if field.irr_vol_per_field > 0:
                 field_type = "irrigated"
@@ -529,9 +531,7 @@ class Finance_1f1w_ci(mesa.Agent):
             payout = 0
             premium = 0
 
-        profit = (
-            payout + rev - cost_e - cost_tech - premium
-        )  
+        profit = payout + rev - cost_e - cost_tech - premium
         self.y = y  # (n_c, 1) [1e4 bu] of all fields
         self.rev = rev
         self.cost_e = cost_e

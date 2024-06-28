@@ -2093,7 +2093,9 @@ class Behavior_1f1w_ci(mesa.Agent):
             if self.model.activate_ci:
                 for field_type in ["irrigated", "rainfed"]:
                     for crop in self.model.crop_options:
-                        field.premium_dict_for_dm[field_type][crop] = self.finance.cal_APH_revenue_based_premium(
+                        field.premium_dict_for_dm[field_type][
+                            crop
+                        ] = self.finance.cal_APH_revenue_based_premium(
                             df=self.finance.aph_revenue_based_coef,
                             crop=crop,
                             county=field.county,
@@ -2103,12 +2105,12 @@ class Behavior_1f1w_ci(mesa.Agent):
                             premium_ratio=self.finance.premium_ratio,
                             coverage_level=0.75,
                         )
-                premium_dict=field.premium_dict_for_dm
-                aph_yield_dict=field.aph_yield_dict
+                premium_dict = field.premium_dict_for_dm
+                aph_yield_dict = field.aph_yield_dict
             else:
-                premium_dict=None,
-                aph_yield_dict=None,
-            
+                premium_dict = (None,)
+                aph_yield_dict = (None,)
+
             if init:
                 # Optimize irrigation depth with others variables given.
                 # Apply the actual prec_aw (not the perceived one)

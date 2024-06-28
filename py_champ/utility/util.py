@@ -36,9 +36,10 @@ class BaseSchedulerByTypeFiltered(BaseScheduler):
             if agent_key in self._agents:
                 getattr(self._agents[agent_key], method)()
 
+
 def get_nested_attr(obj, attr_str):
     """A patch to collect a nested attribute using MESA's datacollector.
-    
+
     This function is used to get a nested attribute from an object.
     For example, if we have an object with an attribute "a" that is a dictionary
     with a key "b", we can get the value of "b" by calling get_nested_attr(obj, "a.b").
@@ -62,8 +63,9 @@ def get_nested_attr(obj, attr_str):
         return current_attr
     return get_nested_attr(current_attr, attrs[1])
 
+
 def get_agt_attr(attr_str):
-    """ Get a nested attribute from an agent object.
+    """Get a nested attribute from an agent object.
 
     This replaces, e.g., lambda a: getattr(a, "satisfaction", None)
     We have to do this to return None if the attribute is not exist
@@ -93,6 +95,7 @@ def get_agt_attr(attr_str):
         return get_nested_attr_(obj, attr_str)
 
     return get_nested_attr
+
 
 def dict_to_string(dictionary, prefix="", indentor="  ", level=2):
     """Ture a dictionary into a printable string.

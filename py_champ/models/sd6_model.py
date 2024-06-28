@@ -12,7 +12,7 @@ from ..components.field import Field
 from ..components.finance import Finance
 from ..components.optimization import Optimization
 from ..components.well import Well
-from ..utility.util import Indicator, TimeRecorder, BaseSchedulerByTypeFiltered
+from ..utility.util import BaseSchedulerByTypeFiltered, Indicator, TimeRecorder
 
 
 # % MESA
