@@ -263,7 +263,13 @@ class Finance_1f1w_ci(mesa.Agent):
         self.cost_e = None
         self.cost_tech = None
         self.profit = None
-        self.premium = None
+        # premium database for all crops and field types assuming a single field.
+        self.premium_dict = self.premium_dict_for_dm = {
+                "irrigated": {c: None for c in self.model.crop_options},
+                "rainfed": {c: None for c in self.model.crop_options},
+            }    
+        # the total premium for all fields of the selected crop and field type.
+        self.premium = None  
         self.payout = None
         self.y = None
         self.t = 0
@@ -285,13 +291,14 @@ class Finance_1f1w_ci(mesa.Agent):
 
         self.energy_price = settings["energy_price"]
         self.crop_price = settings["crop_price"]
-        self.harvest_price = settings.get("harvest_price")
-        self.projected_price = settings.get("projected_price")
-        self.aph_revenue_based_coef = settings.get("aph_revenue_based_coef")
-
         self.crop_cost = settings["crop_cost"]
         self.irr_tech_operational_cost = settings["irr_tech_operational_cost"]
 
+        if self.model.activate_ci:
+            self.harvest_price = settings.get("harvest_price")
+            self.projected_price = settings.get("projected_price")
+            self.aph_revenue_based_coef = settings.get("aph_revenue_based_coef")
+        # If ratios are not provided, default 1 will be used.
         self.payout_ratio = settings.get("payout_ratio", 1)
         self.premium_ratio = settings.get("premium_ratio", 1)
 
@@ -305,8 +312,34 @@ class Finance_1f1w_ci(mesa.Agent):
         projected_price,
         premium_ratio=1,
         coverage_level=0.75,
-        field_area=50,
     ):
+        """ Calculate the premium for a given crop, county, and field type.
+        
+        Parameters
+        ----------
+        df : pd.DataFrame
+            The dataframe containing the crop insurance data.
+        crop : str
+            The crop type.
+        county : str
+            The county name.
+        field_type : str
+            The field type.
+        aph_yield_dict : dict
+            A dictionary of aph yield for each crop.
+        projected_price : float
+            The projected price.
+        premium_ratio : float, optional
+            The premium ratio, by default 1.
+        coverage_level : float, optional
+            The coverage level, by default 0.75.
+
+        Returns
+        -------
+        float
+            The premium calculated for this step [1e4 $].
+            
+            """
         # Calculate here but store in each individual field.
 
         if crop == "fallow":
@@ -337,6 +370,28 @@ class Finance_1f1w_ci(mesa.Agent):
         def calc_continuous_rating_base_rate(
             aph_yield, ref_yield, exponent, ref_rate, fixed_rate, weight=1.2
         ):
+            """ Calculate the continuous rating base rate.
+            
+            Parameters
+            ----------
+            aph_yield : float
+                The aph yield.
+            ref_yield : float
+                The reference yield.
+            exponent : float
+                The exponent value.
+            ref_rate : float
+                The reference rate.
+            fixed_rate : float
+                The fixed rate.
+            weight : float, optional
+                The weight, by default 1.2.
+            
+            Returns
+            -------
+            float
+                The continuous rating base rate.
+            """
             yield_ratio = round(aph_yield / ref_yield, 2)
             yield_ratio = min(max(yield_ratio, 0.50), 1.50)
             continuous_rating_base_rate = (
@@ -372,7 +427,10 @@ class Finance_1f1w_ci(mesa.Agent):
             adjusted_based_rate * coverage_level_rate_differential, 0.999
         )
 
-        premium = base_premium_rate * projected_price * coverage_level * aph_yield
+        # the unit is dependent on the aph_yield unit (1e4 bu/field)
+        # Projected price's unit is $/bu
+        premium = base_premium_rate * projected_price * coverage_level * aph_yield 
+        # premium (1e4 $/field)
 
         return premium * premium_ratio
 
@@ -432,43 +490,49 @@ class Finance_1f1w_ci(mesa.Agent):
         rev = sum([y[j, :] * cp[c] for j, c in enumerate(crop_options)])[0]
 
         # Crop insurance
-        # A list of aph_yield_dicts for all fields that an agent has.
-        # Each aph_yield_dict is a dictionary of aph yield for each crop.
-        aph_yield_dicts = [field.aph_yield_dict for _, field in fields.items()]
-        premiums = [
-            field.premium_dict["irrigated"][field.crop]
-            if field.irr_vol_per_field > 0
-            else field.premium_dict["rainfed"][field.crop]
-            for _, field in fields.items()
-        ]
-
-        field = fields[next(iter(fields.keys()))]  # assuming on field
-        if aph_yield_dicts[0] is not None:  # assuming 1 field only
+        field = fields[next(iter(fields.keys()))]  # assuming only one field
+        if self.model.activate_ci:
+            # Calculate premium for all possible cases for model diagnosis
+            for field_type in ["irrigated", "rainfed"]:
+                for crop in crop_options:
+                    self.premium_dict[field_type][crop] = self.cal_APH_revenue_based_premium(
+                        df=self.aph_revenue_based_coef,
+                        crop=crop,
+                        county=field.county,
+                        field_type=field_type,
+                        aph_yield_dict=field.aph_yield_dict,
+                        projected_price=self.projected_price[crop],
+                        premium_ratio=self.premium_ratio,
+                        coverage_level=0.75,
+                    )
+            
+            # Calculate premium for the selected crop and field type
             if field.irr_vol_per_field > 0:
                 field_type = "irrigated"
             else:
                 field_type = "rainfed"
-            payout = sum(
-                [
-                    self.cal_APH_revenue_based_payout(
-                        self.harvest_price[c],
-                        self.projected_price[c],
-                        aph_yield_dicts[0][field_type][c],
-                        y[j, 0],
-                        coverage_level=0.75,
-                    )
-                    for j, c in enumerate(crop_options)
-                ]
+            crop = field.crop
+            premium = self.premium_dict[field_type][crop]
+
+            # Calculate payout for the selected crop and field type
+            payout = self.cal_APH_revenue_based_payout(
+                self.harvest_price[crop],
+                self.projected_price[crop],
+                field.aph_yield_dict[field_type][crop],
+                y[crop_options.index(crop), 0],
+                coverage_level=0.75,
             )
-            premium = premiums[0]
+
+            # trigger aph_yield_dict update in field
+            field.update_aph_yield(field_type, y[crop_options.index(crop), 0])
         else:
             payout = 0
             premium = 0
 
         profit = (
             payout + rev - cost_e - cost_tech - premium
-        )  # - tech_change_cost - crop_change_cost
-        self.y = y  # (n_s, n_c, 1) [1e4 bu] of all fields
+        )  
+        self.y = y  # (n_c, 1) [1e4 bu] of all fields
         self.rev = rev
         self.cost_e = cost_e
         self.cost_tech = cost_tech

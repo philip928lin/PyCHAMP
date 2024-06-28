@@ -19,6 +19,7 @@ class Optimization_1f1w_ci:
         self,
         unique_id,
         gpenv,
+        activate_ci,
         horizon=1,
         crop_options=None,
     ):
@@ -28,6 +29,7 @@ class Optimization_1f1w_ci:
         self.unique_id = unique_id
         self.horizon = horizon
         self.crop_options = crop_options
+        self.activate_ci = activate_ci
 
         ## Dimension coefficients
         self.n_c = len(crop_options)  # No. of crop choice options
@@ -349,7 +351,7 @@ class Optimization_1f1w_ci:
 
         # Premium constraint
         premium = m.addMVar((n_h), vtype="C", name="premium(1e4$)", lb=0, ub=inf)
-        if premium_dict is not None:
+        if self.activate_ci:
             for j, c in enumerate(crop_options):
                 for r in range(n_c):
                     # Rainfed
@@ -381,7 +383,7 @@ class Optimization_1f1w_ci:
 
         i_rainfed = vars_[self.field_ids[-1]]["i_rainfed"]  # Assuming just one field.
         payout = m.addMVar((n_h), vtype="C", name="premium(1e4$)", lb=0, ub=inf)
-        if aph_yield_dict is not None:
+        if self.activate_ci:
             payout_crops = []
             for j, c in enumerate(crop_options):
                 h_or_p = max(harvest_price[c], projected_price[c])
@@ -659,12 +661,18 @@ class Optimization_1f1w_ci:
         cost_e = vars_["cost_e"]
         annual_cost = vars_["other_cost"]
 
-        premium = vars_["premium"]
-        payout = vars_["payout"]
-        m.addConstr(
-            (profit == (payout + rev - cost_e - annual_cost - premium) / n_f),
-            name="c.profit",
-        )
+        if self.activate_ci:
+            premium = vars_["premium"]
+            payout = vars_["payout"]
+            m.addConstr(
+                (profit == (payout + rev - cost_e - annual_cost - premium) / n_f),
+                name="c.profit",
+            )
+        else:
+            m.addConstr(
+                (profit == (rev - cost_e - annual_cost) / n_f),
+                name="c.profit",
+            )
 
         m.update()
 

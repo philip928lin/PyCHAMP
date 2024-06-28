@@ -948,7 +948,8 @@ class Behavior_1f1w(mesa.Agent):
             setattr(self, k, v)
         self.fix_state = kwargs.get("fix_state")  # internal experiment
 
-        self.Optimization = optimization_class
+        # Load optimization class
+        self.optimization_class = optimization_class
 
         # Load settings
         self.load_settings(settings)
@@ -1319,7 +1320,7 @@ class Behavior_1f1w(mesa.Agent):
         dm_dict = self.dm_dict  # decision-making settings
         consumat_dict = self.consumat_dict
 
-        dm = self.Optimization()
+        dm = self.optimization_class()
 
         dm.setup_ini_model(
             unique_id=self.unique_id,
@@ -1698,7 +1699,7 @@ class Behavior_1f1w_ci(mesa.Agent):
             setattr(self, k, v)
         self.fix_state = kwargs.get("fix_state")  # internal experiment
 
-        self.Optimization = Optimization
+        self.optimization_class = Optimization
 
         # Load settings
         self.load_settings(settings)
@@ -1962,37 +1963,6 @@ class Behavior_1f1w_ci(mesa.Agent):
                 prec_aw=prec_aw_step[field.prec_aw_id][current_year],
             )
 
-            ##### Update premium
-            if field.premium_dict is not None:
-                df = finance.aph_revenue_based_coef
-                for c in self.model.crop_options:
-                    field.premium_dict["rainfed"][
-                        c
-                    ] = finance.cal_APH_revenue_based_premium(
-                        df=df,
-                        crop=c,
-                        county=field.county,
-                        field_type="rainfed",
-                        projected_price=finance.projected_price[c],
-                        aph_yield_dict=field.aph_yield_dict,
-                        premium_ratio=finance.premium_ratio,
-                        coverage_level=0.75,
-                        field_area=field.field_area,
-                    )
-                    field.premium_dict["irrigated"][
-                        c
-                    ] = finance.cal_APH_revenue_based_premium(
-                        df=df,
-                        crop=c,
-                        county=field.county,
-                        field_type="irrigated",
-                        projected_price=finance.projected_price[c],
-                        aph_yield_dict=field.aph_yield_dict,
-                        premium_ratio=finance.premium_ratio,
-                        coverage_level=0.75,
-                        field_area=field.field_area,
-                    )
-
         ##### Simulate wells (energy consumption)
         well_ids = dm_sols["well_ids"]
         self.irr_vol = sum([field.irr_vol_per_field for _, field in fields.items()])
@@ -2101,11 +2071,12 @@ class Behavior_1f1w_ci(mesa.Agent):
         dm_dict = self.dm_dict  # decision-making settings
         consumat_dict = self.consumat_dict
 
-        dm = self.Optimization()
+        dm = self.optimization_class()
 
         dm.setup_ini_model(
             unique_id=self.unique_id,
             gpenv=self.model.gpenv,  # share one environment for the entire simulation.,
+            activate_ci=self.model.activate_ci,
             horizon=dm_dict["horizon"],
             crop_options=self.model.crop_options,
         )
@@ -2118,6 +2089,26 @@ class Behavior_1f1w_ci(mesa.Agent):
             # i_crop and i_te in certain states.
             dm_sols_fi = dm_sols[fi]
 
+            # calulate the premium for dm that store in the field
+            if self.model.activate_ci:
+                for field_type in ["irrigated", "rainfed"]:
+                    for crop in self.model.crop_options:
+                        field.premium_dict_for_dm[field_type][crop] = self.finance.cal_APH_revenue_based_premium(
+                            df=self.finance.aph_revenue_based_coef,
+                            crop=crop,
+                            county=field.county,
+                            field_type=field_type,
+                            aph_yield_dict=field.aph_yield_dict,
+                            projected_price=self.finance.projected_price[crop],
+                            premium_ratio=self.finance.premium_ratio,
+                            coverage_level=0.75,
+                        )
+                premium_dict=field.premium_dict_for_dm
+                aph_yield_dict=field.aph_yield_dict
+            else:
+                premium_dict=None,
+                aph_yield_dict=None,
+            
             if init:
                 # Optimize irrigation depth with others variables given.
                 # Apply the actual prec_aw (not the perceived one)
@@ -2129,8 +2120,8 @@ class Behavior_1f1w_ci(mesa.Agent):
                     field_type=field.field_type,
                     i_crop=dm_sols_fi["i_crop"],
                     i_rainfed=None,
-                    premium_dict=field.premium_dict,
-                    aph_yield_dict=field.aph_yield_dict,
+                    premium_dict=premium_dict,
+                    aph_yield_dict=aph_yield_dict,
                 )
 
             elif state == "Deliberation":
@@ -2143,8 +2134,8 @@ class Behavior_1f1w_ci(mesa.Agent):
                     field_type=field.field_type,
                     i_crop=None,
                     i_rainfed=None,
-                    premium_dict=field.premium_dict,
-                    aph_yield_dict=field.aph_yield_dict,
+                    premium_dict=premium_dict,
+                    aph_yield_dict=aph_yield_dict,
                 )
 
             elif state == "Repetition":
@@ -2157,8 +2148,8 @@ class Behavior_1f1w_ci(mesa.Agent):
                     field_type=field.field_type,
                     i_crop=dm_sols_fi["i_crop"],
                     i_rainfed=None,
-                    premium_dict=field.premium_dict,
-                    aph_yield_dict=field.aph_yield_dict,
+                    premium_dict=premium_dict,
+                    aph_yield_dict=aph_yield_dict,
                 )
 
             else:  # social comparason & imitation
@@ -2176,8 +2167,8 @@ class Behavior_1f1w_ci(mesa.Agent):
                     field_type=field.field_type,
                     i_crop=dm_sols_neighbor_fi["i_crop"],
                     i_rainfed=None,
-                    premium_dict=field.premium_dict,
-                    aph_yield_dict=field.aph_yield_dict,
+                    premium_dict=premium_dict,
+                    aph_yield_dict=aph_yield_dict,
                 )
 
         for wi, well in wells.items():

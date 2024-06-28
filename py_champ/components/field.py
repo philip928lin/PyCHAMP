@@ -373,15 +373,25 @@ class Field_1f1w_ci(mesa.Agent):
         # Initialize field type
         self.field_type = self.init["field_type"]
 
-        # Initialize aph_yield_records & aph_yield_dict
-        self.aph_yield_dict = self.init.get("aph_yield")
-        self.aph_yield_records = {
-            "irrigated": {
-                c: [v] * 5 for c, v in self.aph_yield_dict["irrigated"].items()
-            },
-            "rainfed": {c: [v] * 5 for c, v in self.aph_yield_dict["rainfed"].items()},
-        }
-        self.premium_dict = self.init.get("premium")
+        # Initialize aph_yield_records & aph_yield_dict (in unit of 1e4 bu/field)
+        if self.model.activate_ci:
+            self.aph_yield_dict = self.init.get("aph_yield")
+            self.aph_yield_records = {
+                "irrigated": {
+                    c: [v] * 5 for c, v in self.aph_yield_dict["irrigated"].items()
+                },
+                "rainfed": {c: [v] * 5 for c, v in self.aph_yield_dict["rainfed"].items()},
+            }
+            # Note that the premium_dict_for_dm will be populated in the behavior
+            # module before optimization.
+            self.premium_dict_for_dm = {
+                "irrigated": {c: None for c in crop_options},
+                "rainfed": {c: None for c in crop_options},
+            }
+        else:
+            self.aph_yield_dict = None
+            self.aph_yield_records = None
+            self.premium_dict_for_dm = None
 
         # Additional attributes from kwargs
         for k, v in kwargs.items():
@@ -448,6 +458,25 @@ class Field_1f1w_ci(mesa.Agent):
         crop = crop_options[np.argmax(i_crop[:, 0])]
         self.crop = crop
         self.i_crop = i_crop
+
+    def update_aph_yield(self, field_type, crop_yield):
+        """ Update the aph_yield_records & aph_yield_dict for crop insurance.
+
+        Should be triggered after the yield calculation and premium 
+        calculation in the finance after everthing is done.
+        
+        Parameters
+        ----------
+        field_type : str
+            The type of the field ("irrigated" or "rainfed").
+        crop_yield : float
+            The yield of the crop [1e4 bu].
+        """
+        crop = self.crop
+        self.aph_yield_records[field_type][crop].append(crop_yield)
+        self.aph_yield_dict[field_type][crop] = np.mean(
+            self.aph_yield_records[field_type][crop][-5:]
+        )
 
     def step(self, irr_depth, i_crop, prec_aw: dict) -> tuple:
         """
@@ -516,17 +545,5 @@ class Field_1f1w_ci(mesa.Agent):
         self.yield_rate_per_field = avg_y_y
         self.irr_vol_per_field = irr_vol  # m-ha
 
-        # update aph_yield_records & aph_yield_dict
-        crop = self.crop
-        if irr_vol > 0:
-            self.aph_yield_records["irrigated"][crop].append(np.sum(y))
-            self.aph_yield_dict["irrigated"][crop] = np.mean(
-                self.aph_yield_records["irrigated"][crop][-5:]
-            )
-        else:
-            self.aph_yield_records["rainfed"][crop].append(np.sum(y))
-            self.aph_yield_dict["rainfed"][crop] = np.mean(
-                self.aph_yield_records["rainfed"][crop][-5:]
-            )
-
+        # All crop insurance related update should be done in the finance module.
         return y, avg_y_y, irr_vol
