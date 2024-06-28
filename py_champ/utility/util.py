@@ -3,6 +3,98 @@ import warnings
 
 import numpy as np
 import pandas as pd
+from mesa.time import BaseScheduler
+
+
+class BaseSchedulerByTypeFiltered(BaseScheduler):
+    """
+    A scheduler that overrides the step method to allow for filtering
+    of agents by .agt_type.
+
+    Example:
+    -------
+    >>> scheduler = BaseSchedulerByTypeFiltered(model)
+    >>> scheduler.step(agt_type="Behavior")
+    """
+
+    def step(self, agt_type=None) -> None:
+        """Execute the step of all the agents, one at a time."""
+        # To be able to remove and/or add agents during stepping
+        # it's necessary for the keys view to be a list.
+        self.do_each(method="step", agt_type=agt_type)
+        self.steps += 1
+        self.time += 1
+
+    def do_each(self, method, agent_keys=None, shuffle=False, agt_type=None):
+        if agent_keys is None:
+            agent_keys = self.get_agent_keys()
+        if agt_type is not None:
+            agent_keys = [i for i in agent_keys if self._agents[i].agt_type == agt_type]
+        if shuffle:
+            self.model.random.shuffle(agent_keys)
+        for agent_key in agent_keys:
+            if agent_key in self._agents:
+                getattr(self._agents[agent_key], method)()
+
+
+def get_nested_attr(obj, attr_str):
+    """A patch to collect a nested attribute using MESA's datacollector.
+
+    This function is used to get a nested attribute from an object.
+    For example, if we have an object with an attribute "a" that is a dictionary
+    with a key "b", we can get the value of "b" by calling get_nested_attr(obj, "a.b").
+    This is useful when collecting data from agents in a model.
+
+    Parameters
+    ----------
+    obj : object
+        An object.
+    attr_str : str
+        A string of nested attributes separated by a period.
+
+    Returns
+    -------
+    object
+        The nested attribute.
+    """
+    attrs = attr_str.split(".", 1)
+    current_attr = getattr(obj, attrs[0], None)
+    if len(attrs) == 1 or current_attr is None:
+        return current_attr
+    return get_nested_attr(current_attr, attrs[1])
+
+
+def get_agt_attr(attr_str):
+    """Get a nested attribute from an agent object.
+
+    This replaces, e.g., lambda a: getattr(a, "satisfaction", None)
+    We have to do this to return None if the attribute is not exist
+    in the given agent type.
+    def func(agent):
+        return getattr(agent, attr, None).
+
+    Parameters
+    ----------
+    attr_str : str
+        A string of nested attributes separated by a period.
+
+    Returns
+    -------
+    function
+        A function that returns the nested attribute.
+    """
+
+    def get_nested_attr(obj):
+        def get_nested_attr_(obj, attr_str):
+            attrs = attr_str.split(".", 1)
+            current_attr = getattr(obj, attrs[0], None)
+            if len(attrs) == 1 or current_attr is None:
+                return current_attr
+            return get_nested_attr_(current_attr, attrs[1])
+
+        return get_nested_attr_(obj, attr_str)
+
+    return get_nested_attr
 
 
 def dict_to_string(dictionary, prefix="", indentor="  ", level=2):
