@@ -239,7 +239,7 @@ class Indicator:
         float
             r2 coefficient.
         """
-        r = Indicator.r(x_obv, y_sim, r_na)
+        r = Indicator.get_r(x_obv, y_sim, r_na)
         return r**2
 
     @staticmethod
@@ -368,7 +368,7 @@ class Indicator:
         if r_na:
             x_obv, y_sim = Indicator.remove_na(x_obv, y_sim)
         sig_xObv = np.nanstd(x_obv)
-        return Indicator.rmse(x_obv, y_sim) / sig_xObv
+        return Indicator.get_rmse(x_obv, y_sim) / sig_xObv
 
     @staticmethod
     def get_kge(x_obv, y_sim, r_na=True):
@@ -398,7 +398,7 @@ class Indicator:
         kge = (
             1
             - (
-                (Indicator.r(x_obv, y_sim, False) - 1) ** 2
+                (Indicator.get_r(x_obv, y_sim, False) - 1) ** 2
                 + (sig_ySim / sig_xObv - 1) ** 2
                 + (mu_ySim / mu_xObv - 1) ** 2
             )
@@ -445,7 +445,7 @@ class Indicator:
         ikge = (
             1
             - (
-                (Indicator.r(x_obv, y_sim, False) - 1) ** 2
+                (Indicator.get_r(x_obv, y_sim, False) - 1) ** 2
                 + (sig_ySim / sig_xObv - 1) ** 2
                 + (mu_ySim / mu_xObv - 1) ** 2
             )

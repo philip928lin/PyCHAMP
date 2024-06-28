@@ -623,7 +623,7 @@ class SD6Model(mesa.Model):
     def get_metrices(df_sys, data, 
                      targets=['GW_st', 'withdrawal', 'rainfed']
                          +["corn", "sorghum", "soybeans", "wheat", "fallow"],
-                     indicators_list=['r', 'rmse', "KGE"]):
+                     indicators_list=['r', 'rmse', "kge"]):
         """
         Calculate various metrics based on system-level data and specified targets.
     
@@ -636,7 +636,7 @@ class SD6Model(mesa.Model):
         targets : list
             List of targets or variables for which metrics are calculated.
         indicators_list : list
-            List of indicators to calculate, such as 'r', 'rmse', 'KGE'.
+            List of indicators to calculate, such as 'r', 'rmse', 'kge'.
     
         Returns
         -------
