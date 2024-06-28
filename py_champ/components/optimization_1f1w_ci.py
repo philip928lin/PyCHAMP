@@ -43,7 +43,7 @@ class Optimization_1f1w_ci:
 
         ## Optimization Model
         self.model = gp.Model(name=unique_id, env=gpenv)
-        self.vars = {}  # A container to store variables.
+        self.vars_ = {}  # A container to store variables.
         self.bounds = {}
         self.inf = float("inf")
 
@@ -66,13 +66,13 @@ class Optimization_1f1w_ci:
         profit = m.addMVar((n_h), vtype="C", name="profit(1e4$)", lb=-inf, ub=inf)
 
         ## Record variables
-        self.vars["irr_depth"] = irr_depth
-        self.vars["v"] = v
-        self.vars["y"] = y
-        self.vars["e"] = e
+        self.vars_["irr_depth"] = irr_depth
+        self.vars_["v"] = v
+        self.vars_["y"] = y
+        self.vars_["e"] = e
         ## Average values over fields
-        self.vars["y_y"] = y_y
-        self.vars["profit"] = profit
+        self.vars_["y_y"] = y_y
+        self.vars_["profit"] = profit
 
         ## Record msg about the user inputs.
         self.msg = {}
@@ -165,10 +165,10 @@ class Optimization_1f1w_ci:
         i_rainfed = m.addMVar((n_c, 1), vtype="B", name=f"{fid}.i_rainfed")
 
         ## Extract global opt variables
-        irr_depth = self.vars["irr_depth"]
-        y = self.vars["y"]
-        y_y = self.vars["y_y"]
-        v = self.vars["v"]
+        irr_depth = self.vars_["irr_depth"]
+        y = self.vars_["y"]
+        y_y = self.vars_["y_y"]
+        v = self.vars_["v"]
 
         ## Given crop type input
         if i_crop_input is not None:
@@ -247,10 +247,10 @@ class Optimization_1f1w_ci:
             y_y == gp.quicksum(y_[j, :] for j in range(n_c)), name=f"c.{fid}.y_y"
         )
 
-        self.vars[fid] = {}
-        self.vars[fid]["i_crop"] = i_crop
-        self.vars[fid]["i_rainfed"] = i_rainfed
-        self.vars[fid]["field_type"] = field_type
+        self.vars_[fid] = {}
+        self.vars_[fid]["i_crop"] = i_crop
+        self.vars_[fid]["i_rainfed"] = i_rainfed
+        self.vars_[fid]["field_type"] = field_type
         self.premium_dict = premium_dict  # assuming single field
         self.aph_yield_dict = aph_yield_dict  # assuming single field
 
@@ -273,7 +273,7 @@ class Optimization_1f1w_ci:
         m = self.model
         n_h = self.n_h
 
-        v = self.vars["v"]
+        v = self.vars_["v"]
         if pumping_capacity is not None:
             m.addConstr((v <= pumping_capacity), name=f"c.{wid}.pumping_capacity")
 
@@ -295,7 +295,7 @@ class Optimization_1f1w_ci:
         AaB = A * tech_a * B  # (n_h)
         A_L_bB = A * (l_wt + l_pr + tech_b * B)  # (n_h)
 
-        e = self.vars["e"]
+        e = self.vars_["e"]
         m.addConstr((e == AaB * v * v + A_L_bB * v), name=f"c.{wid}.e(PJ)")
 
         self.n_wells += 1
@@ -308,11 +308,11 @@ class Optimization_1f1w_ci:
         n_h = self.n_h
         n_c = self.n_c
         inf = self.inf
-        vars = self.vars
+        vars_ = self.vars_
 
         fid = self.field_ids[-1]
-        i_crop = vars[fid]["i_crop"]
-        i_rainfed = vars[fid]["i_rainfed"]
+        i_crop = vars_[fid]["i_crop"]
+        i_rainfed = vars_[fid]["i_rainfed"]
         premium_dict = self.premium_dict
         aph_yield_dict = self.aph_yield_dict
 
@@ -327,8 +327,8 @@ class Optimization_1f1w_ci:
 
         cost_tech = 1.876  # center pivot LEPA
 
-        e = vars["e"]  # (n_h) [PJ]
-        y = vars["y"]  # (n_c, n_h) [1e4 bu]
+        e = vars_["e"]  # (n_h) [PJ]
+        y = vars_["y"]  # (n_c, n_h) [1e4 bu]
 
         cost_e = m.addMVar((n_h), vtype="C", name="cost_e(1e4$)", lb=0, ub=inf)
         rev = m.addMVar((n_h), vtype="C", name="rev(1e4$)", lb=-inf, ub=inf)
@@ -379,7 +379,7 @@ class Optimization_1f1w_ci:
 
         projected_price = {c: finance_dict["projected_price"][c] for c in crop_options}
 
-        i_rainfed = vars[self.field_ids[-1]]["i_rainfed"]  # Assuming just one field.
+        i_rainfed = vars_[self.field_ids[-1]]["i_rainfed"]  # Assuming just one field.
         payout = m.addMVar((n_h), vtype="C", name="premium(1e4$)", lb=0, ub=inf)
         if aph_yield_dict is not None:
             payout_crops = []
@@ -428,11 +428,11 @@ class Optimization_1f1w_ci:
         else:
             m.addConstr(payout == 0, name="c.payout")
 
-        vars["rev"] = rev
-        vars["cost_e"] = cost_e
-        vars["other_cost"] = annual_cost
-        vars["premium"] = premium
-        vars["payout"] = payout
+        vars_["rev"] = rev
+        vars_["cost_e"] = cost_e
+        vars_["other_cost"] = annual_cost
+        vars_["premium"] = premium
+        vars_["payout"] = payout
 
         # Note the average profit per field is calculated in finish_setup().
         # That way we can ensure the final field numbers added by users.
@@ -493,9 +493,9 @@ class Optimization_1f1w_ci:
         m = self.model
         n_h = self.n_h
         n_c = self.n_c
-        vars = self.vars
+        vars_ = self.vars_
 
-        irr_sub = vars["irr_depth"]
+        irr_sub = vars_["irr_depth"]
 
         # Initial period
         # The structure is to fit within a larger simulation framework, which
@@ -605,11 +605,11 @@ class Optimization_1f1w_ci:
         self.alphas = consumat_dict["alpha"]
         self.scales = consumat_dict["scale"]
 
-        vars = self.vars
+        vars_ = self.vars_
 
         # Currently supported metrices
         # We use average value per field (see finish_setup())
-        eval_metric_vars = {"profit": vars["profit"], "yield_rate": vars["y_y"]}
+        eval_metric_vars = {"profit": vars_["profit"], "yield_rate": vars_["y_y"]}
 
         if target not in eval_metric_vars:
             print(f"{target} is not a valid metric.")
@@ -618,7 +618,7 @@ class Optimization_1f1w_ci:
         m = self.model
         n_h = self.n_h
 
-        vars["Sa"] = {}
+        vars_["Sa"] = {}
 
         def add_metric(metric):
             # fakeSa will be forced to be nonnegative later on for Sa calculation
@@ -628,11 +628,11 @@ class Optimization_1f1w_ci:
                 (fakeSa == gp.quicksum(metric_var[h] for h in range(n_h)) / n_h),
                 name=f"c.Sa.{metric}",
             )
-            vars["Sa"][metric] = fakeSa  # fake Sa for each metric (profit and y_Y)
+            vars_["Sa"][metric] = fakeSa  # fake Sa for each metric (profit and y_Y)
 
         # Add objective
         add_metric(target)
-        m.setObjective(vars["Sa"][target], gp.GRB.MAXIMIZE)
+        m.setObjective(vars_["Sa"][target], gp.GRB.MAXIMIZE)
         self.obj_post_calculation = True
 
     def finish_setup(self, display_summary=True):
@@ -650,17 +650,17 @@ class Optimization_1f1w_ci:
 
         """
         m = self.model
-        vars = self.vars
+        vars_ = self.vars_
         n_f = self.n_fields
 
         # Calculate average value per field
-        profit = vars["profit"]
-        rev = vars["rev"]
-        cost_e = vars["cost_e"]
-        annual_cost = vars["other_cost"]
+        profit = vars_["profit"]
+        rev = vars_["rev"]
+        cost_e = vars_["cost_e"]
+        annual_cost = vars_["other_cost"]
 
-        premium = vars["premium"]
-        payout = vars["payout"]
+        premium = vars_["premium"]
+        payout = vars_["payout"]
         m.addConstr(
             (profit == (payout + rev - cost_e - annual_cost - premium) / n_f),
             name="c.profit",
@@ -688,7 +688,7 @@ class Optimization_1f1w_ci:
     def solve(
         self, keep_gp_model=False, keep_gp_output=False, display_report=True, **kwargs
     ):
-        def extract_sol(vars):
+        def extract_sol(vars_):
             sols = {}
 
             def get_inner_dict(d, new_dict):
@@ -704,7 +704,7 @@ class Optimization_1f1w_ci:
                         except:
                             new_dict[k] = v  # for all others
 
-            get_inner_dict(vars, sols)
+            get_inner_dict(vars_, sols)
             return sols
 
         ## Solving model
@@ -715,7 +715,7 @@ class Optimization_1f1w_ci:
         # Optimal solution found or reach time limit
         if m.Status == 2 or m.Status == 9:
             self.optimal_obj_value = m.objVal
-            self.sols = extract_sol(self.vars)
+            self.sols = extract_sol(self.vars_)
             sols = self.sols
             sols["obj"] = m.objVal
             sols["field_ids"] = self.field_ids

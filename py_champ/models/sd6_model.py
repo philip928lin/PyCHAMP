@@ -164,7 +164,13 @@ class SD6Model(mesa.Model):
         if gurobi_dict is None:
             gurobi_dict = {"LogToConsole": 0, "NonConvex": 2, "Presolve": -1}
         if components is None:
-            components = {"aquifer": Aquifer, "field": Field, "well": Well, "finance": Finance, "behavior": Behavior}
+            components = {
+                "aquifer": Aquifer,
+                "field": Field,
+                "well": Well,
+                "finance": Finance,
+                "behavior": Behavior,
+            }
         self.running = True  # Required for batch run
 
         # Time and Step recorder
@@ -710,7 +716,16 @@ class SD6Model(mesa.Model):
         or specific objectives, providing insights into the accuracy and reliability of the simulation.
         """
         if targets is None:
-            targets = ["GW_st", "withdrawal", "rainfed", "corn", "sorghum", "soybeans", "wheat", "fallow"]
+            targets = [
+                "GW_st",
+                "withdrawal",
+                "rainfed",
+                "corn",
+                "sorghum",
+                "soybeans",
+                "wheat",
+                "fallow",
+            ]
         if indicators_list is None:
             indicators_list = ["r", "rmse", "kge"]
         indicators = Indicator()

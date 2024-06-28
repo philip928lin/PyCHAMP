@@ -536,7 +536,7 @@ class Behavior(mesa.Agent):
 
         dm = self.optimization_class(
             unique_id=self.unique_id,
-            LogToConsole=self.gb_dict.get("LogToConsole"),
+            log_to_console=self.gb_dict.get("LogToConsole"),
             gpenv=self.model.gpenv,
         )
 
@@ -696,7 +696,8 @@ class Behavior(mesa.Agent):
         dm_sols = dm.sols
         if dm_sols is None:
             warnings.warn(
-                "Gurobi returns empty solutions (likely due to infeasible problem."
+                "Gurobi returns empty solutions (likely due to infeasible problem.",
+                stacklevel=2,
             )
         dm.depose_gp_env()  # Delete the entire environment to release memory.
 
@@ -2244,7 +2245,8 @@ class Behavior_1f1w_ci(mesa.Agent):
         dm_sols = dm.sols
         if dm_sols is None:
             warnings.warn(
-                "Gurobi returns empty solutions (likely due to infeasible problem."
+                "Gurobi returns empty solutions (likely due to infeasible problem.",
+                stacklevel=2,
             )
         # dm.depose_gp_env()  # Delete the entire environment to release memory.
 

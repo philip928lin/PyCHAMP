@@ -665,7 +665,16 @@ class SD6Model_1f1w_ci(mesa.Model):
         or specific objectives, providing insights into the accuracy and reliability of the simulation.
         """
         if targets is None:
-            targets = ["GW_st", "withdrawal", "rainfed", "corn", "sorghum", "soybeans", "wheat", "fallow"]
+            targets = [
+                "GW_st",
+                "withdrawal",
+                "rainfed",
+                "corn",
+                "sorghum",
+                "soybeans",
+                "wheat",
+                "fallow",
+            ]
         if indicators_list is None:
             indicators_list = ["r", "rmse", "KGE"]
         indicators = Indicator()

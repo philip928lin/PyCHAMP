@@ -74,7 +74,7 @@ class Optimization:
 
     """
 
-    def __init__(self, unique_id="", LogToConsole=1, gpenv=None):
+    def __init__(self, unique_id="", log_to_console=1, gpenv=None):
         """
         Instantiate an optimization environment and object for a farmer agent.
 
@@ -92,8 +92,8 @@ class Optimization:
         # This will remove all output from gurobi to the console.
         if gpenv:
             self.gpenv = gp.Env(empty=True)
-            if LogToConsole is not None:
-                self.gpenv.setParam("LogToConsole", LogToConsole)
+            if log_to_console is not None:
+                self.gpenv.setParam("LogToConsole", log_to_console)
             self.gpenv.start()
         else:
             self.gpenv = gpenv
@@ -195,7 +195,10 @@ class Optimization:
         if gurobi_kwargs is None:
             gurobi_kwargs = {}
         if consumat_dict is None:
-            consumat_dict = {"alpha": {"profit": 1, "yield_rate": 1}, "scale": {"profit": 0.23 * 50, "yield_rate": 1}}
+            consumat_dict = {
+                "alpha": {"profit": 1, "yield_rate": 1},
+                "scale": {"profit": 0.23 * 50, "yield_rate": 1},
+            }
         if tech_options is None:
             tech_options = ["center pivot", "center pivot LEPA"]
         if crop_options is None:
@@ -236,7 +239,7 @@ class Optimization:
         ## Optimization Model
         # self.model.dispose()    # release the memory of the previous model
         self.model = gp.Model(name=self.unique_id, env=self.gpenv)
-        self.vars = {}  # A container to store variables.
+        self.vars_ = {}  # A container to store variables.
         self.bounds = {}
         self.inf = float("inf")
 
@@ -266,14 +269,14 @@ class Optimization:
         profit = m.addMVar((n_h), vtype="C", name="profit(1e4$)", lb=-inf, ub=inf)
 
         ## Record variables
-        self.vars["irr_depth"] = irr_depth
-        self.vars["v"] = v
-        self.vars["y"] = y
-        self.vars["e"] = e
+        self.vars_["irr_depth"] = irr_depth
+        self.vars_["v"] = v
+        self.vars_["y"] = y
+        self.vars_["e"] = e
         ## Average values over fields
-        self.vars["y_y"] = y_y
-        self.vars["profit"] = profit
-        self.vars["irr_depth_per_field"] = irr_depth_per_field
+        self.vars_["y_y"] = y_y
+        self.vars_["profit"] = profit
+        self.vars_["irr_depth_per_field"] = irr_depth_per_field
         self.bigM = 100
         self.penalties = []
 
@@ -636,23 +639,23 @@ class Optimization:
             name=f"c.{fid}.i_tech_change",
         )
 
-        self.vars[fid] = {}
-        self.vars[fid]["v"] = v
-        self.vars[fid]["y"] = y
-        self.vars[fid]["y_y"] = y_y
-        self.vars[fid]["irr_depth"] = irr_depth
-        self.vars[fid]["i_crop"] = i_crop
-        self.vars[fid]["i_rainfed"] = i_rainfed
-        self.vars[fid]["i_te"] = i_te
-        self.vars[fid]["l_pr"] = l_pr
-        self.vars[fid]["q"] = q
+        self.vars_[fid] = {}
+        self.vars_[fid]["v"] = v
+        self.vars_[fid]["y"] = y
+        self.vars_[fid]["y_y"] = y_y
+        self.vars_[fid]["irr_depth"] = irr_depth
+        self.vars_[fid]["i_crop"] = i_crop
+        self.vars_[fid]["i_rainfed"] = i_rainfed
+        self.vars_[fid]["i_te"] = i_te
+        self.vars_[fid]["l_pr"] = l_pr
+        self.vars_[fid]["q"] = q
 
-        self.vars[fid]["pre_i_crop"] = pre_i_crop
-        self.vars[fid]["pre_i_te"] = pre_i_te
-        self.vars[fid]["i_crop_change"] = i_crop_change
-        self.vars[fid]["i_tech_change"] = i_tech_change
+        self.vars_[fid]["pre_i_crop"] = pre_i_crop
+        self.vars_[fid]["pre_i_te"] = pre_i_te
+        self.vars_[fid]["i_crop_change"] = i_crop_change
+        self.vars_[fid]["i_tech_change"] = i_tech_change
 
-        self.vars[fid]["field_type"] = field_type
+        self.vars_[fid]["field_type"] = field_type
 
         self.n_fields += 1
 
@@ -784,11 +787,11 @@ class Optimization:
         r_g_m_ha_2_m3_eff = rho * g * m_ha_2_m3 / eff_pump / 1e15
         m.addConstr((e == r_g_m_ha_2_m3_eff * v * l_t), name=f"c.{wid}.e(PJ)")
 
-        self.vars[wid] = {}
-        self.vars[wid]["e"] = e
-        self.vars[wid]["v"] = v
-        self.vars[wid]["q"] = q
-        self.vars[wid]["l_pr"] = l_pr
+        self.vars_[wid] = {}
+        self.vars_[wid]["e"] = e
+        self.vars_[wid]["v"] = v
+        self.vars_[wid]["q"] = q
+        self.vars_[wid]["l_pr"] = l_pr
         self.n_wells += 1
 
     def setup_constr_finance(self, finance_dict):
@@ -815,7 +818,7 @@ class Optimization:
         n_s = self.n_s
         n_te = self.n_te
         inf = self.inf
-        vars = self.vars
+        vars_ = self.vars_
         field_ids = self.field_ids
 
         ## Form tech change cost matrix from the finance_dict
@@ -851,8 +854,8 @@ class Optimization:
             [finance_dict["irr_tech_operational_cost"][te] for te in tech_options]
         )
 
-        e = vars["e"]  # (n_h) [PJ]
-        y = vars["y"]  # (n_s, n_c, n_h) [1e4 bu]
+        e = vars_["e"]  # (n_h) [PJ]
+        y = vars_["y"]  # (n_s, n_c, n_h) [1e4 bu]
 
         cost_e = m.addMVar((n_h), vtype="C", name="cost_e(1e4$)", lb=0, ub=inf)
         rev = m.addMVar((n_h), vtype="C", name="rev(1e4$)", lb=-inf, ub=inf)
@@ -861,23 +864,23 @@ class Optimization:
         annual_tech_change_cost = 0
         annual_crop_change_cost = 0
         for fid in field_ids:
-            i_te = vars[fid]["i_te"]
+            i_te = vars_[fid]["i_te"]
             annual_tech_cost += i_te * cost_tech
 
-            pre_i_te = vars[fid]["pre_i_te"]
+            pre_i_te = vars_[fid]["pre_i_te"]
             tech_change_cost_arr = tech_change_cost_matrix[
                 np.argmax(pre_i_te), :
             ]  # ==1
-            i_tech_change = vars[fid]["i_tech_change"]
+            i_tech_change = vars_[fid]["i_tech_change"]
             # uniformly allocate into planning horizon, "/n_h"
             annual_tech_change_cost += tech_change_cost_arr * i_tech_change / n_h
 
             for s in range(n_s):
-                pre_i_crop = vars[fid]["pre_i_crop"][s, :, 0]
+                pre_i_crop = vars_[fid]["pre_i_crop"][s, :, 0]
                 crop_change_cost_arr = crop_change_cost_matrix[
                     np.argmax(pre_i_crop), :
                 ]  # ==1
-                i_crop_change = vars[fid]["i_crop_change"][s, :, 0]
+                i_crop_change = vars_[fid]["i_crop_change"][s, :, 0]
                 # uniformly allocate into planning horizon, "/n_h"
                 annual_crop_change_cost += crop_change_cost_arr * i_crop_change / n_h
         annual_cost = m.addMVar(
@@ -901,9 +904,9 @@ class Optimization:
             ),
             name="c.rev",
         )
-        vars["rev"] = rev
-        vars["cost_e"] = cost_e
-        vars["other_cost"] = annual_cost
+        vars_["rev"] = rev
+        vars_["cost_e"] = cost_e
+        vars_["other_cost"] = annual_cost
 
         # Note the average profit per field is calculated in finish_setup().
         # That way we can ensure the final field numbers added by users.
@@ -982,19 +985,19 @@ class Optimization:
         n_h = self.n_h
         n_c = self.n_c
         n_s = self.n_s
-        vars = self.vars
+        vars_ = self.vars_
 
         # Collect irrigation depth over the constrained fields.
         if fids == "all":
-            irr_sub = vars[
+            irr_sub = vars_[
                 "irr_depth_per_field"
             ]  # (n_s, n_c, n_h) averaged irrigation for all the fields a farmer owns
         else:
             for i, fid in enumerate(fids):
                 if i == 0:
-                    irr_sub = vars[fid]["irr_depth"]
+                    irr_sub = vars_[fid]["irr_depth"]
                 else:
-                    irr_sub += vars[fid]["irr_depth"]
+                    irr_sub += vars_[fid]["irr_depth"]
             irr_sub = irr_sub / len(fids)
 
         # Initial period
@@ -1112,7 +1115,7 @@ class Optimization:
         """
         target = self.target
         alphas = self.alphas
-        vars = self.vars
+        vars_ = self.vars_
 
         # Update alpha list
         if alpha_dict is not None:
@@ -1129,13 +1132,13 @@ class Optimization:
 
         # Currently supported metrices
         # We use average value per field (see finish_setup())
-        eval_metric_vars = {"profit": vars["profit"], "yield_rate": vars["y_y"]}
+        eval_metric_vars = {"profit": vars_["profit"], "yield_rate": vars_["y_y"]}
 
         inf = self.inf
         m = self.model
         n_h = self.n_h
 
-        vars["Sa"] = {}
+        vars_["Sa"] = {}
 
         def add_metric(metric):
             # fakeSa will be forced to be nonnegative later on for Sa calculation
@@ -1145,7 +1148,7 @@ class Optimization:
                 (fakeSa == gp.quicksum(metric_var[h] for h in range(n_h)) / n_h),
                 name=f"c.Sa.{metric}",
             )
-            vars["Sa"][metric] = fakeSa  # fake Sa for each metric (profit and y_Y)
+            vars_["Sa"][metric] = fakeSa  # fake Sa for each metric (profit and y_Y)
 
         penalties = self.penalties
         penalty = 0
@@ -1156,7 +1159,7 @@ class Optimization:
             # Add objective
             if metric == target:
                 add_metric(metric)
-                m.setObjective(vars["Sa"][metric] - penalty, gp.GRB.MAXIMIZE)
+                m.setObjective(vars_["Sa"][metric] - penalty, gp.GRB.MAXIMIZE)
         self.obj_post_calculation = True
 
     def finish_setup(self, display_summary=True):
@@ -1174,7 +1177,7 @@ class Optimization:
 
         """
         m = self.model
-        vars = self.vars
+        vars_ = self.vars_
         fids = self.field_ids
         wids = self.well_ids
         n_h = self.n_h
@@ -1186,8 +1189,8 @@ class Optimization:
         # satisfy v. Sum of the ratios is equal to 1.
         allo_r = m.addMVar((n_f, n_w, n_h), vtype="C", name="allo_r", lb=0, ub=1)
         allo_r_w = m.addMVar((n_w, n_h), vtype="C", name="allo_r_w", lb=0, ub=1)
-        vars["allo_r"] = allo_r
-        vars["allo_r_w"] = allo_r_w
+        vars_["allo_r"] = allo_r
+        vars_["allo_r_w"] = allo_r_w
         m.addConstr(
             allo_r_w == gp.quicksum(allo_r[f, :, :] for f in range(n_f)) / n_f,
             name="c.allo_r_w",
@@ -1200,63 +1203,65 @@ class Optimization:
             ),
             name="c.allo_r",
         )
-        v = vars["v"]
+        v = vars_["v"]
         for k, wid in enumerate(wids):
-            m.addConstr((vars[wid]["v"] == v * allo_r_w[k, :]), name=f"c.{wid}.v(m-ha)")
+            m.addConstr(
+                (vars_[wid]["v"] == v * allo_r_w[k, :]), name=f"c.{wid}.v(m-ha)"
+            )
             m.addConstr(
                 (
-                    vars[wid]["q"]
+                    vars_[wid]["q"]
                     == gp.quicksum(
-                        vars[fid]["q"] * allo_r[f, k, :] for f, fid in enumerate(fids)
+                        vars_[fid]["q"] * allo_r[f, k, :] for f, fid in enumerate(fids)
                     )
                 ),
                 name=f"c.{wid}.q(m-ha/d)",
             )
             m.addConstr(
                 (
-                    vars[wid]["l_pr"]
+                    vars_[wid]["l_pr"]
                     == gp.quicksum(
-                        vars[fid]["l_pr"] * allo_r[f, k, :]
+                        vars_[fid]["l_pr"] * allo_r[f, k, :]
                         for f, fid in enumerate(fids)
                     )
                 ),
                 name=f"c.{wid}.l_pr(m)",
             )
 
-        irr_depth = vars["irr_depth"]
-        irr_depth_per_field = vars["irr_depth_per_field"]
-        y = vars["y"]
-        y_y = vars["y_y"]
-        e = vars["e"]
+        irr_depth = vars_["irr_depth"]
+        irr_depth_per_field = vars_["irr_depth_per_field"]
+        y = vars_["y"]
+        y_y = vars_["y_y"]
+        e = vars_["e"]
 
         # Sum to the total
-        def get_sum(ids, vars, var):
+        def get_sum(ids, vars_, var):
             """Sum over ids."""
             for i, v in enumerate(ids):
                 if i == 0:
-                    acc = vars[v][var]
+                    acc = vars_[v][var]
                 else:
-                    acc += vars[v][var]
+                    acc += vars_[v][var]
             return acc
 
         # Sum over fields
         m.addConstr(
-            irr_depth == get_sum(fids, vars, "irr_depth"), name="c.irr_depth(cm)"
+            irr_depth == get_sum(fids, vars_, "irr_depth"), name="c.irr_depth(cm)"
         )
-        m.addConstr(v == get_sum(fids, vars, "v"), name="c.v(m-ha)")
-        m.addConstr(y == get_sum(fids, vars, "y"), name="c.y(1e4bu)")
-        m.addConstr(e == get_sum(wids, vars, "e"), name="c.e(PJ)")
+        m.addConstr(v == get_sum(fids, vars_, "v"), name="c.v(m-ha)")
+        m.addConstr(y == get_sum(fids, vars_, "y"), name="c.y(1e4bu)")
+        m.addConstr(e == get_sum(wids, vars_, "e"), name="c.e(PJ)")
 
         # Calculate average value per field
-        m.addConstr(y_y == get_sum(fids, vars, "y_y") / n_f, name="c.y_y")
+        m.addConstr(y_y == get_sum(fids, vars_, "y_y") / n_f, name="c.y_y")
         m.addConstr(
-            irr_depth_per_field == get_sum(fids, vars, "irr_depth") / n_f,
+            irr_depth_per_field == get_sum(fids, vars_, "irr_depth") / n_f,
             name="c.irr_depth_per_field(cm)",
         )
-        profit = vars["profit"]
-        rev = vars["rev"]
-        cost_e = vars["cost_e"]
-        annual_cost = vars["other_cost"]
+        profit = vars_["profit"]
+        rev = vars_["rev"]
+        cost_e = vars_["cost_e"]
+        annual_cost = vars_["other_cost"]
         m.addConstr((profit == (rev - cost_e - annual_cost) / n_f), name="c.profit")
 
         m.update()
@@ -1318,7 +1323,7 @@ class Optimization:
 
         """
 
-        def extract_sol(vars):
+        def extract_sol(vars_):
             sols = {}
 
             def get_inner_dict(d, new_dict):
@@ -1334,7 +1339,7 @@ class Optimization:
                         except:
                             new_dict[k] = v  # for all others
 
-            get_inner_dict(vars, sols)
+            get_inner_dict(vars_, sols)
             return sols
 
         ## Solving model
@@ -1351,7 +1356,7 @@ class Optimization:
         # Optimal solution found or reach time limit
         if m.Status == 2 or m.Status == 9:
             self.optimal_obj_value = m.objVal
-            self.sols = extract_sol(self.vars)
+            self.sols = extract_sol(self.vars_)
             sols = self.sols
             sols["obj"] = m.objVal
             sols["field_ids"] = self.field_ids
