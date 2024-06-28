@@ -195,3 +195,172 @@ class Well(mesa.Agent):
         self.pumping_rate = pumping_rate
         self.e = e
         return e
+
+class Well_1f1w(mesa.Agent):
+    """
+    This module is a well simulator.
+
+    Parameters
+    ----------
+    unique_id : int
+        A unique identifier for this agent.
+    model
+        The model instance to which this agent belongs.
+    settings : dict
+        A dictionary containing settings specific to a well, such as 
+        hydraulic properties and initial conditions.
+        
+        - 'r': Radius of the well [m].
+        - 'k': Hydraulic conductivity of the aquifer [m/day].
+        - 'sy': Specific yield of the aquifer [-].
+        - 'rho': Density of water [kg/m³].
+        - 'g': Acceleration due to gravity [m/s²].
+        - 'eff_pump': Pump efficiency as a fraction [-].
+        - 'eff_well': Well efficiency as a fraction [-].
+        - 'pumping_capacity': Maximum pumping capacity of the well [m-ha/year].
+        - 'init': Initial conditions, which include water table lift (l_wt [m]), saturated thickness (st [m]) and pumping_days (days).
+        
+        >>> # A sample settings dictionary
+        >>> settings = {
+        >>>     "r": None,
+        >>>     "k": None,
+        >>>     "sy": None,
+        >>>     "rho": None,   
+        >>>     "g": None,     
+        >>>     "eff_pump": None,
+        >>>     "eff_well": None,
+        >>>     "aquifer_id": None,
+        >>>     "pumping_capacity": None,
+        >>>     "init":{
+        >>>         "l_wt": None,
+        >>>         "st": None,
+        >>>         "pumping_days": None
+        >>>         },
+        >>>     }
+        
+    **kwargs
+        Additional keyword arguments that can be dynamically set as well agent attributes.
+
+    Attributes
+    ----------
+    agt_type : str
+        The type of the agent, set to 'Well'.
+    st : float
+        The saturated thickness of the aquifer at the well location [m].
+    l_wt : float
+        The lift of the water table from its initial position [m].
+    pumping_days : int
+        Number of days the well pumps water [day].
+    tr : float
+        The transmissivity of the aquifer at the well location [m²/day].
+    t : int
+        The current time step, initialized to zero.
+    e : float or None
+        The energy consumption [PJ], initialized to None.
+    withdrawal : float or None
+        The volume of water withdrawn in meter-hectares [m-ha].
+
+    Notes
+    -----
+    - Transmissivity 'tr' is calculated as the product of saturated thickness and hydraulic conductivity.
+    """
+    def __init__(self, unique_id, model, settings: dict, **kwargs):
+        """
+        Initialize a Well agent in the Mesa model.
+        """
+        # MESA required attributes => (unique_id, model)
+        super().__init__(unique_id, model)
+        self.agt_type = "Well"
+        # Load kwargs
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+        self.load_settings(settings)
+        self.pumping_days = self.init["pumping_days"]
+        
+        # Some other attributes
+        self.t = 0
+        self.e = None
+        self.withdrawal = None # m-ha
+        
+        self.l_wt = self.init["l_wt"]
+        
+        if self.init.get("B") is None:
+            self.st = self.init["st"]
+            self.tr = self.st * settings["k"]    # Transmissivity
+            self.B = 1/(4 * np.pi * self.tr * settings["eff_well"]) \
+                * (-0.5772 - np.log(settings["r"]**2*settings["sy"] \
+                / (4 * self.tr * self.pumping_days))) 
+        else:
+            self.B = self.init["B"]
+        
+    def load_settings(self, settings: dict):
+        """
+        Load the well settings from the dictionary.
+    
+        Parameters
+        ----------
+        settings : dict
+            A dictionary containing well settings. Expected keys include 'r', 'k', 'sy', 'rho', 
+            'g', 'eff_pump', 'eff_well', 'aquifer_id', 'pumping_capacity', and 'init'.
+        """
+        self.rho = settings["rho"]
+        self.g = settings["g"]
+        self.eff_pump = settings["eff_pump"]
+        self.aquifer_id = settings["aquifer_id"]
+        self.pumping_capacity = settings["pumping_capacity"]
+        self.init = settings["init"]
+        
+    def step(self, withdrawal: float, dwl: float, pumping_days: int = None) -> float:
+        """
+        Perform a single step of well simulation, calculating the energy consumption.
+    
+        Parameters
+        ----------
+        withdrawal : float
+            The amount of water withdrawn in this step [m-ha].
+        dwl : float
+            The change in the water level due to withdrawal [m].
+        pumping_days : int, optional
+            Number of days the well is operational. If not specified, previous
+            value is used.
+    
+        Returns
+        -------
+        float
+            The energy consumption for this step [Petajoules, PJ].
+    
+        Notes
+        -----
+        The method calculates energy consumption based on several factors including withdrawal volume, 
+        water table lift, well and pump efficiency, and hydraulic properties of the aquifer.
+        """
+        self.t += 1
+        # Only update pumping_days when it is given.
+        if pumping_days is not None:    
+            self.pumping_days = pumping_days
+        # Update saturated thickness and water table lift based on groundwater
+        # level change
+        self.l_wt -= dwl
+        #self.st += dwl
+        self.withdrawal = withdrawal
+
+        # From our precalculation for sd6
+        self.B = self.B - 0.00015 * dwl
+        
+        #!!!! Center pivot LEPA (fixed)
+        tech_a = 0.0058
+        tech_b = 0.212206
+        l_pr = 12.65 
+        
+        rho, g = self.rho, self.g
+        eff_pump = self.eff_pump
+        
+        A = rho * g / eff_pump * 1e-11
+        AaB = A * tech_a * self.B  
+        A_L_bB = A * (self.l_wt + l_pr + tech_b * self.B) 
+        e =  AaB * withdrawal * withdrawal + A_L_bB * withdrawal
+
+        # Record energy consumption
+        self.e = e
+        return e
