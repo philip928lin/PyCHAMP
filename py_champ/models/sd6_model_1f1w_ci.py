@@ -533,12 +533,12 @@ class SD6Model_1f1w_ci(mesa.Model):
                         "field_area",
                     ]
                 ],
-                df_wells[["wid", "water_depth", "withdrawal"]],
+                df_wells[["wid", "water_depth", "withdrawal", "energy"]],
             ],
             axis=1,
         )
         df_agt["yield"] = df_agt["yield"].apply(sum).apply(sum)
-        df_agt = df_agt.round(4)
+        df_agt = df_agt.round(8)
 
         df_other = pd.concat(
             [

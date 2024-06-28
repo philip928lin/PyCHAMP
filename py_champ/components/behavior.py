@@ -137,7 +137,6 @@ class Behavior(mesa.Agent):
         # MESA required attributes => (unique_id, model)
         super().__init__(unique_id, model)
         self.agt_type = "Behavior"
-
         self.optimization_class = optimization_class
 
         # Load other kwargs
