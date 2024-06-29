@@ -500,54 +500,93 @@ class SD6Model_1f1w_ci(mesa.Model):
 
         df_wells = df[df["agt_type"] == "Well"].dropna(axis=1, how="all")
         df_wells["wid"] = df_wells["AgentID"]
-
-        df_agt = pd.concat(
-            [
-                df_behaviors[
-                    [
-                        "bid",
-                        "Sa",
-                        "E[Sa]",
-                        "Un",
-                        "state",
-                        "profit",
-                        "revenue",
-                        "energy_cost",
-                        "tech_cost",
-                        "premium",
-                        "payout",
-                        "gp_status",
-                        "gp_MIPGap",
-                    ]
+        
+        if model.activate_ci:
+            df_agt = pd.concat(
+                [
+                    df_behaviors[
+                        [
+                            "bid",
+                            "Sa",
+                            "E[Sa]",
+                            "Un",
+                            "state",
+                            "profit",
+                            "revenue",
+                            "energy_cost",
+                            "tech_cost",
+                            "premium",
+                            "payout",
+                            "gp_status",
+                            "gp_MIPGap",
+                        ]
+                    ],
+                    df_fields[
+                        [
+                            "fid",
+                            "field_type",
+                            "crop",
+                            "irr_vol",
+                            "yield",
+                            "yield_rate",
+                            "irr_depth",
+                            "w",
+                            "field_area",
+                        ]
+                    ],
+                    df_wells[["wid", "water_depth", "withdrawal", "energy"]],
                 ],
-                df_fields[
-                    [
-                        "fid",
-                        "field_type",
-                        "crop",
-                        "irr_vol",
-                        "yield",
-                        "yield_rate",
-                        "irr_depth",
-                        "w",
-                        "field_area",
-                    ]
+                axis=1,
+            )
+            df_agt["yield"] = df_agt["yield"].apply(sum).apply(sum)
+            df_agt = df_agt.round(8)
+
+            df_other = pd.concat(
+                [
+                    df_behaviors[["bid", "premium_dict"]],
+                    df_fields[["fid", "aph_yield_dict"]],
                 ],
-                df_wells[["wid", "water_depth", "withdrawal", "energy"]],
-            ],
-            axis=1,
-        )
-        df_agt["yield"] = df_agt["yield"].apply(sum).apply(sum)
-        df_agt = df_agt.round(8)
+                axis=1,
+            )
+        else:
+            df_agt = pd.concat(
+                [
+                    df_behaviors[
+                        [
+                            "bid",
+                            "Sa",
+                            "E[Sa]",
+                            "Un",
+                            "state",
+                            "profit",
+                            "revenue",
+                            "energy_cost",
+                            "tech_cost",
+                            "gp_status",
+                            "gp_MIPGap",
+                        ]
+                    ],
+                    df_fields[
+                        [
+                            "fid",
+                            "field_type",
+                            "crop",
+                            "irr_vol",
+                            "yield",
+                            "yield_rate",
+                            "irr_depth",
+                            "w",
+                            "field_area",
+                        ]
+                    ],
+                    df_wells[["wid", "water_depth", "withdrawal", "energy"]],
+                ],
+                axis=1,
+            )
+            df_agt["yield"] = df_agt["yield"].apply(sum).apply(sum)
+            df_agt = df_agt.round(8)
 
-        df_other = pd.concat(
-            [
-                df_behaviors[["bid", "premium_dict"]],
-                df_fields[["fid", "aph_yield_dict"]],
-            ],
-            axis=1,
-        )
-
+            df_other = None
         # =============================================================================
         # df_sys
         # =============================================================================
