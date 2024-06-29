@@ -7,11 +7,11 @@ import pandas as pd
 from tqdm import tqdm
 
 from ..components.aquifer import Aquifer
-from ..components.behavior import Behavior_1f1w
-from ..components.field import Field_1f1w
-from ..components.finance import Finance_1f1w
-from ..components.optimization_1f1w_ci import Optimization_1f1w
-from ..components.well import Well_1f1w
+from ..components.behavior import Behavior4SingleFieldAndWell
+from ..components.field import Field4SingleFieldAndWell
+from ..components.finance import Finance4SingleFieldAndWell
+from ..components.optimization_1f1w import Optimization4SingleFieldAndWell
+from ..components.well import Well4SingleFieldAndWell
 from ..utility.util import (
     BaseSchedulerByTypeFiltered,
     Indicator,
@@ -36,7 +36,7 @@ class SD6Model4SingleFieldAndWell(mesa.Model):
         finances_dict,
         behaviors_dict,
         components,
-        optimization_class=Optimization_1f1w,
+        optimization_class=Optimization4SingleFieldAndWell,
         init_year=2007,
         end_year=2022,
         lema_options=(True, "wr_LEMA_5yr", 2013),
@@ -55,10 +55,10 @@ class SD6Model4SingleFieldAndWell(mesa.Model):
         if components is None:
             components = {
                 "aquifer": Aquifer,
-                "field": Field_1f1w,
-                "well": Well_1f1w,
-                "finance": Finance_1f1w,
-                "behavior": Behavior_1f1w,
+                "field": Field4SingleFieldAndWell,
+                "well": Well4SingleFieldAndWell,
+                "finance": Finance4SingleFieldAndWell,
+                "behavior": Behavior4SingleFieldAndWell,
             }
         self.components = components
         self.optimization_class = optimization_class
@@ -281,7 +281,7 @@ class SD6Model4SingleFieldAndWell(mesa.Model):
         if self.crop_price_step is not None:
             for _, finance in self.finances.items():
                 crop_prices = self.crop_price_step.get(finance.finance_id)
-                finance.crop_price = crop_prices[self.current_year]
+                finance.crop_price = crop_prices[current_year]
 
         # Assign field type based on each behavioral agent.
         for _, behavior in self.behaviors.items():
@@ -325,8 +325,6 @@ class SD6Model4SingleFieldAndWell(mesa.Model):
                     for _, well in self.wells.items()
                 ]
             )
-            # withdrawal += sum([well.withdrawal if well.aquifer_id==aq_id else 0 \
-            #                for _, well in self.wells.items()])
             # Update aquifer
             aquifer.step(withdrawal)
 

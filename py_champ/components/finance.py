@@ -190,7 +190,7 @@ class Finance(mesa.Agent):
         return profit
 
 
-class Finance_1f1w(mesa.Agent):
+class Finance4SingleFieldAndWell(mesa.Agent):
     """ Simulate the financial aspect of the model. """
     
     def __init__(self, unique_id, model, settings: dict):

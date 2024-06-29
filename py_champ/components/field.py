@@ -286,11 +286,20 @@ class Field(mesa.Agent):
         return y, avg_y_y, irr_vol
 
 
-class Field_1f1w(mesa.Agent):
+class Field4SingleFieldAndWell(mesa.Agent):
     """ Simulate a field agent in the model. """
     def __init__(self, unique_id, model, settings: dict, **kwargs):
-        """
-        Initialize a Field agent in the Mesa model.
+        """Initialize a Field agent.
+
+        Parameters
+        ----------
+        unique_id : int
+            A unique identifier for this agent.
+        model
+            The mesa model instance to which this agent belongs.
+        settings : dict
+            A dictionary containing initial settings for the field, which include field
+            area, water yield curves, climate data id, and initial conditions.
         """
         # MESA required attributes => (unique_id, model)
         super().__init__(unique_id, model)
@@ -438,7 +447,7 @@ class Field_1f1w(mesa.Agent):
         avg_w = np.sum(w)
 
         # record
-        self.y = y 
+        self.y = y # 1e4 bu
         self.w = avg_w
         self.yield_rate_per_field = avg_y_y
         self.irr_vol_per_field = irr_vol     # m-ha
@@ -447,69 +456,7 @@ class Field_1f1w(mesa.Agent):
 
 
 class Field_1f1w_ci(mesa.Agent):
-    """
-    This module is a field simulator.
-
-    Parameters
-    ----------
-    unique_id : int
-        A unique identifier for this agent.
-    model
-        The model instance to which this agent belongs.
-    settings : dict
-        A dictionary containing initial settings for the field, which include field
-        area, water yield curves, technology pumping rate coefficients,
-        climate data id, and initial conditions.
-
-        - 'field_area': The total area of the field [ha].
-        - 'water_yield_curves': Water yield response curves for different crops.
-        - 'tech_pumping_rate_coefs': Coefficients for calculating pumping rates based on irrigation technology. Pumping rate [m-ha/day] = a * annual withdrawal [m-ha] + b
-        - 'prec_aw_id': Identifier for available precipitation data.
-        - 'init': Initial conditions: irrigation technology, crop type, and field type.
-
-        >>> # A sample settings dictionary
-        >>> settings = {
-        >>>     "field_area": 50.,
-        >>>     "water_yield_curves": {
-        >>>     "corn": [ymax [bu], wmax [cm], a, b, c, min_yield_ratio]}, # Replace variables with actual values
-        >>>     "tech_pumping_rate_coefs": {
-        >>>         "center pivot LEPA": [a, b, l_pr [m]]}, # Replace variables with actual values
-        >>>     "prec_aw_id": None,
-        >>>     "init":{
-        >>>         "tech": None,
-        >>>         "crop": None,
-        >>>         "field_type": None, # "optimize" or "irrigated" or "rainfed"
-        >>>         },
-        >>>    }
-
-    **kwargs
-        Additional keyword arguments that can be dynamically set as field agent attributes.
-
-    Attributes
-    ----------
-    agt_type : str
-        The type of the agent, set to 'Field'.
-    te : str
-        The current irrigation technology.
-    crop : str
-        The crop planted in the field.
-    field_type : str
-        The type of the field ("optimize" or "irrigated" or "rainfed").
-    t : int
-        The current time step, initialized to zero.
-    irr_vol : float or None
-        The total volume of irrigation applied [m-ha].
-    yield_rate_per_field : float or None
-        The averaged yield rate across the fields [bu/ha].
-    irr_vol_per_field : float or None
-        The averaged irrigation volume per fields [m-ha].
-
-    Notes
-    -----
-    - The yield is measured in bushels [1e4 bu].
-    - The irrigation volume is measured in meter-hectares [m-ha].
-    - Field area should be provided in hectares [ha].
-    """
+    """ Simulate a field agent in the model. """
 
     def __init__(self, unique_id, model, settings: dict, **kwargs):
         """Initialize a Field agent in the Mesa model."""

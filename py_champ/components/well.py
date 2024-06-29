@@ -197,77 +197,25 @@ class Well(mesa.Agent):
         return e
 
 
-class Well_1f1w(mesa.Agent):
-    """
-    This module is a well simulator.
-
-    Parameters
-    ----------
-    unique_id : int
-        A unique identifier for this agent.
-    model
-        The model instance to which this agent belongs.
-    settings : dict
-        A dictionary containing settings specific to a well, such as
-        hydraulic properties and initial conditions.
-
-        - 'r': Radius of the well [m].
-        - 'k': Hydraulic conductivity of the aquifer [m/day].
-        - 'sy': Specific yield of the aquifer [-].
-        - 'rho': Density of water [kg/m³].
-        - 'g': Acceleration due to gravity [m/s²].
-        - 'eff_pump': Pump efficiency as a fraction [-].
-        - 'eff_well': Well efficiency as a fraction [-].
-        - 'pumping_capacity': Maximum pumping capacity of the well [m-ha/year].
-        - 'init': Initial conditions, which include water table lift (l_wt [m]), saturated thickness (st [m]) and pumping_days (days).
-
-        >>> # A sample settings dictionary
-        >>> settings = {
-        >>>     "r": None,
-        >>>     "k": None,
-        >>>     "sy": None,
-        >>>     "rho": None,
-        >>>     "g": None,
-        >>>     "eff_pump": None,
-        >>>     "eff_well": None,
-        >>>     "aquifer_id": None,
-        >>>     "pumping_capacity": None,
-        >>>     "init":{
-        >>>         "l_wt": None,
-        >>>         "st": None,
-        >>>         "pumping_days": None
-        >>>         },
-        >>>     }
-
-    **kwargs
-        Additional keyword arguments that can be dynamically set as well agent attributes.
-
-    Attributes
-    ----------
-    agt_type : str
-        The type of the agent, set to 'Well'.
-    st : float
-        The saturated thickness of the aquifer at the well location [m].
-    l_wt : float
-        The lift of the water table from its initial position [m].
-    pumping_days : int
-        Number of days the well pumps water [day].
-    tr : float
-        The transmissivity of the aquifer at the well location [m²/day].
-    t : int
-        The current time step, initialized to zero.
-    e : float or None
-        The energy consumption [PJ], initialized to None.
-    withdrawal : float or None
-        The volume of water withdrawn in meter-hectares [m-ha].
-
-    Notes
-    -----
-    - Transmissivity 'tr' is calculated as the product of saturated thickness and hydraulic conductivity.
-    """
+class Well4SingleFieldAndWell(mesa.Agent):
+    """ A well simulator for single field and well."""
 
     def __init__(self, unique_id, model, settings: dict, **kwargs):
-        """Initialize a Well agent in the Mesa model."""
+        """Initialize a Well agent in the Mesa model.
+        
+        Parameters
+        ----------
+        unique_id : int
+            A unique identifier for this agent.
+        model
+            The model instance to which this agent belongs.
+        settings : dict
+            A dictionary containing settings specific to a well, such as
+            initial conditions.
+        kwargs
+            Additional keyword arguments that can be dynamically set as well agent
+            attributes.
+        """
         # MESA required attributes => (unique_id, model)
         super().__init__(unique_id, model)
         self.agt_type = "Well"
@@ -288,18 +236,9 @@ class Well_1f1w(mesa.Agent):
         if self.init.get("B") is None:
             self.st = self.init["st"]
             self.tr = self.st * settings["k"]  # Transmissivity
-            self.B = (
-                1
-                / (4 * np.pi * self.tr * settings["eff_well"])
-                * (
-                    -0.5772
-                    - np.log(
-                        settings["r"] ** 2
-                        * settings["sy"]
-                        / (4 * self.tr * self.pumping_days)
-                    )
-                )
-            )
+            self.B = (-0.5772 - np.log(
+                settings["r"] ** 2 * settings["sy"] / (4 * self.tr * self.pumping_days))
+                ) / (4 * np.pi * self.tr * settings["eff_well"])
         else:
             self.B = self.init["B"]
 
@@ -310,8 +249,9 @@ class Well_1f1w(mesa.Agent):
         Parameters
         ----------
         settings : dict
-            A dictionary containing well settings. Expected keys include 'r', 'k', 'sy', 'rho',
-            'g', 'eff_pump', 'eff_well', 'aquifer_id', 'pumping_capacity', and 'init'.
+            A dictionary containing well settings. Expected keys include 'r', 'k', 'sy',
+            'rho', 'g', 'eff_pump', 'eff_well', 'aquifer_id', 'pumping_capacity', and
+            'init'.
         """
         self.rho = settings["rho"]
         self.g = settings["g"]
@@ -320,7 +260,9 @@ class Well_1f1w(mesa.Agent):
         self.pumping_capacity = settings["pumping_capacity"]
         self.init = settings["init"]
 
-    def step(self, withdrawal: float, dwl: float, pumping_days: int | None = None) -> float:
+    def step(
+            self, withdrawal: float, dwl: float, pumping_days: int | None = None
+            ) -> float:
         """
         Perform a single step of well simulation, calculating the energy consumption.
 
@@ -338,11 +280,6 @@ class Well_1f1w(mesa.Agent):
         -------
         float
             The energy consumption for this step [Petajoules, PJ].
-
-        Notes
-        -----
-        The method calculates energy consumption based on several factors including withdrawal volume,
-        water table lift, well and pump efficiency, and hydraulic properties of the aquifer.
         """
         self.t += 1
         # Only update pumping_days when it is given.
@@ -354,10 +291,10 @@ class Well_1f1w(mesa.Agent):
         # self.st += dwl
         self.withdrawal = withdrawal
 
-        # From our precalculation for sd6
+        #!!!! From our precalculation for sd6
         self.B = self.B - 0.00015 * dwl
 
-        #!!!! Center pivot LEPA (fixed)
+        #!!!! Center-pivot LEPA (fixed)
         tech_a = 0.0058
         tech_b = 0.212206
         l_pr = 12.65
