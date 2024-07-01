@@ -233,7 +233,7 @@ class Indicator:
         x_obv = np.array(x_obv)
         y_sim = np.array(y_sim)
         index = [
-            True if np.isnan(x) is False and np.isnan(y) is False else False
+            True if not np.isnan(x) and not np.isnan(y) else False
             for x, y in zip(x_obv, y_sim, strict=True)
         ]
         x_obv = x_obv[index]

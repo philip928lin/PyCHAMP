@@ -3,7 +3,6 @@ import logging
 import os
 import sys
 
-join = os.path.join
 import dill
 
 sys.setrecursionlimit(10000)
@@ -103,7 +102,7 @@ class GlobalBestPSO(SwarmOptimizer):
             oh_strategy = {}
         # Initialize logger
         self.rep = Reporter(
-            log_path=join(wd, "Report.log"), logger=logging.getLogger(__name__)
+            log_path=os.path.join(wd, "Report.log"), logger=logging.getLogger(__name__)
         )
         self.wd = wd
         # Initialize the resettable attributes
@@ -246,12 +245,12 @@ class GlobalBestPSO(SwarmOptimizer):
                 # Plot cost
                 fig, ax = plt.subplots()
                 plot_cost_history(cost_history=self.cost_history, ax=ax)
-                fig.savefig(join(self.wd, "cost_history.png"))
+                fig.savefig(os.path.join(self.wd, "cost_history.png"))
                 plt.close()
 
             # save
             dict_item = self.to_dict()
-            with open(join(self.wd, f"PSO_it{culmulated_iter}.pkl"), "wb") as f:
+            with open(os.path.join(self.wd, f"PSO_it{culmulated_iter}.pkl"), "wb") as f:
                 dill.dump(dict_item, f)
 
             self.culmulated_iter += 1
