@@ -5,12 +5,10 @@ import json
 import gurobipy as gp
 import numpy as np
 
+from ..utility.util import dict_to_string
 
-class Optimization_1f1w:
-    """
-    This class is specifically designed for 1 field and 1 well with fixed
-    irrigation technology to facilitate the solving speed.
-    """
+class Optimization4SingleFieldAndWell:
+    """A class to set up an optimization model for a single field and well."""
 
     def __init__(self):
         pass
@@ -22,9 +20,27 @@ class Optimization_1f1w:
         horizon=1,
         crop_options=None,
     ):
+        """ Set up an optimization model for a single field and well.
+
+        Parameters
+        ----------
+        unique_id : str
+            Unique id for the optimization model.
+        gpenv : gurobipy.Env
+            Gurobi environment.
+        horizon : int, optional
+            Planning horizon. The default is 1.
+        crop_options : list, optional
+            Crop options. The default is None.
+        
+        Returns
+        -------
+        None.
+
+        """
         ## Basic information
         if crop_options is None:
-            crop_options = ["corn", "sorghum", "soybeans", "fallow"]
+            crop_options = ["corn", "others"]
         self.unique_id = unique_id
         self.horizon = horizon
         self.crop_options = crop_options
@@ -91,6 +107,31 @@ class Optimization_1f1w:
         i_rainfed=None,
         **kwargs,
     ):
+        """
+        Set up constraints for a field.
+
+        Parameters
+        ----------
+        field_id : str
+            Field id.
+        field_area : float
+            Field area [ha].
+        prec_aw : dict
+            Available precipitation [cm].
+        water_yield_curves : dict
+            Water yield curves for different crops.
+        field_type : str, optional
+            Field type. The default is "optimize".
+        i_crop : np.array, optional
+            Given crop types. The default is None.
+        i_rainfed : np.array, optional
+            Given rainfed options. The default is None.
+
+        Returns
+        -------
+        None.
+
+        """
         ## Append field_id
         self.field_ids.append(field_id)
         fid = field_id
@@ -261,13 +302,40 @@ class Optimization_1f1w:
         rho=1000.0,
         g=9.8016,
     ):
+        """
+        Set up constraints for a well.
+
+        Parameters
+        ----------
+        well_id : str
+            Well id.
+        dwl : float
+            Drawdown per unit pumping [m].
+        B : float
+            Aquifer storage coefficient.
+        l_wt : float
+            Lift head [m].
+        eff_pump : float
+            Pump efficiency.
+        pumping_capacity : float, optional
+            Pumping capacity [m-ha]. The default is None.
+        rho : float, optional
+            Water density [kg/m^3]. The default is 1000.0.
+        g : float, optional
+            Gravity [m/s^2]. The default is 9.8016.
+
+        Returns
+        -------
+        None.
+
+        """
         self.well_ids.append(well_id)
         wid = well_id
 
         m = self.model
         n_h = self.n_h
 
-        v = self.vars_["v"]
+        v = self.vars_["v"] # m-ha
         if pumping_capacity is not None:
             m.addConstr((v <= pumping_capacity), name=f"c.{wid}.pumping_capacity")
 
@@ -280,7 +348,7 @@ class Optimization_1f1w:
         self.l_wt = l_wt
         self.B = B
 
-        #!!!! Center pivot LEPA (fixed)
+        #!!!! Center-pivot LEPA (fixed)
         tech_a = 0.0058
         tech_b = 0.212206
         l_pr = 12.65
@@ -344,9 +412,9 @@ class Optimization_1f1w:
         tail_method="proportion",
     ):
         """
-        Set up water right constraints for the optimization model. You can assign multiple water rights
-        constraints by calling this function repeatedly with different
-        water_right_id. Water rights can constrain all fields or a selected
+        Set up water right constraints for the optimization model. You can assign
+        multiple water rights constraints by calling this function repeatedly with
+        different water_right_id. Water rights can constrain all fields or a selected
         subset of fields with an optional time_window argument, allowing the farmer
         to allocate their water rights across multiple years. To enforce water
         rights at the point of diversion, pumping capacity can be assigned to
@@ -628,7 +696,8 @@ class Optimization_1f1w:
 
                 alpha = alphas[metric]
                 metric_var = eval_metric_vars.get(metric)
-                # force the minimum value to be zero since there is an exponential function
+                # force the minimum value to be zero since there is an exponential 
+                # function
                 metric_var[metric_var < 0] = 0
                 N_yr = 1 - np.exp(-alpha * metric_var)
                 Sa = np.mean(N_yr)
@@ -670,7 +739,7 @@ class Optimization_1f1w:
             self.decisions = decisions
             decisions = dict_to_string(decisions, prefix="\t\t", level=2)
             msg = dict_to_string(self.msg, prefix="\t\t", level=2)
-            sas = dict_to_string(sols["Sa"], prefix="\t\t", level=2, roun=4)
+            sas = dict_to_string(sols["Sa"], prefix="\t\t", level=2)#, roun=4)
             h_msg = str(self.n_h)
             gp_report = f"""
         ########## Model Report ##########\n
@@ -717,7 +786,8 @@ class Optimization_1f1w:
         by Gurobi is not necessarily the smallest one; others may exist
         with a fewer constraints or bounds.
 
-        More info: https://www.gurobi.com/documentation/10.0/refman/py_model_computeiis.html
+        More info: 
+        https://www.gurobi.com/documentation/10.0/refman/py_model_computeiis.html
 
         Parameters
         ----------
@@ -746,120 +816,32 @@ class Optimization_1f1w:
                 filename += ".ilp"
             m.write(filename)
 
-    def write_ilp(self, filename):
+    def write_file(self, filename, extension):
         """
-        This function outputs the information about the results of the IIS computation to
-        .ilp and can only be executed after do_IIS_gp().
+        This function outputs the model to a specified file format based on the 
+        extension provided. Supported extensions are .ilp, .sol, .lp, and .mps. The 
+        function appends the correct extension to the filename if not already present
+        and writes the model to the file.
 
         Parameters
         ----------
         filename : str
-            Output filename.
+            Output filename without the extension.
+        extension : str
+            Desired file extension (e.g., 'ilp', 'sol', 'lp', 'mps').
 
         Returns
         -------
         None.
-
         """
-        if filename[-4:] != ".ilp":
-            filename += ".ilp"
+        # Ensure the extension is prefixed with a dot
+        if not extension.startswith("."):
+            extension = "." + extension
+
+        # Append the extension if not already present
+        if not filename.endswith(extension):
+            filename += extension
+
+        # Write the model to the file
         m = self.model
         m.write(filename)
-
-    def write_sol(self, filename):
-        """
-        This function outputs the solution of the model to a .sol file.
-
-        Parameters
-        ----------
-        filename : str
-            Output filename.
-
-        Returns
-        -------
-        None.
-
-        """
-        if filename[-4:] != ".sol":
-            filename += ".sol"
-        m = self.model
-        m.write(filename)
-
-    def write_lp(self, filename):
-        """
-        This function outputs the model to a .lp file.
-
-        Parameters
-        ----------
-        filename : str
-            Output filename.
-
-        Returns
-        -------
-        None.
-
-        """
-        if filename[-3:] != ".lp":
-            filename += ".lp"
-        m = self.model
-        m.write(filename)
-
-    def write_mps(self, filename):
-        """
-        This funtion outputs the model to an .mps file.
-
-        Parameters
-        ----------
-        filename : str
-            Output filename.
-
-        Returns
-        -------
-        None.
-
-        """
-        if filename[-3:] != ".mps":
-            filename += ".mps"
-        m = self.model
-        m.write(filename)
-
-    def depose_gp_env(self):
-        self.gpenv.dispose()
-
-
-# Utility code
-def dict_to_string(dictionary, prefix="", indentor="  ", level=2, roun=None):
-    """Ture a dictionary into a printable string.
-
-    Parameters
-    ----------
-    dictionary : dict
-        A dictionary.
-    indentor : str, optional
-        Indentor, by default "  ".
-
-    Returns
-    -------
-    str
-        A printable string.
-    """
-
-    def dict_to_string_list(dictionary, indentor="  ", count=1, string=None):
-        if string is None:
-            string = []
-        for key, value in dictionary.items():
-            string.append(prefix + indentor * count + str(key))
-            if isinstance(value, dict) and count < level:
-                string = dict_to_string_list(value, indentor, count + 1, string)
-            elif isinstance(value, dict) is False and count == level:
-                string[-1] += ":\t" + str(value)
-            else:
-                if roun is not None and isinstance(value, float):
-                    string.append(
-                        prefix + indentor * (count + 1) + str(round(value, roun))
-                    )
-                else:
-                    string.append(prefix + indentor * (count + 1) + str(value))
-        return string
-
-    return "\n".join(dict_to_string_list(dictionary, indentor))

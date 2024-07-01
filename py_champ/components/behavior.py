@@ -106,7 +106,7 @@ class Behavior(mesa.Agent):
         The number of fields managed by the agent.
     num_wells : int
         The number of wells managed by the agent.
-    fields_area : float
+    total_field_area : float
         The total area of all fields managed by the agent.
     t : int
         The current time step, initialized to zero.
@@ -158,7 +158,7 @@ class Behavior(mesa.Agent):
         self.finance = finance
         self.num_fields = len(fields)
         self.num_wells = len(wells)
-        self.fields_area = sum([field.field_area for _, field in self.fields.items()])
+        self.total_field_area = sum([field.field_area for _, field in self.fields.items()])
 
         # Initialize CONSUMAT
         self.state = None
@@ -189,7 +189,7 @@ class Behavior(mesa.Agent):
         self.process_percieved_risks(par_perceived_risk=self.pars["perceived_risk"])
         # Since perceived_risk and forecast_trust are not dynamically updated,
         # we pre-calculate perceived_prec_aw for all years here (not step-wise).
-        self.update_perceived_prec_aw(par_forecast_trust=self.pars["forecast_trust"])
+        self.update_perceived_prec_aw(par_forecast_confidence=self.pars["forecast_trust"])
 
         # Initialize dm_sols (mimicking opt_model's output)
         dm_sols = {}
@@ -264,13 +264,13 @@ class Behavior(mesa.Agent):
             }
         self.percieved_risks = percieved_risks
 
-    def update_perceived_prec_aw(self, par_forecast_trust, year=None):
+    def update_perceived_prec_aw(self, par_forecast_confidence, year=None):
         """
         Update the perceived precipitation available water based on forecast trust.
 
         Parameters
         ----------
-        par_forecast_trust : float
+        par_forecast_confidence : float
             The forecast trust parameter used in the calculation.
         year : int, optional
             The specific year for which the calculation is done. If None, the calculation
@@ -283,7 +283,7 @@ class Behavior(mesa.Agent):
         for each crop in each field accordingly.
         """
         prec_aw_step = self.model.prec_aw_step  # read prec_aw_step from mesa model
-        fotr = par_forecast_trust
+        fotr = par_forecast_confidence
         percieved_risks = self.percieved_risks
 
         if year is None:
@@ -813,116 +813,8 @@ class Behavior(mesa.Agent):
         )
 
 
-class Behavior_1f1w(mesa.Agent):
-    """
-    Simulate a farmer's behavior.
-
-    Parameters
-    ----------
-    unique_id : int
-        A unique identifier for this agent.
-    model
-        The model instance to which this agent belongs.
-    settings : dict
-        A dictionary containing behavior-related settings, which includes assets,
-        decision-making parameters, and gurobi settings.
-
-        - 'behavior_ids_in_network': IDs of other behavior agents in the agent's social network.
-        - 'field_ids': IDs of fields managed by the agent.
-        - 'well_ids': IDs of wells managed by the agent.
-        - 'finance_id': ID of the finance agent associated with this behavior agent.
-        - 'decision_making': Settings and parameters for the decision-making process.
-        - 'consumat': Parameters related to the CONSUMAT model, including sensitivities and scales.
-        - 'water_rights': Information about water rights, including depth [cm] and fields to which the constraint is applied.
-        - 'gurobi': Settings for the Gurobi optimizer, such as logging and output controls.
-
-        >>> # A sample settings dictionary
-        >>> settings = {
-        >>>     "field_ids": ["f1", "f2"],
-        >>>     "well_ids": ["w1"],
-        >>>     "finance_id": "finance",
-        >>>     "behavior_ids_in_network": ["behavior2", "behavior3"],
-        >>>     "decision_making": {
-        >>>         "target": "profit",
-        >>>         "horizon": 5, # [yr]
-        >>>         "n_dwl": 5,
-        >>>         "keep_gp_model": False,
-        >>>         "keep_gp_output": False,
-        >>>         "display_summary": False,
-        >>>         "display_report": False
-        >>>         },
-        >>>     "water_rights": {
-        >>>         "<name>": {
-        >>>             "wr_depth": None,
-        >>>             "applied_field_ids": ["f1_"], # Will automatically update to "f1_"
-        >>>             "time_window": 1,
-        >>>             "remaining_tw": None,
-        >>>             "remaining_wr": None,
-        >>>             "tail_method": "proportion",  # tail_method can be "proportion" or "all" or float
-        >>>             "status": True
-        >>>             }
-        >>>         },
-        >>>     "consumat": {
-        >>>         "alpha": {  # [0-1] Sensitivity factor for the "satisfaction" calculation.
-        >>>             "profit":     1,
-        >>>             "yield_rate": 1
-        >>>             },
-        >>>         "scale": {  # Normalize "need" for "satisfaction" calculation.
-        >>>             "profit": 1000,
-        >>>             "yield_rate": 1
-        >>>             },
-        >>>         },
-        >>>     "gurobi": {
-        >>>         "LogToConsole": 1,  # 0: no console output; 1: with console output.
-        >>>         "Presolve": -1      # Options are Auto (-1; default), Aggressive (2), Conservative (1), Automatic (-1), or None (0).
-        >>>         }
-        >>>     }
-
-    pars : dict
-        Parameters defining satisfaction and uncertainty thresholds for
-        CONSUMAT and the agent's perception of risk and trust in forecasts.
-        All four parameters are in the range 0 to 1.
-
-        >>> # A sample pars dictionary
-        >>> settings = {
-        >>>     'perceived_risk': 0.5,
-        >>>     'forecast_trust': 0.5,
-        >>>     'sa_thre': 0.5,
-        >>>     'un_thre': 0.5
-        >>>     }
-
-    fields : dict
-        A dictionary of Field agents with their unique IDs as keys.
-    wells : dict
-        A dictionary of Well agents with their unique IDs as keys.
-    finance : Finance
-        A Finance agent instance associated with the behavior agent.
-    aquifers : dict
-        A dictionary of Aquifer agents with their unique IDs as keys.
-    **kwargs
-        Additional keyword arguments that can be dynamically set as agent attributes.
-
-    Attributes
-    ----------
-    agt_type : str
-        The type of the agent, set to 'Behavior'.
-    num_fields : int
-        The number of fields managed by the agent.
-    num_wells : int
-        The number of wells managed by the agent.
-    fields_area : float
-        The total area of all fields managed by the agent.
-    t : int
-        The current time step, initialized to zero.
-    state : str
-        The current state of the agent based on CONSUMAT theory.
-
-    Notes
-    -----
-    This method also initializes various attributes related to the agent's
-    perception of risks, precipitation, profit, yield rate, and decision-making
-    solutions. It calculates initial perceived risks and precipitation availability as well.
-    """
+class Behavior4SingleFieldAndWell(mesa.Agent):
+    """ Simulate a farmer's behavior. """
 
     def __init__(
         self,
@@ -937,7 +829,42 @@ class Behavior_1f1w(mesa.Agent):
         optimization_class: object,
         **kwargs,
     ):
-        """Initialize a Behavior agent in the Mesa model."""
+        """Initialize a Behavior agent in the Mesa model.
+        
+        Parameters
+        ----------
+        unique_id : int
+            A unique identifier for the agent.
+        model : object
+            The Mesa model object.
+        settings : dict
+            A dictionary containing settings related to the behavior agent. Expected 
+            keys include 'behavior_ids_in_network', 'field_ids', 'well_ids', 
+            'finance_id', 'decision_making', 'consumat', and 'water_rights'.
+        pars : dict
+            Parameters defining satisfaction and uncertainty thresholds for
+            CONSUMAT and the agent's perception of risk and confidence in forecasts.
+            All four parameters are in the range 0 to 1.
+        fields : dict
+            A dictionary of Field agents with their unique IDs as keys.
+        wells : dict
+            A dictionary of Well agents with their unique IDs as keys.
+        finance : Finance
+            A Finance agent instance associated with the behavior agent.
+        aquifers : dict
+            A dictionary of Aquifer agents with their unique IDs as keys.
+        optimization_class : object
+            The optimization class used for decision-making.
+        **kwargs
+            Additional keyword arguments that can be dynamically set as agent
+            attributes.
+
+        Notes
+        -----
+        This method initializes various attributes related to the agent's perception
+        of risks, precipitation, profit, yield rate, and decision-making solutions. It
+        calculates initial perceived risks and precipitation availability as well.
+        """
         # MESA required attributes => (unique_id, model)
         super().__init__(unique_id, model)
         self.agt_type = "Behavior"
@@ -964,7 +891,7 @@ class Behavior_1f1w(mesa.Agent):
         self.finance = finance
         self.num_fields = len(fields)
         self.num_wells = len(wells)
-        self.fields_area = sum([field.field_area for _, field in self.fields.items()])
+        self.total_field_area = sum([field.field_area for _, field in self.fields.items()])
 
         # Initialize CONSUMAT
         self.state = None
@@ -995,7 +922,7 @@ class Behavior_1f1w(mesa.Agent):
         self.process_percieved_risks(par_perceived_risk=self.pars["perceived_risk"])
         # Since perceived_risk and forecast_trust are not dynamically updated,
         # we pre-calculate perceived_prec_aw for all years here (not step-wise).
-        self.update_perceived_prec_aw(par_forecast_trust=self.pars["forecast_trust"])
+        self.update_perceived_prec_aw(par_forecast_confidence=self.pars["forecast_trust"])
 
         # Initialize dm_sols (mimicking opt_model's output)
         dm_sols = {}
@@ -1018,9 +945,9 @@ class Behavior_1f1w(mesa.Agent):
         Parameters
         ----------
         settings : dict
-            A dictionary containing settings related to the behavior agent. Expected keys include
-            'behavior_ids_in_network', 'field_ids', 'well_ids', 'finance_id', 'decision_making',
-            'consumat', 'water_rights', and 'gurobi'.
+            A dictionary containing settings related to the behavior agent. Expected
+            keys include 'behavior_ids_in_network', 'field_ids', 'well_ids', 
+            'finance_id', 'decision_making', 'consumat', and 'water_rights'.
         """
         self.behavior_ids_in_network = settings["behavior_ids_in_network"]
         self.field_ids = settings["field_ids"]
@@ -1042,8 +969,9 @@ class Behavior_1f1w(mesa.Agent):
 
         Notes
         -----
-        This method calculates the perceived risks based on the truncated normal distribution
-        parameters for each crop. The calculated values are stored in the `percieved_risks` attribute.
+        This method calculates the perceived risks based on the truncated normal 
+        distribution parameters for each crop. The calculated values are stored in the
+        `percieved_risks` attribute.
         """
         # Compute percieved_risks (i.e., ECDF^(-1)(qu)) for each field and crop.
         percieved_risks = {}
@@ -1066,13 +994,13 @@ class Behavior_1f1w(mesa.Agent):
             }
         self.percieved_risks = percieved_risks
 
-    def update_perceived_prec_aw(self, par_forecast_trust, year=None):
+    def update_perceived_prec_aw(self, par_forecast_confidence, year=None):
         """
         Update the perceived precipitation available water based on forecast trust.
 
         Parameters
         ----------
-        par_forecast_trust : float
+        par_forecast_confidence : float
             The forecast trust parameter used in the calculation.
         year : int, optional
             The specific year for which the calculation is done. If None, the calculation
@@ -1085,7 +1013,7 @@ class Behavior_1f1w(mesa.Agent):
         for each crop in each field accordingly.
         """
         prec_aw_step = self.model.prec_aw_step  # read prec_aw_step from mesa model
-        fotr = par_forecast_trust
+        fotr = par_forecast_confidence
         percieved_risks = self.percieved_risks
 
         if year is None:
@@ -1130,11 +1058,13 @@ class Behavior_1f1w(mesa.Agent):
 
         1. Updating agents in the agent's social network.
 
-        2. Making decisions based on the current CONSUMAT state (Imitation, Social Comparison, Repetition, Deliberation).
+        2. Making decisions based on the current CONSUMAT state (Imitation,
+           Social Comparison, Repetition, Deliberation).
 
         3. Running simulations based on these decisions.
 
-        4. Updating various attributes like profit, yield rate, satisfaction, and uncertainty.
+        4. Updating various attributes like profit, yield rate, satisfaction, and
+           uncertainty.
         """
         self.t += 1
         # No need for step-wise update for perceived_prec_aw. We pre-calculated it.
@@ -1152,10 +1082,6 @@ class Behavior_1f1w(mesa.Agent):
         elif state == "Repetition":
             self.make_dm_repetition()
         elif state == "Deliberation":
-            self.make_dm_deliberation()
-
-        # Internal experiment
-        elif state == "FixCrop":
             self.make_dm_deliberation()
 
         # Retrieve opt info
@@ -1215,7 +1141,7 @@ class Behavior_1f1w(mesa.Agent):
         well_ids = dm_sols["well_ids"]
         self.irr_vol = sum([field.irr_vol_per_field for _, field in fields.items()])
 
-        for _k, wid in enumerate(well_ids):
+        for _, wid in enumerate(well_ids):
             well = wells[wid]
             # We only take first year optimization solution for simulation.
             withdrawal = self.irr_vol
@@ -1292,11 +1218,14 @@ class Behavior_1f1w(mesa.Agent):
         Parameters
         ----------
         state : str or None
-            The current CONSUMAT state of the agent, which influences the optimization process.
+            The current CONSUMAT state of the agent, which influences the optimization
+            process.
         dm_sols : dict
-            The previous decision-making solutions, used as inputs for the optimization model.
+            The previous decision-making solutions, used as inputs for the optimization
+            model.
         neighbor : dict, optional
-            A neighboring agent object, used in states, 'Imitation' and "Social comparison".
+            A neighboring agent object, used in states, 'Imitation' and
+            "Social comparison".
         init : bool, optional
             A flag indicating if it is the initial setup of the optimization model.
 
@@ -1307,11 +1236,11 @@ class Behavior_1f1w(mesa.Agent):
 
         Notes
         -----
-        This method sets up and solves an optimization model based on various inputs, including
-        field data, well data, water rights, and financial considerations. The type of
-        optimization and constraints applied depend on the agent's current state, as defined
-        by the CONSUMAT theory. The method returns updated decision-making solutions that
-        guide the agent's actions in subsequent steps.
+        This method sets up and solves an optimization model based on various inputs, 
+        including field data, well data, water rights, and financial considerations. The 
+        type of optimization and constraints applied depend on the agent's current 
+        state, as defined by the CONSUMAT theory. The method returns updated 
+        decision-making solutions that guide the agent's actions in subsequent steps.
         """
         aquifers = self.aquifers  # aquifer objects
         fields = self.fields  # field objects
@@ -1323,7 +1252,7 @@ class Behavior_1f1w(mesa.Agent):
 
         dm.setup_ini_model(
             unique_id=self.unique_id,
-            gpenv=self.model.gpenv,  # share one environment for the entire simulation.,
+            gpenv=self.model.gpenv,  # share one environment for the entire simulation.
             horizon=dm_dict["horizon"],
             crop_options=self.model.crop_options,
         )
@@ -1454,7 +1383,6 @@ class Behavior_1f1w(mesa.Agent):
                 "Gurobi returns empty solutions (likely due to infeasible problem.",
                 stacklevel=2,
             )
-        # dm.depose_gp_env()  # Delete the entire environment to release memory.
 
         return dm_sols
 
@@ -1512,8 +1440,6 @@ class Behavior_1f1w(mesa.Agent):
         # Evaluate comparable
         dm_sols_list = []
         for behavior_id in behavior_ids_in_network:
-            # !!! Here we assume no. fields, n_c and split are the same across agents
-            # Keep this for now.
             dm_sols = self.make_dm(
                 state="Social comparison",
                 dm_sols=self.pre_dm_sols,
@@ -1546,10 +1472,12 @@ class Behavior_1f1w(mesa.Agent):
         -----
         This method performs the following key steps:
 
-        1. Selects an agent based on memory from previous social comparison from the network for imitation.
+        1. Selects an agent based on memory from previous social comparison from the
+           network for imitation.
 
         2. Updates the `dm_sols` attribute by calling the `make_dm` method
-           with the current state set to "Imitation" and using the selected agent's solutions.
+           with the current state set to "Imitation" and using the selected agent's
+           solutions.
         """
         selected_behavior_id_in_network = self.selected_behavior_id_in_network
         if selected_behavior_id_in_network is None:
@@ -1661,7 +1589,7 @@ class Behavior_1f1w_ci(mesa.Agent):
         The number of fields managed by the agent.
     num_wells : int
         The number of wells managed by the agent.
-    fields_area : float
+    total_field_area : float
         The total area of all fields managed by the agent.
     t : int
         The current time step, initialized to zero.
@@ -1714,7 +1642,7 @@ class Behavior_1f1w_ci(mesa.Agent):
         self.finance = finance
         self.num_fields = len(fields)
         self.num_wells = len(wells)
-        self.fields_area = sum([field.field_area for _, field in self.fields.items()])
+        self.total_field_area = sum([field.field_area for _, field in self.fields.items()])
 
         # Initialize CONSUMAT
         self.state = None
@@ -1745,7 +1673,7 @@ class Behavior_1f1w_ci(mesa.Agent):
         self.process_percieved_risks(par_perceived_risk=self.pars["perceived_risk"])
         # Since perceived_risk and forecast_trust are not dynamically updated,
         # we pre-calculate perceived_prec_aw for all years here (not step-wise).
-        self.update_perceived_prec_aw(par_forecast_trust=self.pars["forecast_trust"])
+        self.update_perceived_prec_aw(par_forecast_confidence=self.pars["forecast_trust"])
 
         # Initialize dm_sols (mimicking opt_model's output)
         dm_sols = {}
@@ -1816,13 +1744,13 @@ class Behavior_1f1w_ci(mesa.Agent):
             }
         self.percieved_risks = percieved_risks
 
-    def update_perceived_prec_aw(self, par_forecast_trust, year=None):
+    def update_perceived_prec_aw(self, par_forecast_confidence, year=None):
         """
         Update the perceived precipitation available water based on forecast trust.
 
         Parameters
         ----------
-        par_forecast_trust : float
+        par_forecast_confidence : float
             The forecast trust parameter used in the calculation.
         year : int, optional
             The specific year for which the calculation is done. If None, the calculation
@@ -1835,7 +1763,7 @@ class Behavior_1f1w_ci(mesa.Agent):
         for each crop in each field accordingly.
         """
         prec_aw_step = self.model.prec_aw_step  # read prec_aw_step from mesa model
-        fotr = par_forecast_trust
+        fotr = par_forecast_confidence
         percieved_risks = self.percieved_risks
 
         if year is None:
