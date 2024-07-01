@@ -739,7 +739,7 @@ class Optimization4SingleFieldAndWell:
             self.decisions = decisions
             decisions = dict_to_string(decisions, prefix="\t\t", level=2)
             msg = dict_to_string(self.msg, prefix="\t\t", level=2)
-            sas = dict_to_string(sols["Sa"], prefix="\t\t", level=2, roun=4)
+            sas = dict_to_string(sols["Sa"], prefix="\t\t", level=2)#, roun=4)
             h_msg = str(self.n_h)
             gp_report = f"""
         ########## Model Report ##########\n
