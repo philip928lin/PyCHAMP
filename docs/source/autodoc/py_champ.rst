@@ -7,7 +7,7 @@ Subpackages
 .. toctree::
    :maxdepth: 4
 
-   py_champ.entities
+   py_champ.components
    py_champ.models
    py_champ.utility
 

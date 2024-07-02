@@ -9,7 +9,7 @@ Sheriden 6 Local Enhanced Management Area Model (SD-6 Model)
 Background of the Sheriden 6 Local Enhanced Management Area (SD-6 LEMA)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The SD-6 LEMA, launched in 2012, is a grassroots groundwater management initiative under the LEMA program within western Kansas's High Plains Aquifer region. With the objective of curtailing groundwater consumption by capping the water rights at 55 inches per unit area over a five-year period, SD-6 LEMA has completed two full cylces, first from 2013 to 2017 and subsequently from 2018 to 2022. Water use diminished by 33.6% in the first period and by 36.8% in the second. The upcoming section provides an overview of how PyCHAMP can model the complex interactions between human activities and water systems, employing SD-6 LEMA as an illustrative example. The article referenced has a detailed description of the background and the study area.
+The SD-6 LEMA, launched in 2012, is a grassroots groundwater management initiative under the LEMA program within western Kansas's High Plains Aquifer region. With the objective of curtailing groundwater consumption by capping the water rights at 55 inches per unit area over a five-year period, SD-6 LEMA has completed two full cylces, first from 2013 to 2017 and subsequently from 2018 to 2022. Water use diminished by 33.6% in the first period and by 36.8% in the second. The upcoming section provides an overview of how PyCHAMP can model the complex interactions between human activities and water systems, employing SD-6 LEMA case study as an illustrative example. The article referenced has a detailed description of the background and the study area.
 
 Lin, C. Y., Orduna Alegria, M., Dhakal, S., Zipper, S.,& Marston, L. (2024, in review). PyCHAMP: A crop‑hydrological‑agent modeling platform for groundwater management. Environmental Modelling & Software.
 
@@ -33,16 +33,16 @@ In this example, we validate the model's ability to capture agro-hydrological dy
    :widths: auto
    :header-rows: 1
 
-A process flow diagram is provided to illustrate the organized sequence of operations and the decision-making mechanisms of the farmers in the model.
+A process flow diagram is provided to illustrate the organized sequence of operations and the decision-making mechanisms of the farmer agents in the model.
 
 .. figure:: SD6SimulationDiagram.png
    :align: center
    :width: 80%
    :alt: alternative text
 
-   Simulation schema of the SD-6 Model, developed with PyCHAMP modules within the Mesa agent-based modeling framework, delineating the systematic process flow and decision-making procedure of farmers.
+   Simulation schema of the SD-6 Model, developed with PyCHAMP modules within the Mesa agent-based modeling framework, delineating the systematic process flow and decision-making procedure of farmer agents.
 
-   *Note: The rectangle with rounded corners illustrates the sequence of steps that take place for each farmer*.
+   *Note: The rectangle with rounded corners illustrates the sequence of steps that take place for each farmer agent*.
 
 Execution Steps
 """"""""""""""""""
@@ -62,9 +62,8 @@ Execution Steps
 	import pandas as pd
 
 	# set up a working directory (wd) and load the inputs
-	file_path =  wd + "/Inputs_SD6.pkl"
-
-	with open(file_path, "rb") as f:
+	wd = r"Add your working directory"
+	with open(os.path.join(wd, "Inputs_SD6.pkl"), "rb") as f:
 	    (aquifers_dict, fields_dict, wells_dict, finances_dict, behaviors_dict,
 	     prec_aw_step, crop_price_step, shared_config) = dill.load(f)
 
@@ -88,17 +87,17 @@ Execution Steps
 	area_split = 1
 
 	# seed for model replicability and comparison
-	seed = 12345
+	seed = 3
 
 	# calibrated parameters for simulation 
 	pars = {'perceived_risk': 0.7539,
-	 'forecast_trust': 0.8032,
+	 'forecast_trust': 0.8032,		# forecast_confidence = forecast_trust
 	 'sa_thre': 0.1421,
 	 'un_thre': 0.0773}
 
-5. Initialize a new instance of the model and run the simulation for the required number of steps, which is from 2008 to 2022 in this case.
+5. Initialize a new instance of the model and run the simulation for the required number of steps, which is from 2008 to 2022 in this case. And release the computational resources used by simulation run at the end.
 
-*Note that the dicitonaries for each of the classes are loaded into the pickle file*.
+*Note that the dictionaries for each of the classes are loaded into the pickle file*.
 
 .. code-block:: python
 	
@@ -115,7 +114,7 @@ Execution Steps
 	    prec_aw_step=prec_aw_step, 
 	    init_year=2007, 
 	    end_year=2022, 
-	    lema_options=(False, 'wr_LEMA_5yr', 2013), 
+	    lema_options=(True, 'wr_LEMA_5yr', 2013), 
 	    fix_state=None, 
 	    show_step=True,
 	    seed=seed, 
@@ -127,6 +126,9 @@ Execution Steps
 	for i in range(15):
 		m.step()
 
+	m.end()
+
+
 6. Load the model-level and agent-level data after the simulation.
 
 .. code-block:: python
@@ -137,7 +139,16 @@ Execution Steps
 	# read system level outputs. For e.g., ratios of crop types, irrigation technology, rainfed or irrigated field for the duration of the simulation
 	df_sys = SD6Model.get_df_sys(m, df_farmers, df_fields, df_wells, df_aquifers)
 
-7. Read the metrices (Root Mean Square Error, Kling-Gupta Efficiency, and Regression Coefficient) based on observed and simulated data for given targets: groundwater saturated thickness, withdrawal, ratio of rainfed or irrigated fields, and ratio of crop types grown.
+7. Visualize the socio-economic and envrionmental results from the simulation.
+
+.. code-block:: python
+	
+	df_sys["GW_st"].plot()
+	df_sys["withdrawal"].plot()
+	df_sys[["corn", "sorghum", "soybeans", "wheat", "fallow"]].plot()
+	df_sys[["Imitation", "Social comparison", "Repetition", "Deliberation"]].plot()
+
+8. (Optional) Read the metrices (Root Mean Square Error, Kling-Gupta Efficiency, and Regression Coefficient) based on observed and simulated data for given targets: groundwater saturated thickness, withdrawal, ratio of rainfed or irrigated fields, and ratio of crop types grown.
 
 .. code-block:: python
 	
@@ -550,7 +561,7 @@ The following section outlines a detailed process for generating input dictionar
 
 	# pre-calibrated parameters for simulation 
 	pars = {'perceived_risk': 0.7539,
-			 'forecast_trust': 0.8032,
+			 'forecast_trust': 0.8032,		# forecast_confidence = forecast_trust
 			 'sa_thre': 0.1421,
 			 'un_thre': 0.0773}
 
@@ -578,12 +589,14 @@ The following section outlines a detailed process for generating input dictionar
 	    shared_config=shared_config
 	    )
 
-13. Initiate the simulation, iterating through the SD-6 Model class's step method for the desired number of iterations.
+13. Initiate the simulation, iterating through the SD-6 Model class's step method for the desired number of iterations and release the memory once the simulation is done.
 
 .. code-block:: python 
 
 	for i in range(5):
 		m.step()
+
+	m.end()
 
 14. Post-simulation, display the collected data at both the model and agent levels.
 
@@ -597,7 +610,7 @@ The following section outlines a detailed process for generating input dictionar
 
 Creating advanced input dictionaries to set up and run an SD-6 Model
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-A feature aspect of PyCHAMP is its adaptability, allowing users to customize various components, such as the assets and networks of agents. To illustrate this, a scenario with two aquifers and four farmers, each possessing different assets, is established. Farmers are presented with a selection of crops — corn, sorghum, wheat, and soybeans — with the added option of leaving fields fallow. The irrigation technology choices have also been expanded to include both center pivot LEPA and standard center pivot systems. The figure and table provided below illustrate and outline the setup of the model, assets of each farmer, and the characteristics of the assets under their management.
+A feature aspect of PyCHAMP is its adaptability, allowing users to customize network topology through adjustments in input files. To illustrate this, a scenario with two aquifers and four farmers, each possessing different assets, is established. Farmers are presented with a selection of crops — corn, sorghum, wheat, and soybeans — with the added option of leaving fields fallow. The irrigation technology choices have also been expanded to include both center pivot LEPA and standard center pivot systems. The figure and table provided below illustrate and outline the setup of the model, assets of each farmer, and the characteristics of the assets under their management.
 
 .. figure:: example2.png
    :align: center
@@ -1125,7 +1138,7 @@ Simulating an SD-6 model consists of the following steps:
 
 	# pre-calibrated parameters for simulation
 	pars = {'perceived_risk': 0.7539,
-			 'forecast_trust': 0.8032,
+			 'forecast_trust': 0.8032,		# forecast_confidence = forecast_trust
 			 'sa_thre': 0.1421,
 			 'un_thre': 0.0773}
 
@@ -1153,12 +1166,14 @@ Simulating an SD-6 model consists of the following steps:
 	    shared_config=shared_config,
 	    )
 
-12. Initiate the simulation, looping through the step method of SD-6 Model class for the desired number of iterations.
+12. Initiate the simulation, looping through the step method of SD-6 Model class for the desired number of iterations and release the memory once the simulation is done.
 
 .. code-block:: python 
 
 	for i in range(5):
 		m.step()
+
+	m.end()
 
 13. Post-simulation, display the collected data at both the model and agent levels.
 
