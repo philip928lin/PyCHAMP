@@ -320,7 +320,7 @@ class SD6Model_1f1w_ci(mesa.Model):
             "yield_rate": get_agt_attr("yield_rate_per_field"),
             "yield": get_agt_attr("y"),  # 1e4 bu/field
             "w": get_agt_attr("w"),
-            "field_area": get_agt_attr("field_area"),  # ha
+            "field_area": get_agt_attr("total_field_area"),  # ha
             "aph_yield_dict": get_agt_attr("aph_yield_dict"),  # a dictionary
             ### Behavior
             "Sa": get_agt_attr("satisfaction"),
