@@ -379,7 +379,7 @@ class SD6Model(mesa.Model):
             "gp_MIPGap": get_agt_attr("gp_MIPGap"),
             "num_fields": get_agt_attr("num_fields"),
             "num_wells": get_agt_attr("num_wells"),
-            "fields_area": get_agt_attr("fields_area"),
+            "total_field_area": get_agt_attr("total_field_area"),
             # Well
             "water_depth": get_agt_attr("l_wt"),
             "pumping rate": get_agt_attr("pumping_rate"),
@@ -564,7 +564,7 @@ class SD6Model(mesa.Model):
 
         df_behaviors = df[df["agt_type"] == "Behavior"].dropna(axis=1, how="all")
         df_behaviors["irr_depth"] = (
-            df_behaviors["irr_vol"] / (df_behaviors["fields_area"]) * 100
+            df_behaviors["irr_vol"] / (df_behaviors["total_field_area"]) * 100
         )  # cm
         return df_behaviors, df_fields, df_wells, df_aquifers
 
