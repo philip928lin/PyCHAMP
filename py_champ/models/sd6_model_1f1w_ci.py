@@ -11,7 +11,7 @@ from ..components.behavior import Behavior_1f1w_ci
 from ..components.field import Field_1f1w_ci
 from ..components.finance import Finance_1f1w_ci
 from ..components.optimization_1f1w_ci import Optimization_1f1w_ci
-from ..components.well import Well_1f1w
+from ..components.well import Well4SingleFieldAndWell
 from ..utility.util import (
     BaseSchedulerByTypeFiltered,
     Indicator,
@@ -135,7 +135,7 @@ class SD6Model_1f1w_ci(mesa.Model):
             components = {
                 "aquifer": Aquifer,
                 "field": Field_1f1w_ci,
-                "well": Well_1f1w,
+                "well": Well4SingleFieldAndWell,
                 "finance": Finance_1f1w_ci,
                 "behavior": Behavior_1f1w_ci,
             }
