@@ -42,6 +42,7 @@ class SD6Model4SingleFieldAndWell(mesa.Model):
         lema_options=(True, "wr_LEMA_5yr", 2013),
         fix_state=None,
         show_step=True,
+        show_initialization=True,
         seed=None,
         gurobi_dict=None,
         **kwargs,
@@ -161,7 +162,9 @@ class SD6Model4SingleFieldAndWell(mesa.Model):
         behaviors = {}
         finances = {}
         for behavior_id, behavior_dict in tqdm(
-            behaviors_dict.items(), desc="Initialize agents"
+            behaviors_dict.items(),
+            desc="Initialize behavior agents",
+            disable=not show_initialization
         ):
             # Initialize finance
             finance_id = behavior_dict["finance_id"]
@@ -256,7 +259,8 @@ class SD6Model4SingleFieldAndWell(mesa.Model):
         Initialiation duration:\t{self.time_recorder.get_elapsed_time()}
         Estimated sim duration:\t{estimated_sim_dur}
         """
-        print(msg)
+        if show_initialization:
+            print(msg)
 
     def step(self):
         """
