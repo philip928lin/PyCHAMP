@@ -490,7 +490,7 @@ class SD6Model_1f1w_ci(mesa.Model):
         df_behaviors["bid"] = df_behaviors["AgentID"]
 
         df_fields = df[df["agt_type"] == "Field"].dropna(axis=1, how="all")
-        df_fields["field_type"] = np.nan
+        df_fields["field_type"] = ""
         df_fields.loc[df_fields["irr_vol"] == 0, "field_type"] = "rainfed"
         df_fields.loc[df_fields["irr_vol"] > 0, "field_type"] = "irrigated"
         df_fields["irr_depth"] = (
