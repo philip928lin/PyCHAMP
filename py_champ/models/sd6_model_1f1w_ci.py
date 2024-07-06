@@ -681,7 +681,7 @@ class SD6Model_1f1w_ci(mesa.Model):
                 "fallow",
             ]
         if indicators_list is None:
-            indicators_list = ["r", "rmse", "KGE"]
+            indicators_list = ["r", "rmse", "kge"]
         indicators = Indicator()
         metrices = []
         for tar in targets:
