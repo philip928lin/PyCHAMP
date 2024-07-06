@@ -7,7 +7,7 @@ version = "1.0.0"
 authors = [
     {name = "Chung-Yi Lin", email = "philip928lin@gmail.com"}
 ]
-license = {text = "GNU General Public License v3 (GPLv3)"}
+#license = "file: LICENSE"
 description = "file: README.md"
 dependencies = [
   "numpy",
