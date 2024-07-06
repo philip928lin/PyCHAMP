@@ -10,6 +10,7 @@ authors = [
 #license = "file: LICENSE"
 description = "file: README.md"
 dependencies = [
+  "dill",
   "numpy",
   "pandas",
   "gurobipy",
