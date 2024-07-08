@@ -361,7 +361,7 @@ class SD6Model(mesa.Model):
             "w": get_agt_attr("w"),
             "irr_vol_per_field": get_agt_attr("irr_vol_per_field"),
             "yield_rate_per_field": get_agt_attr("yield_rate_per_field"),
-            "field_area": get_agt_attr("total_field_area"),
+            "field_area": get_agt_attr("field_area"),
             "field_type_rn": get_agt_attr("field_type_rn"),
             # Behavior
             "Sa": get_agt_attr("satisfaction"),
