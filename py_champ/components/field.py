@@ -480,15 +480,18 @@ class Field_1f1w_ci(mesa.Agent):
         # Initialize field type
         self.field_type = self.init["field_type"]
 
+        # Numerber of years for the aph yield calculation
+        self.n_aph_years = 10
+
         # Initialize aph_yield_records & aph_yield_dict (in unit of 1e4 bu/field)
         if self.model.activate_ci:
             self.aph_yield_dict = self.init.get("aph_yield")
             self.aph_yield_records = {
                 "irrigated": {
-                    c: [v] * 5 for c, v in self.aph_yield_dict["irrigated"].items()
+                    c: [v] * self.n_aph_years for c, v in self.aph_yield_dict["irrigated"].items()
                 },
                 "rainfed": {
-                    c: [v] * 5 for c, v in self.aph_yield_dict["rainfed"].items()
+                    c: [v] * self.n_aph_years for c, v in self.aph_yield_dict["rainfed"].items()
                 },
             }
             # Note that the premium_dict_for_dm will be populated in the behavior
@@ -584,7 +587,7 @@ class Field_1f1w_ci(mesa.Agent):
         crop = self.crop
         self.aph_yield_records[field_type][crop].append(crop_yield)
         self.aph_yield_dict[field_type][crop] = np.mean(
-            self.aph_yield_records[field_type][crop][-5:]
+            self.aph_yield_records[field_type][crop][-self.n_aph_years:]
         )
 
     def step(self, irr_depth, i_crop, prec_aw: dict) -> tuple:
