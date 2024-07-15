@@ -637,6 +637,20 @@ class SD6Model_1f1w_ci(mesa.Model):
         for s in all_states:
             df_sys[f"{s}"] = dff.xs(s, level="state")
         df_sys = df_sys.round(4)
+        
+        # Averaged Energy cost and Profit
+        dff = df_agt[["profit", "energy_cost"]]
+        dff = dff.groupby([dff.index]).mean().round(6)
+        df_sys["average_profit"] = dff["profit"]
+        df_sys["average_energy_cost"] = dff["energy_cost"]
+        
+        # Averaged Payout and Premium
+        if model.activate_ci:
+            dff = df_agt[["premium", "payout"]]
+            dff = dff.groupby([dff.index]).mean().round(6)
+            df_sys["average_premium"] = dff["premium"]
+            df_sys["average_payout"] = dff["payout"]
+        
 
         return df_sys, df_agt, df_other
 
