@@ -650,7 +650,15 @@ class SD6Model_1f1w_ci(mesa.Model):
             dff = dff.groupby([dff.index]).mean().round(6)
             df_sys["average_premium"] = dff["premium"]
             df_sys["average_payout"] = dff["payout"]
-        
+            
+            dff = df_agt[["premium", "payout", "crop"]]
+            dff = dff.groupby([dff.index, "crop"]).mean().round(6)
+            dff = dff.reset_index()
+            premium = pd.pivot_table(dff, "premium", "year", "crop")
+            premium.columns = [f"premium ({c})" for c in premium.columns]
+            payout = pd.pivot_table(dff, "payout", "year", "crop")
+            payout.columns = [f"payout ({c})" for c in payout.columns]
+            df_sys = pd.concat([df_sys, premium, payout], axis=1)
 
         return df_sys, df_agt, df_other
 
