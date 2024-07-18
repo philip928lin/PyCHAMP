@@ -10,7 +10,7 @@ In PyCHAMP, a **component** is implemented as a module, which is a file containi
 [http://dx.doi.org/10.2139/ssrn.4814225](http://dx.doi.org/10.2139/ssrn.4814225)
 
 ## Manual
-[https://diese-pychamp.readthedocs.io](https://diese-pychamp.readthedocs.io/en/latest/?badge=latest#)
+[https://diese-pychamp.readthedocs.io](https://dises-pychamp.readthedocs.io/en/latest/?badge=latest)
 
 ## Installation
 
