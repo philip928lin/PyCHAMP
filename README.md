@@ -6,8 +6,8 @@ PyCHAMP (Crop-Hydrological-Agent Modeling Platform) is an open-source Python pac
 
 In PyCHAMP, a **component** is implemented as a module, which is a file containing Python statements and definitions. This includes classes and functions relevant to that component. An **agent type** is implemented as a class, serving as a template for creating agent objects. These objects encapsulate both attributes (data) and methods (functions) that define their behavior. PyCHAMP includes five default agent types, one for each component: **Aquifer**, **Field**, **Well**, **Finance**, and **Behavior**.
 
-## Preprint
-[http://dx.doi.org/10.2139/ssrn.4814225](http://dx.doi.org/10.2139/ssrn.4814225)
+## Citation
+Lin, C.-Y., Orduna Alegria, M. E., Dhakal, S., Zipper, S., & Marston, L. (2024). PyCHAMP: A crop-hydrological-agent modeling platform for groundwater management. Environmental Modelling & Software, 181, 106187. [https://doi.org/10.1016/j.envsoft.2024.106187](https://doi.org/10.1016/j.envsoft.2024.106187)
 
 ## Manual
 [https://diese-pychamp.readthedocs.io](https://dises-pychamp.readthedocs.io/en/latest/?badge=latest)
