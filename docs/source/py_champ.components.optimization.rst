@@ -1,9 +1,9 @@
-﻿.. _py_champ_entities_optimization:
+﻿.. _py_champ_components_optimization:
 
-py\_champ.entities.optimization
+py\_champ.components.optimization
 ===================================
 
-.. automodule:: py_champ.entities.optimization
+.. automodule:: py_champ.components.optimization
 
    
    

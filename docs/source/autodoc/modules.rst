@@ -1,5 +1,5 @@
-PyCHAMP_manual_revision
-=======================
+PyCHAMP
+=======
 
 .. toctree::
    :maxdepth: 4

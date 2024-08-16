@@ -1,9 +1,9 @@
-﻿.. _py_champ_entities_aquifer:
+﻿.. _py_champ_components_aquifer:
 
-py\_champ.entities.aquifer
+py\_champ.components.aquifer
 ============================
 
-.. automodule:: py_champ.entities.aquifer
+.. automodule:: py_champ.components.aquifer
 
    
    

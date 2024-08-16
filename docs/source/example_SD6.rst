@@ -11,7 +11,7 @@ Background of the Sheriden 6 Local Enhanced Management Area (SD-6 LEMA)
 
 The SD-6 LEMA, launched in 2012, is a grassroots groundwater management initiative under the LEMA program within western Kansas's High Plains Aquifer region. With the objective of curtailing groundwater consumption by capping the water rights at 55 inches per unit area over a five-year period, SD-6 LEMA has completed two full cylces, first from 2013 to 2017 and subsequently from 2018 to 2022. Water use diminished by 33.6% in the first period and by 36.8% in the second. The upcoming section provides an overview of how PyCHAMP can model the complex interactions between human activities and water systems, employing SD-6 LEMA case study as an illustrative example. The article referenced has a detailed description of the background and the study area.
 
-Lin, C. Y., Orduna Alegria, M., Dhakal, S., Zipper, S.,& Marston, L. (2024, in review). PyCHAMP: A crop‑hydrological‑agent modeling platform for groundwater management. Environmental Modelling & Software.
+Lin, C. Y., Alegria, M. E. O., Dhakal, S., Zipper, S., & Marston, L. (2024). PyCHAMP: A Crop-Hydrological-Agent Modeling Platform for Groundwater Management. Environmental Modelling & Software, 106187. (https://doi.org/10.1016/j.envsoft.2024.106187)
 
 Setting up a complete simulation of the SD-6 model
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -216,7 +216,7 @@ The following section outlines a detailed process for generating input dictionar
 	    "soybeans": (-2.0, 2.0, 29.40, 8.69)
 	}
 
-5. Assemble a settings dictionary for an aquifer: As stated in :ref:`py_champ_entities_aquifer`, the aquifer setting dictionary consists of the following keys.
+5. Assemble a settings dictionary for an aquifer: As stated in :ref:`py_champ_components_aquifer`, the aquifer setting dictionary consists of the following keys.
 
 	- 'aq_a' and 'aq_b': coefficients used in the static inflow calculation
 	- 'area': the area of the aquifer [ha]
@@ -238,7 +238,7 @@ The following section outlines a detailed process for generating input dictionar
 	        }
 	    }
 
-6. Construct a setting dictionary for fields: Refer to :ref:`py_champ_entities_field` for detailed description of field settings dictionary. A field dictionary consists of the following keys.
+6. Construct a setting dictionary for fields: Refer to :ref:`py_champ_components_field` for detailed description of field settings dictionary. A field dictionary consists of the following keys.
 
 	- 'field_area': The total area of the field [ha].
 	- 'water_yield_curves': Water yield response curves for different crops.
@@ -292,7 +292,7 @@ The following section outlines a detailed process for generating input dictionar
 	        }
 	    }
 
-7. Create an input dictionary for wells: As outlined in :ref:`py_champ_entities_well`, the input dicitonaries for a well dictionary consists of the following keys.
+7. Create an input dictionary for wells: As outlined in :ref:`py_champ_components_well`, the input dicitonaries for a well dictionary consists of the following keys.
 
 	- 'r': Radius of the well [m].
 	- 'k': Hydraulic conductivity of the aquifer [m/day].
@@ -359,7 +359,7 @@ The following section outlines a detailed process for generating input dictionar
 	        }
 	    }
 
-8. Formulate a finance settings dictionary for the farmers: A finance input dictionaries has the following keys, as defined in :ref:`py_champ_entities_finance`.
+8. Formulate a finance settings dictionary for the farmers: A finance input dictionaries has the following keys, as defined in :ref:`py_champ_components_finance`.
 
     - 'energy_price': The price of energy [1e4 $/PJ].
     - 'crop_price' and 'crop_cost': The price and cost of different crops [$/bu].
@@ -381,7 +381,7 @@ The following section outlines a detailed process for generating input dictionar
 	        }
 	    }
 
-9. Construct an input dictionary for farmers: As outlined in :ref:`py_champ_entities_behavior`, the input dicitonaries for a well consists of the following keys.
+9. Construct an input dictionary for farmers: As outlined in :ref:`py_champ_components_behavior`, the input dicitonaries for a well consists of the following keys.
 
 	- 'behavior_ids_in_network': IDs of other farmers in the agent's social network.
 	- 'field_ids': IDs of fields managed by the agent.

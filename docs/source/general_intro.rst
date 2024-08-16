@@ -56,7 +56,7 @@ Within the aquifer component, the currently available agent type is the aquifer 
 
    Illustration of a simplified version of the the Aquifer class  
 
-For a detailed description of the aquifer component, please see to :ref:`py_champ_entities_aquifer`.
+For a detailed description of the aquifer component, please see to :ref:`py_champ_components_aquifer`.
 
 2. Field Component 
 -----------------
@@ -79,7 +79,7 @@ Within the field component, the available agent type is represented by the Field
 
    Illustration of a simplified version of the Field class  
 
-For a comprehensive overview of the field component, please refer to :ref:`py_champ_entities_field`.
+For a comprehensive overview of the field component, please refer to :ref:`py_champ_components_field`.
 
 3. Well Component 
 ---------------
@@ -99,7 +99,7 @@ In the well component, the agent type provided is the Well class. The Well class
 
    Illustration of a simplified version of the Well class  
 
-For detailed insights into the well component, refer to :ref:`py_champ_entities_well`.
+For detailed insights into the well component, refer to :ref:`py_champ_components_well`.
 
 4. Finance Component 
 ------------------
@@ -120,7 +120,7 @@ The finance component currently features the Finance class as its agent type, wh
 
    Illustration of a simplified version of the Finance class  
 
-For additional information on the finance component, refer to :ref:`py_champ_entities_finance`.
+For additional information on the finance component, refer to :ref:`py_champ_components_finance`.
 
 5. Behavior Component 
 -------------------
@@ -148,7 +148,7 @@ The agent type currently provided in the behavior component is the Behavior clas
 
    Illustration of a simplified version of the Behavior class  
 
-For further insights into the behavior component, refer to :ref:`py_champ_entities_behavior`.
+For further insights into the behavior component, refer to :ref:`py_champ_components_behavior`.
 
 
 6. Optimization Class 
@@ -175,12 +175,12 @@ The Optimization class is designed for flexible programming of agent types. This
 
    Illustration of a simplified version of the Optimization class  
 
-For further insights into the optimization class, refer to :ref:`py_champ.entities.optimization`.
+For further insights into the optimization class, refer to :ref:`py_champ_components_optimization`.
 
 General Structure of an agent-based model based on PyCHAMP
 ============================================================
 
-PyCHAMP utilizes the Mesa 2.1.1 Agent-Based Modeling (ABM) framework. To customize agent types and models in PyCHAMP, they must inherit from the basic Mesa class, mesa.Agent (see different classes under PyCHAMP components, e.g., :ref:`py_champ_entities_aquifer` and https://github.com/philip928lin/PyCHAMP/tree/main/py_champ/components for details) and mesa.Model (shown in the structure below). For a detailed understanding of how to build, analyze, and visualize agent-based models using the Mesa framework, refer to https://mesa.readthedocs.io/en/latest/overview.html.
+PyCHAMP utilizes the Mesa 2.1.1 Agent-Based Modeling (ABM) framework. To customize agent types and models in PyCHAMP, they must inherit from the basic Mesa class, mesa.Agent (see different classes under PyCHAMP components, e.g., :ref:`py_champ_components_aquifer` and https://github.com/philip928lin/PyCHAMP/tree/main/py_champ/components for details) and mesa.Model (shown in the structure below). For a detailed understanding of how to build, analyze, and visualize agent-based models using the Mesa framework, refer to https://mesa.readthedocs.io/en/latest/overview.html.
 
 PyCHAMP initiates by defining a MyModel class, which is an extension of mesa.Model. A new instance of this model is created, taking various input dictionaries as parameters. Within the newly created instance of the class, different agents like aquifer, field, well, finance, and behavioral, each based on their respective input dictionaries are initialized. It is important to note the flexibility in the number of agent instances; for example, there can be multiple instances of well agents, ranging from 1 to n. Upon initialization, these agents are added to the Mesa scheduler. Additionally, within the __init__ method of MyModel, a DataCollector is set up to gather and record both model-level and agent-level data during the simulation.
 
