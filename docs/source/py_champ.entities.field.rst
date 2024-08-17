@@ -1,9 +1,9 @@
-﻿.. _py_champ_components_field:
+﻿.. _py_champ_entities_field:
 
-py\_champ.components.field
+py\_champ.entities.field
 ========================
 
-.. automodule:: py_champ.components.field
+.. automodule:: py_champ.entities.field
 
    
    

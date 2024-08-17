@@ -1,9 +1,9 @@
-﻿.. _py_champ_components_behavior:
+﻿.. _py_champ_entities_behavior:
 
-py\_champ.components.behavior
+py\_champ.entities.behavior
 =============================
 
-.. automodule:: py_champ.components.behavior
+.. automodule:: py_champ.entities.behavior
 
    
    
