@@ -1,9 +1,9 @@
-﻿.. _py_champ_entities_well:
+﻿.. _py_champ_components_well:
 
-py\_champ.entities.well
+py\_champ.components.well
 =========================
 
-.. automodule:: py_champ.entities.well
+.. automodule:: py_champ.components.well
 
    
    
