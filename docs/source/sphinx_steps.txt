@@ -1,9 +1,0 @@
-cd to C:\Users\CL\Documents\GitHub\PyCHAMP\docs
-
-Use sphinx-apidoc to build your API documentation:
-sphinx-apidoc -f -o source/autodoc C:\Users\samee\Documents\GitHub\PyCHAMP
-
-or 
-sphinx-autogen -o source/generated source/index.rst
-
-make html
