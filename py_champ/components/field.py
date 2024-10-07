@@ -445,6 +445,12 @@ class Field4SingleFieldAndWell(mesa.Agent):
         irr_vol = np.sum(v_c)                 # m-ha
         avg_y_y = np.sum(y_)
         avg_w = np.sum(w)
+        
+        #Pumping_rate_for_original_Cooper_Jacobs
+        tech_a = 0.0058
+        tech_b = 0.212206
+        pumping_rate = tech_a * irr_vol + tech_b  # (McCarthy et al., 2020)
+        self.pumping_rate = pumping_rate  # m-ha/day
 
         # record
         self.y = y # 1e4 bu

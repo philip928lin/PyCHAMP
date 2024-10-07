@@ -4,7 +4,6 @@
 import mesa
 import numpy as np
 
-
 class Well(mesa.Agent):
     """
     This module is a well simulator.
@@ -197,7 +196,7 @@ class Well(mesa.Agent):
         return e
 
 
-class Well4SingleFieldAndWell(mesa.Agent):
+class Well4SingleFieldAndWell_simCJ(mesa.Agent):
     """ A well simulator for single field and well."""
 
     def __init__(self, unique_id, model, settings: dict, **kwargs):
@@ -308,5 +307,137 @@ class Well4SingleFieldAndWell(mesa.Agent):
         e = AaB * withdrawal * withdrawal + A_L_bB * withdrawal
 
         # Record energy consumption
+        self.e = e
+        return e
+    
+class Well4SingleFieldAndWell_ogCJ(mesa.Agent):
+    """ A well simulator for single field and well."""
+
+    def __init__(self, unique_id, model, settings: dict, **kwargs):
+        """Initialize a Well agent in the Mesa model.
+        
+        Parameters
+        ----------
+        unique_id : int
+            A unique identifier for this agent.
+        model
+            The model instance to which this agent belongs.
+        settings : dict
+            A dictionary containing settings specific to a well, such as
+            initial conditions.
+        kwargs
+            Additional keyword arguments that can be dynamically set as well agent
+            attributes.
+        """
+        # MESA required attributes => (unique_id, model)
+        super().__init__(unique_id, model)
+        self.agt_type = "Well"
+        # Load kwargs
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+        self.load_settings(settings)
+        self.st = self.init["st"]
+        self.pumping_days = self.init["pumping_days"]
+
+        # Some other attributes
+        self.t = 0
+        self.e = None
+        self.withdrawal = None  # m-ha
+
+        self.l_wt = self.init["l_wt"]
+        self.tr = self.st * self.k  # Transmissivity
+
+
+    def load_settings(self, settings: dict):
+        """
+        Load the well settings from the dictionary.
+
+        Parameters
+        ----------
+        settings : dict
+            A dictionary containing well settings. Expected keys include 'r', 'k', 'sy',
+            'rho', 'g', 'eff_pump', 'eff_well', 'aquifer_id', 'pumping_capacity', and
+            'init'.
+        """
+        self.r = settings["r"]
+        self.k = settings["k"]
+        self.sy = settings["sy"]
+        self.rho = settings["rho"]
+        self.g = settings["g"]
+        self.eff_pump = settings["eff_pump"]
+        self.eff_well = settings["eff_well"]
+        self.aquifer_id = settings["aquifer_id"]
+        self.pumping_capacity = settings["pumping_capacity"]
+        self.init = settings["init"]
+
+    def step(
+        self,
+        withdrawal: float,
+        dwl: float,
+        pumping_rate: float,
+        pumping_days: int | None = None,
+    ) -> float:
+        """
+        Perform a single step of well simulation, calculating the energy consumption.
+
+        Parameters
+        ----------
+        withdrawal : float
+            The amount of water withdrawn in this step [m-ha].
+        dwl : float
+            The change in the water level due to withdrawal [m].
+        pumping_days : int, optional
+            Number of days the well is operational. If not specified, previous
+            value is used.
+
+        Returns
+        -------
+        float
+            The energy consumption for this step [Petajoules, PJ].
+        """
+        self.t += 1
+        # Only update pumping_days when it is given.
+        if pumping_days is not None:
+            self.pumping_days = pumping_days
+        # Update saturated thickness and water table lift based on groundwater
+        # level change
+        self.l_wt -= dwl
+        self.st += dwl
+        tr_ = self.st * self.k  # Update Transmissivity
+        # cannot divided by zero
+        if tr_ < 0.001:
+            self.tr = 0.001
+        else:
+            self.tr = tr_
+
+        self.withdrawal = withdrawal
+        l_wt = self.l_wt
+
+        r, tr, sy = self.r, self.tr, self.sy
+        eff_well, eff_pump = self.eff_well, self.eff_pump
+        rho, g = self.rho, self.g
+        pumping_days = self.pumping_days
+
+        # Calculate energy consumption
+        m_ha_2_m3 = 10000
+        fpitr = 4 * np.pi * tr
+        ftrd = 4 * tr * pumping_days
+        l_pr = 12.65
+
+        l_wd_l_cd = (
+            pumping_rate
+            / fpitr
+            * (-0.5772 - np.log(r**2 * sy / ftrd))
+            * m_ha_2_m3
+            / eff_well
+        )
+
+        l_t = l_wt + l_wd_l_cd + l_pr
+
+        e = rho * g * m_ha_2_m3 / eff_pump / 1e15 * withdrawal * l_t  # PJ
+
+        # Record energy consumption
+        self.pumping_rate = pumping_rate
         self.e = e
         return e

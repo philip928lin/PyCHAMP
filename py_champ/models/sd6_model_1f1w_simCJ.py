@@ -7,11 +7,11 @@ import pandas as pd
 from tqdm import tqdm
 
 from ..components.aquifer import Aquifer
-from ..components.behavior import Behavior4SingleFieldAndWell
+from ..components.behavior import Behavior4SingleFieldAndWell_simCJ
 from ..components.field import Field4SingleFieldAndWell
 from ..components.finance import Finance4SingleFieldAndWell
-from ..components.optimization_1f1w import Optimization4SingleFieldAndWell
-from ..components.well import Well4SingleFieldAndWell
+from ..components.optimization_1f1w import Optimization4SingleFieldAndWell_simCJ
+from ..components.well import Well4SingleFieldAndWell_simCJ
 from ..utility.util import (
     BaseSchedulerByTypeFiltered,
     Indicator,
@@ -21,7 +21,7 @@ from ..utility.util import (
 
 
 # % MESA
-class SD6Model4SingleFieldAndWell(mesa.Model):
+class SD6Model4SingleFieldAndWell_simCJ(mesa.Model):
     """ The SD6Model_1f1w class is a simplified SD6Model that targets a single field
     and well owned by a farmer agent."""
 
@@ -36,7 +36,7 @@ class SD6Model4SingleFieldAndWell(mesa.Model):
         finances_dict,
         behaviors_dict,
         components=None,
-        optimization_class=Optimization4SingleFieldAndWell,
+        optimization_class=Optimization4SingleFieldAndWell_simCJ,
         init_year=2011,
         end_year=2022,
         lema_options=(True, "wr_LEMA_5yr", 2013),
@@ -57,9 +57,9 @@ class SD6Model4SingleFieldAndWell(mesa.Model):
             components = {
                 "aquifer": Aquifer,
                 "field": Field4SingleFieldAndWell,
-                "well": Well4SingleFieldAndWell,
+                "well": Well4SingleFieldAndWell_simCJ,
                 "finance": Finance4SingleFieldAndWell,
-                "behavior": Behavior4SingleFieldAndWell,
+                "behavior": Behavior4SingleFieldAndWell_simCJ,
             }
         self.components = components
         self.optimization_class = optimization_class
