@@ -9,11 +9,11 @@ import pandas as pd
 from tqdm import tqdm
 
 from ..components.aquifer import Aquifer
-from ..components.behavior import Behavior4SingleFieldAndWell_simCJ
+from ..components.behavior import Behavior4SingleFieldAndWell
 from ..components.field import Field4SingleFieldAndWell
 from ..components.finance import Finance4SingleFieldAndWell
-from ..components.optimization_1f1w import Optimization4SingleFieldAndWell_simCJ
-from ..components.well import Well4SingleFieldAndWell_simCJ
+from ..components.optimization_1f1w import Optimization4SingleFieldAndWell
+from ..components.well import Well4SingleFieldAndWell
 from ..utility.util import (
     BaseSchedulerByTypeFiltered,
     Indicator,
@@ -38,7 +38,7 @@ class SD6Model4SingleFieldAndWell(mesa.Model):
         finances_dict,
         behaviors_dict,
         components=None,
-        optimization_class=Optimization4SingleFieldAndWell_simCJ,
+        optimization_class=Optimization4SingleFieldAndWell,
         init_year=2011,
         end_year=2022,
         lema_options=(True, "wr_LEMA_5yr", 2013),
@@ -59,9 +59,9 @@ class SD6Model4SingleFieldAndWell(mesa.Model):
             components = {
                 "aquifer": Aquifer,
                 "field": Field4SingleFieldAndWell,
-                "well": Well4SingleFieldAndWell_simCJ,
+                "well": Well4SingleFieldAndWell,
                 "finance": Finance4SingleFieldAndWell,
-                "behavior": Behavior4SingleFieldAndWell_simCJ,
+                "behavior": Behavior4SingleFieldAndWell,
             }
         self.components = components
         self.optimization_class = optimization_class
